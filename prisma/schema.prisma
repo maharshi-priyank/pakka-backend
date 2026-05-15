@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String           @id
+  email             String           @unique
+  name              String
+  businessName      String?
+  logoUrl           String?
+  gstNumber         String?
+  panNumber         String?
+  businessType      String?
+  razorpayAccountId String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  leads             Lead[]
+  clients           Client[]
+  proposals         Proposal[]
+  contracts         Contract[]
+  invoices          Invoice[]
+  automationRules   AutomationRule[]
+
+  @@map("users")
+}
+
+model Client {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  email     String?
+  phone     String?
+  company   String?
+  gstNumber String?
+  state     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  leads     Lead[]
+  proposals Proposal[]
+  contracts Contract[]
+  invoices  Invoice[]
+
+  @@map("clients")
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId       String?
+  client         Client?    @relation(fields: [clientId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  company        String?
+  service        String?
+  budget         Decimal?   @db.Decimal(12, 2)
+  source         String?
+  stage          LeadStage  @default(ENQUIRY)
+  notes          String?
+  lastActivityAt DateTime   @default(now())
+  followUpAt     DateTime?
+  isDeleted      Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  proposals      Proposal[]
+
+  @@map("leads")
+}
+
+enum LeadStage {
+  ENQUIRY
+  PROPOSAL_SENT
+  NEGOTIATING
+  WON
+  LOST
+}
+
+model Proposal {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId      String?
+  lead        Lead?          @relation(fields: [leadId], references: [id])
+  clientId    String?
+  client      Client?        @relation(fields: [clientId], references: [id])
+  title       String
+  status      ProposalStatus @default(DRAFT)
+  slug        String         @unique
+  content     Json
+  totalAmount Decimal        @db.Decimal(12, 2)
+  gstAmount   Decimal        @default(0) @db.Decimal(12, 2)
+  validUntil  DateTime?
+  acceptedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  opens       ProposalOpen[]
+  contracts   Contract[]
+
+  @@map("proposals")
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  OPENED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model ProposalOpen {
+  id          String   @id @default(cuid())
+  proposalId  String
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  ipAddress   String?
+  userAgent   String?
+  pagesViewed Json?
+  openedAt    DateTime @default(now())
+
+  @@map("proposal_opens")
+}
+
+model Contract {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proposalId String?
+  proposal   Proposal?      @relation(fields: [proposalId], references: [id])
+  clientId   String?
+  client     Client?        @relation(fields: [clientId], references: [id])
+  title      String
+  status     ContractStatus @default(DRAFT)
+  content    Json
+  signedAt   DateTime?
+  signerOtp  String?
+  auditLog   Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  invoices   Invoice[]
+
+  @@map("contracts")
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  DECLINED
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractId        String?
+  contract          Contract?     @relation(fields: [contractId], references: [id])
+  clientId          String?
+  client            Client?       @relation(fields: [clientId], references: [id])
+  invoiceNumber     String        @unique
+  status            InvoiceStatus @default(DRAFT)
+  lineItems         Json
+  subtotal          Decimal       @db.Decimal(12, 2)
+  gstAmount         Decimal       @db.Decimal(12, 2)
+  total             Decimal       @db.Decimal(12, 2)
+  gstType           GstType       @default(IGST)
+  tdsRate           Decimal?      @db.Decimal(5, 2)
+  dueDate           DateTime?
+  paidAt            DateTime?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  remindersSent     Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum GstType {
+  CGST_SGST
+  IGST
+  EXEMPT
+}
+
+model AutomationRule {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trigger   String
+  action    String
+  config    Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("automation_rules")
+}
