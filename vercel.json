@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "installCommand": "npm ci",
+  "buildCommand": "npx prisma generate && npx prisma db push && npm run build",
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "dist/**",
+      "memory": 512,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index.js" }
+  ]
+}
