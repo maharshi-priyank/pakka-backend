@@ -186,13 +186,16 @@ export class AutomationEngine {
         where:   { id: entityId },
         include: { client: true },
       })
-      if (!contract || !contract.client?.email) {
+      const content = contract?.content as Record<string, string> | null
+      const contractEmail = contract?.client?.email ?? content?.signerEmail
+      const contractName  = contract?.client?.name  ?? content?.signerName ?? 'there'
+      if (!contract || !contractEmail) {
         await this.notifySkip(userId, entityId, 'contract', `Contract "${contract?.title ?? entityId}" has no client email — automated email was skipped.`)
         return
       }
-      to = contract.client.email
+      to = contractEmail
       vars = {
-        clientName:    contract.client.name,
+        clientName:    contractName,
         businessName,
         contractTitle: contract.title,
         signLink:      `${appUrl}/sign/${contract.id}`,
