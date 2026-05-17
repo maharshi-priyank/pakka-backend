@@ -28,6 +28,21 @@ export class AutomationEngine {
     private readonly moduleRef:    ModuleRef,
   ) {}
 
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  private async notifySkip(userId: string, entityId: string, entityType: string, reason: string) {
+    await this.prisma.notification.create({
+      data: {
+        userId,
+        type:       'automation_skip',
+        title:      'Email not sent — missing contact info',
+        body:       reason,
+        entityId,
+        entityType,
+      },
+    })
+  }
+
   // ─── Event listeners ───────────────────────────────────────────────────────
 
   @OnEvent('invoice.paid')
@@ -143,7 +158,10 @@ export class AutomationEngine {
         where:   { id: entityId },
         include: { client: true },
       })
-      if (!inv || !inv.client?.email) return
+      if (!inv || !inv.client?.email) {
+        await this.notifySkip(userId, entityId, 'invoice', `Invoice ${inv?.invoiceNumber ?? entityId} has no client email — automated email was skipped.`)
+        return
+      }
       to = inv.client.email
       const dueDate      = inv.dueDate ? inv.dueDate.toLocaleDateString('en-IN') : '—'
       const overdueByDays = inv.dueDate
@@ -166,7 +184,10 @@ export class AutomationEngine {
         where:   { id: entityId },
         include: { client: true },
       })
-      if (!contract || !contract.client?.email) return
+      if (!contract || !contract.client?.email) {
+        await this.notifySkip(userId, entityId, 'contract', `Contract "${contract?.title ?? entityId}" has no client email — automated email was skipped.`)
+        return
+      }
       to = contract.client.email
       vars = {
         clientName:    contract.client.name,
@@ -181,7 +202,10 @@ export class AutomationEngine {
         include: { client: true, lead: true },
       })
       const clientEmail = proposal?.client?.email ?? (proposal?.lead as { email?: string } | null)?.email
-      if (!proposal || !clientEmail) return
+      if (!proposal || !clientEmail) {
+        await this.notifySkip(userId, entityId, 'proposal', `Proposal "${proposal?.title ?? entityId}" has no client email — automated email was skipped.`)
+        return
+      }
       to = clientEmail
       vars = {
         clientName:    proposal.client?.name ?? proposal.lead?.name ?? 'there',
@@ -193,7 +217,10 @@ export class AutomationEngine {
 
     } else if (entityType === 'lead') {
       const lead = await this.prisma.lead.findUnique({ where: { id: entityId } })
-      if (!lead?.email) return
+      if (!lead?.email) {
+        await this.notifySkip(userId, entityId, 'lead', `Lead "${lead?.name ?? entityId}" has no email address — automated email was skipped.`)
+        return
+      }
       to = lead.email
       vars = {
         leadName:         lead.name,

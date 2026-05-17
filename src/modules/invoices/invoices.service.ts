@@ -54,6 +54,27 @@ async function generateInvoiceNumber(prisma: PrismaService, userId: string): Pro
   return `INV-${year}-${String(seq).padStart(3, '0')}`;
 }
 
+type InvoiceCreateData = Omit<Parameters<PrismaService['invoice']['create']>[0]['data'], 'invoiceNumber'>
+
+async function createInvoiceWithRetry(
+  prisma: PrismaService,
+  userId: string,
+  data: InvoiceCreateData,
+  include: Parameters<PrismaService['invoice']['create']>[0]['include'],
+  maxRetries = 5,
+) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const invoiceNumber = await generateInvoiceNumber(prisma, userId);
+    try {
+      return await prisma.invoice.create({ data: { ...data, invoiceNumber } as Parameters<PrismaService['invoice']['create']>[0]['data'], include });
+    } catch (err: unknown) {
+      const isUniqueViolation = (err as { code?: string }).code === 'P2002';
+      if (!isUniqueViolation || attempt === maxRetries - 1) throw err;
+    }
+  }
+  throw new Error('Failed to generate unique invoice number after retries');
+}
+
 @Injectable()
 export class InvoicesService {
   constructor(
@@ -64,24 +85,19 @@ export class InvoicesService {
   async create(userId: string, dto: CreateInvoiceDto) {
     const gstType = dto.gstType ?? GstType.IGST;
     const { subtotal, gstAmount, total } = calcTotals(dto.lineItems, gstType);
-    const invoiceNumber = await generateInvoiceNumber(this.prisma, userId);
 
-    return this.prisma.invoice.create({
-      data: {
-        userId,
-        contractId: dto.contractId,
-        clientId:   dto.clientId,
-        invoiceNumber,
-        lineItems: dto.lineItems as object[],
-        subtotal,
-        gstAmount,
-        total,
-        gstType,
-        tdsRate:  dto.tdsRate  != null ? dto.tdsRate  : null,
-        dueDate:  dto.dueDate  ? new Date(dto.dueDate)  : null,
-      },
-      include: INCLUDE_FULL,
-    });
+    return createInvoiceWithRetry(this.prisma, userId, {
+      userId,
+      contractId: dto.contractId,
+      clientId:   dto.clientId,
+      lineItems:  dto.lineItems as object[],
+      subtotal,
+      gstAmount,
+      total,
+      gstType,
+      tdsRate: dto.tdsRate  != null ? dto.tdsRate  : null,
+      dueDate: dto.dueDate  ? new Date(dto.dueDate)  : null,
+    }, INCLUDE_FULL);
   }
 
   async createFromContract(userId: string, contractId: string) {
@@ -94,46 +110,63 @@ export class InvoicesService {
       throw new BadRequestException('Invoice can only be created from a signed contract');
     }
 
-    const existing = await this.prisma.invoice.findFirst({ where: { contractId } });
-    if (existing) return existing;
+    const existing = await this.prisma.invoice.findMany({ where: { contractId } });
+    if (existing.length > 0) return existing;
 
-    const content = contract.content as Record<string, unknown>;
+    const content         = contract.content as Record<string, unknown>;
     const paymentSchedule = (content.paymentSchedule as Array<{ milestone: string; amount: number }> | undefined) ?? [];
-    const gstType       = (content.gstType    as GstType | undefined) ?? GstType.IGST;
-    const totalAmount   = (content.totalAmount as number  | undefined) ?? 0;
-    const contractGst   = (content.gstAmount   as number  | undefined) ?? 0;
-    const tdsRate       = (content.tdsRate     as number  | undefined) ?? null;
+    const gstType         = (content.gstType    as GstType | undefined) ?? GstType.IGST;
+    const totalAmount     = (content.totalAmount as number  | undefined) ?? 0;
+    const contractGst     = (content.gstAmount   as number  | undefined) ?? 0;
+    const tdsRate         = (content.tdsRate     as number  | undefined) ?? null;
 
-    const lineItems: LineItemDto[] = paymentSchedule.length > 0
-      ? paymentSchedule.map(ps => ({ description: ps.milestone, qty: 1, rate: ps.amount, gstRate: 0 }))
-      : [{ description: contract.title, qty: 1, rate: totalAmount - contractGst, gstRate: 18 }];
+    if (paymentSchedule.length > 0) {
+      // One DRAFT invoice per milestone, each with correct gstType and proportional GST
+      const subtotalBase   = totalAmount - contractGst;
+      const effectiveGstRate = subtotalBase > 0
+        ? parseFloat(((contractGst / subtotalBase) * 100).toFixed(4))
+        : 0;
 
-    const gstTypeForCalc = paymentSchedule.length > 0 ? GstType.EXEMPT : gstType;
-    const totals = paymentSchedule.length > 0
-      ? {
-          subtotal:  parseFloat((totalAmount - contractGst).toFixed(2)),
-          gstAmount: parseFloat(contractGst.toFixed(2)),
-          total:     parseFloat(totalAmount.toFixed(2)),
-        }
-      : calcTotals(lineItems, gstType);
+      const invoices = [];
+      for (const ps of paymentSchedule) {
+        const lineItems: LineItemDto[] = [{ description: ps.milestone, qty: 1, rate: ps.amount, gstRate: effectiveGstRate }];
+        const totals = calcTotals(lineItems, gstType);
 
-    const invoiceNumber = await generateInvoiceNumber(this.prisma, userId);
+        const inv = await createInvoiceWithRetry(this.prisma, userId, {
+          userId,
+          contractId,
+          clientId:  contract.clientId,
+          lineItems: lineItems as object[],
+          subtotal:  totals.subtotal,
+          gstAmount: totals.gstAmount,
+          total:     totals.total,
+          gstType,
+          tdsRate,
+        }, INCLUDE_FULL);
+        invoices.push(inv);
+      }
+      return invoices;
+    }
 
-    return this.prisma.invoice.create({
-      data: {
-        userId,
-        contractId,
-        clientId:  contract.clientId,
-        invoiceNumber,
-        lineItems: lineItems as object[],
-        subtotal:  totals.subtotal,
-        gstAmount: totals.gstAmount,
-        total:     totals.total,
-        gstType:   gstTypeForCalc,
-        tdsRate,
-      },
-      include: INCLUDE_FULL,
-    });
+    // No payment schedule — single invoice for the full contract amount
+    const gstRateSingle = (totalAmount - contractGst) > 0
+      ? parseFloat(((contractGst / (totalAmount - contractGst)) * 100).toFixed(4))
+      : 0;
+    const lineItems: LineItemDto[] = [{ description: contract.title, qty: 1, rate: totalAmount - contractGst, gstRate: gstRateSingle }];
+    const totals = calcTotals(lineItems, gstType);
+
+    const inv = await createInvoiceWithRetry(this.prisma, userId, {
+      userId,
+      contractId,
+      clientId:  contract.clientId,
+      lineItems: lineItems as object[],
+      subtotal:  totals.subtotal,
+      gstAmount: totals.gstAmount,
+      total:     totals.total,
+      gstType,
+      tdsRate,
+    }, INCLUDE_FULL);
+    return [inv];
   }
 
   async findAll(userId: string, dto: QueryInvoicesDto) {
