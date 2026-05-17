@@ -7,7 +7,7 @@ import { CreateMeetingDto } from './dto/create-meeting.dto';
 import { UpdateMeetingDto } from './dto/update-meeting.dto';
 
 const INCLUDE_FULL = {
-  lead:   { select: { id: true, name: true } },
+  lead:   { select: { id: true, name: true, email: true } },
   client: { select: { id: true, name: true, company: true, email: true } },
 } as const;
 
@@ -34,6 +34,7 @@ export class MeetingsService {
         durationMins: dto.durationMins ?? 30,
         leadId:       dto.leadId,
         clientId:     dto.clientId,
+        guestEmails:  dto.guestEmails ?? [],
       },
       include: INCLUDE_FULL,
     });
@@ -46,6 +47,8 @@ export class MeetingsService {
         scheduledAt:  meeting.scheduledAt,
         durationMins: meeting.durationMins,
         clientEmail:  meeting.client?.email,
+        leadEmail:    meeting.lead?.email,
+        guestEmails:  meeting.guestEmails,
       });
 
       if (meetLink || googleEventId) {

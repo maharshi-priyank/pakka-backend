@@ -8,7 +8,7 @@ import { EmailService } from './email.service'
 import { renderTemplate } from './templates/email-templates'
 import type {
   InvoiceTemplateVars, ContractTemplateVars,
-  ProposalTemplateVars, LeadTemplateVars,
+  ProposalTemplateVars, LeadTemplateVars, MeetingTemplateVars,
 } from './templates/template.variables'
 
 export interface AutomationEvent {
@@ -63,6 +63,11 @@ export class AutomationEngine {
   @OnEvent('contract.sent')
   async onContractSent(ev: AutomationEvent) {
     await this.sendEmailToClient({ templateKey: 'contract_client_sign' }, ev.entityId, 'contract', ev.userId)
+  }
+
+  @OnEvent('meeting.scheduled')
+  async onMeetingScheduled(ev: AutomationEvent) {
+    await this.sendMeetingConfirmation(ev.entityId, ev.userId)
   }
 
   // ─── Core: fire all matching active rules ──────────────────────────────────
@@ -250,6 +255,71 @@ export class AutomationEngine {
 
     const { subject, html } = renderTemplate(templateKey, vars)
     await this.email.send({ userId, to: user.email, subject, html, templateKey, entityId, entityType })
+  }
+
+  // ─── Meeting: confirmation email to client/lead + guests ─────────────────
+
+  private async sendMeetingConfirmation(meetingId: string, userId: string) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where:   { id: meetingId },
+      include: {
+        client: { select: { id: true, name: true, email: true, portalToken: true } },
+        lead:   { select: { id: true, name: true, email: true } },
+      },
+    })
+    if (!meeting) return
+
+    const user         = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) return
+
+    const businessName = user.businessName ?? user.name
+    const appUrl       = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
+
+    const scheduledAt = meeting.scheduledAt.toLocaleString('en-IN', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true,
+    })
+
+    // Build list of recipients: client → lead (if no client) → guests
+    const recipients: { name: string; email: string; portalLink?: string | null }[] = []
+
+    if (meeting.client?.email) {
+      const portalLink = meeting.client.portalToken
+        ? `${appUrl}/portal/${meeting.client.portalToken}`
+        : null
+      recipients.push({ name: meeting.client.name, email: meeting.client.email, portalLink })
+    } else if (meeting.lead?.email) {
+      recipients.push({ name: meeting.lead.name, email: meeting.lead.email })
+    }
+
+    for (const guestEmail of meeting.guestEmails) {
+      if (!recipients.find(r => r.email === guestEmail)) {
+        recipients.push({ name: 'Guest', email: guestEmail })
+      }
+    }
+
+    for (const recipient of recipients) {
+      const vars: MeetingTemplateVars = {
+        recipientName: recipient.name,
+        businessName,
+        meetingTitle:  meeting.title,
+        scheduledAt,
+        durationMins:  meeting.durationMins,
+        meetLink:      meeting.meetLink,
+        agenda:        meeting.agenda,
+        portalLink:    recipient.portalLink ?? null,
+      }
+      const { subject, html } = renderTemplate('meeting_scheduled_client', vars)
+      await this.email.send({
+        userId,
+        to:          recipient.email,
+        subject,
+        html,
+        templateKey: 'meeting_scheduled_client',
+        entityId:    meetingId,
+        entityType:  'meeting',
+      })
+    }
   }
 
   // ─── Send digest email to user (called directly from scheduler) ───────────

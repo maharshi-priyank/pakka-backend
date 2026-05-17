@@ -1,4 +1,4 @@
-import { IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsEmail, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateMeetingDto {
   @IsString()
@@ -24,4 +24,9 @@ export class CreateMeetingDto {
   @IsString()
   @IsOptional()
   clientId?: string;
+
+  @IsArray()
+  @IsEmail({}, { each: true })
+  @IsOptional()
+  guestEmails?: string[];
 }
