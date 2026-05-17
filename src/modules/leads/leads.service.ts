@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -109,6 +109,31 @@ export class LeadsService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
     return this.prisma.lead.update({ where: { id }, data: { isDeleted: true } });
+  }
+
+  async convertToClient(userId: string, leadId: string) {
+    const lead = await this.findOne(userId, leadId);
+
+    if (lead.clientId) {
+      throw new ConflictException('This lead is already linked to a client');
+    }
+
+    const client = await this.prisma.client.create({
+      data: {
+        userId,
+        name:    lead.name,
+        email:   lead.email   ?? undefined,
+        phone:   lead.phone   ?? undefined,
+        company: lead.company ?? undefined,
+      },
+    });
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data:  { clientId: client.id, lastActivityAt: new Date() },
+    });
+
+    return client;
   }
 
   async getPipelineValue(userId: string) {

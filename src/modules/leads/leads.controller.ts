@@ -60,6 +60,13 @@ export class LeadsController {
     return this.leadsService.updateStage(user.id, id, dto.stage);
   }
 
+  @Post(':id/convert-to-client')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Convert a lead to a client and link them' })
+  convertToClient(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.leadsService.convertToClient(user.id, id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a lead' })
