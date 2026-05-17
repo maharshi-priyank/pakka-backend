@@ -130,7 +130,7 @@ export class LeadsService {
 
     await this.prisma.lead.update({
       where: { id: leadId },
-      data:  { clientId: client.id, lastActivityAt: new Date() },
+      data:  { clientId: client.id, stage: LeadStage.WON, lastActivityAt: new Date() },
     });
 
     return client;
