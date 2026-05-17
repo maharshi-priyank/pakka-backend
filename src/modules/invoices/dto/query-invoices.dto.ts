@@ -8,7 +8,7 @@ export class QueryInvoicesDto {
   @IsEnum(InvoiceStatus) @IsOptional()
   status?: InvoiceStatus;
 
-  @ApiPropertyOptional() @IsInt() @Min(1) @Max(200) @Type(() => Number) @IsOptional()
+  @ApiPropertyOptional() @IsInt() @Min(1) @Max(500) @Type(() => Number) @IsOptional()
   limit?: number = 50;
 
   @ApiPropertyOptional() @IsInt() @Min(1) @Type(() => Number) @IsOptional()
