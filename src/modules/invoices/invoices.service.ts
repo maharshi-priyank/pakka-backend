@@ -94,6 +94,9 @@ export class InvoicesService {
       throw new BadRequestException('Invoice can only be created from a signed contract');
     }
 
+    const existing = await this.prisma.invoice.findFirst({ where: { contractId } });
+    if (existing) return existing;
+
     const content = contract.content as Record<string, unknown>;
     const paymentSchedule = (content.paymentSchedule as Array<{ milestone: string; amount: number }> | undefined) ?? [];
     const gstType       = (content.gstType    as GstType | undefined) ?? GstType.IGST;

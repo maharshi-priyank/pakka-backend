@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProposalStatus } from '@prisma/client';
+import { LeadStage, ProposalStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { CreateProposalDto, LineItemDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
@@ -150,6 +150,13 @@ export class ProposalsService {
       data:  { status: ProposalStatus.SENT },
     });
 
+    if (proposal.leadId) {
+      await this.prisma.lead.update({
+        where: { id: proposal.leadId },
+        data:  { stage: LeadStage.PROPOSAL_SENT, lastActivityAt: new Date() },
+      });
+    }
+
     this.eventEmitter.emit('proposal.sent', { entityId: id, userId });
     const appUrl = process.env.APP_URL ?? 'http://localhost:5175';
     return {
@@ -159,11 +166,19 @@ export class ProposalsService {
   }
 
   async accept(userId: string, id: string) {
-    await this.findOne(userId, id);
+    const proposal = await this.findOne(userId, id);
     const updated = await this.prisma.proposal.update({
       where: { id },
       data:  { status: ProposalStatus.ACCEPTED, acceptedAt: new Date() },
     });
+
+    if (proposal.leadId) {
+      await this.prisma.lead.update({
+        where: { id: proposal.leadId },
+        data:  { stage: LeadStage.NEGOTIATING, lastActivityAt: new Date() },
+      });
+    }
+
     this.eventEmitter.emit('proposal.accepted', { entityId: id, userId });
     return updated;
   }
@@ -173,6 +188,14 @@ export class ProposalsService {
     if (proposal.status === ProposalStatus.ACCEPTED) {
       throw new ForbiddenException('Cannot decline an already accepted proposal');
     }
+
+    if (proposal.leadId) {
+      await this.prisma.lead.update({
+        where: { id: proposal.leadId },
+        data:  { stage: LeadStage.LOST, lastActivityAt: new Date() },
+      });
+    }
+
     return this.prisma.proposal.update({
       where: { id },
       data:  { status: ProposalStatus.DECLINED },
@@ -205,6 +228,14 @@ export class ProposalsService {
       where: { id: proposal.id },
       data:  { status: ProposalStatus.ACCEPTED, acceptedAt: new Date() },
     });
+
+    if (proposal.leadId) {
+      await this.prisma.lead.update({
+        where: { id: proposal.leadId },
+        data:  { stage: LeadStage.NEGOTIATING, lastActivityAt: new Date() },
+      });
+    }
+
     this.eventEmitter.emit('proposal.accepted', { entityId: proposal.id, userId: proposal.userId });
     return updated;
   }
@@ -215,6 +246,14 @@ export class ProposalsService {
     if (proposal.status === ProposalStatus.ACCEPTED) {
       throw new ForbiddenException('Cannot decline an already accepted proposal');
     }
+
+    if (proposal.leadId) {
+      await this.prisma.lead.update({
+        where: { id: proposal.leadId },
+        data:  { stage: LeadStage.LOST, lastActivityAt: new Date() },
+      });
+    }
+
     return this.prisma.proposal.update({
       where: { id: proposal.id },
       data:  { status: ProposalStatus.DECLINED },

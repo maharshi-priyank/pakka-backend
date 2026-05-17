@@ -48,6 +48,9 @@ export class ContractsService {
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
 
+    const existing = await this.prisma.contract.findFirst({ where: { proposalId } });
+    if (existing) return existing;
+
     const c = proposal.content as Record<string, unknown>;
 
     const content = {

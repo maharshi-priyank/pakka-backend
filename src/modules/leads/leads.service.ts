@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
@@ -122,10 +123,11 @@ export class LeadsService {
       const newClient = await tx.client.create({
         data: {
           userId,
-          name:    lead.name,
-          email:   lead.email   ?? undefined,
-          phone:   lead.phone   ?? undefined,
-          company: lead.company ?? undefined,
+          name:        lead.name,
+          email:       lead.email   ?? undefined,
+          phone:       lead.phone   ?? undefined,
+          company:     lead.company ?? undefined,
+          portalToken: nanoid(21),
         },
       });
 
