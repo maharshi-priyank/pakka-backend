@@ -9,6 +9,8 @@ interface MeetingEvent {
   scheduledAt:  Date;
   durationMins: number;
   clientEmail?: string | null;
+  leadEmail?:   string | null;
+  guestEmails?: string[];
 }
 
 @Injectable()
@@ -25,7 +27,10 @@ export class GoogleCalendarService {
       const startTime = new Date(meeting.scheduledAt);
       const endTime   = new Date(startTime.getTime() + meeting.durationMins * 60 * 1000);
 
-      const attendees = meeting.clientEmail ? [{ email: meeting.clientEmail }] : [];
+      const allEmails = [meeting.clientEmail, meeting.leadEmail, ...(meeting.guestEmails ?? [])]
+        .filter((e): e is string => !!e)
+        .filter((e, i, arr) => arr.indexOf(e) === i);
+      const attendees = allEmails.map(email => ({ email }));
 
       const response = await calendar.events.insert({
         calendarId:            'primary',

@@ -462,6 +462,31 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   },
 
   // Meeting reminder (to USER and CLIENT)
+  // Meeting: confirmation sent to client/lead when meeting is scheduled
+  meeting_scheduled_client: {
+    subject: (v) => {
+      const mv = v as MeetingTemplateVars
+      return `Meeting confirmed: "${mv.meetingTitle}" on ${mv.scheduledAt}`
+    },
+    html: (v) => {
+      const mv = v as MeetingTemplateVars
+      return layout(`
+        ${alert('Meeting scheduled ✓', 'success')}
+        ${h1('Your meeting is confirmed')}
+        ${p(`Hi ${mv.recipientName}, a call has been scheduled with <strong>${mv.businessName}</strong>. Here are the details:`)}
+        ${infoTable([
+          ['Meeting',  mv.meetingTitle],
+          ['Date & Time', mv.scheduledAt],
+          ['Duration', mv.durationMins >= 60 ? `${mv.durationMins / 60} hour${mv.durationMins > 60 ? 's' : ''}` : `${mv.durationMins} minutes`],
+          ...(mv.agenda ? [['Agenda', mv.agenda] as [string, string]] : []),
+        ])}
+        ${mv.meetLink ? btn('Join Google Meet →', mv.meetLink, '#059669') : ''}
+        ${mv.portalLink ? p(`You can also view this meeting and all your documents in your <a href="${mv.portalLink}" style="color:#2563EB;font-weight:600;">client portal</a>.`, true) : ''}
+        ${p('If you have any questions, simply reply to this email.', true)}
+      `, mv.businessName)
+    },
+  },
+
   meeting_reminder: {
     subject: (v) => {
       const mv = v as MeetingTemplateVars

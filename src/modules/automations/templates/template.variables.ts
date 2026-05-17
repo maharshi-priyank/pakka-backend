@@ -49,6 +49,7 @@ export interface MeetingTemplateVars {
   durationMins:   number
   meetLink:       string | null
   agenda:         string | null
+  portalLink?:    string | null
 }
 
 export type TemplateVars =

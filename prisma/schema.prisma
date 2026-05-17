@@ -302,6 +302,7 @@ model Meeting {
   googleEventId String?
   status        MeetingStatus @default(SCHEDULED)
   reminderSent  Boolean       @default(false)
+  guestEmails   String[]      @default([])
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
