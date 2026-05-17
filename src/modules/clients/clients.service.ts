@@ -84,6 +84,11 @@ export class ClientsService {
           orderBy: { createdAt: 'desc' },
           select: { id: true, invoiceNumber: true, status: true, total: true, dueDate: true, createdAt: true },
         },
+        leads: {
+          orderBy: { createdAt: 'desc' },
+          where:   { isDeleted: false },
+          select:  { id: true, name: true, stage: true, budget: true, source: true, createdAt: true },
+        },
         _count: {
           select: { proposals: true, contracts: true, invoices: true },
         },
