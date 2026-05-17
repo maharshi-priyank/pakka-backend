@@ -6,6 +6,8 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { AutomationsService } from './automations.service'
 import { EmailService } from './email.service'
 import { renderTemplate } from './templates/email-templates'
+import { ContractsService } from '../contracts/contracts.service'
+import { InvoicesService } from '../invoices/invoices.service'
 import type {
   InvoiceTemplateVars, ContractTemplateVars,
   ProposalTemplateVars, LeadTemplateVars, MeetingTemplateVars,
@@ -390,12 +392,9 @@ export class AutomationEngine {
   }
 
   // ─── Action: auto-create contract ─────────────────────────────────────────
-  // Uses ModuleRef.get with string token to avoid circular module dependencies
 
   private async autoCreateContract(proposalId: string, userId: string) {
-    const contractsService = this.moduleRef.get('ContractsService', { strict: false }) as {
-      createFromProposal: (userId: string, proposalId: string) => Promise<unknown>
-    }
+    const contractsService = this.moduleRef.get(ContractsService, { strict: false })
     await contractsService.createFromProposal(userId, proposalId)
     this.logger.log(`[engine] auto-created contract from proposal=${proposalId}`)
   }
@@ -403,9 +402,7 @@ export class AutomationEngine {
   // ─── Action: auto-create invoice ──────────────────────────────────────────
 
   private async autoCreateInvoice(contractId: string, userId: string) {
-    const invoicesService = this.moduleRef.get('InvoicesService', { strict: false }) as {
-      createFromContract: (userId: string, contractId: string) => Promise<unknown>
-    }
+    const invoicesService = this.moduleRef.get(InvoicesService, { strict: false })
     await invoicesService.createFromContract(userId, contractId)
     this.logger.log(`[engine] auto-created invoice from contract=${contractId}`)
   }
