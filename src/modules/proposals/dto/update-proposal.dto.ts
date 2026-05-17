@@ -1,0 +1,10 @@
+import { PartialType } from '@nestjs/swagger';
+import { IsEnum, IsOptional } from 'class-validator';
+import { ProposalStatus } from '@prisma/client';
+import { CreateProposalDto } from './create-proposal.dto';
+
+export class UpdateProposalDto extends PartialType(CreateProposalDto) {
+  @IsOptional()
+  @IsEnum(ProposalStatus)
+  status?: ProposalStatus;
+}

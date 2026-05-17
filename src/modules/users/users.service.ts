@@ -1,70 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UpsertUserDto } from './dto/upsert-user.dto';
-
-const DEFAULT_AUTOMATION_RULES = [
-  {
-    trigger: 'proposal_accepted',
-    action: 'generate_contract',
-    config: { delayHours: 0 },
-    isActive: true,
-  },
-  {
-    trigger: 'contract_signed',
-    action: 'generate_invoice',
-    config: { delayHours: 0 },
-    isActive: true,
-  },
-  {
-    trigger: 'invoice_unpaid',
-    action: 'send_reminder',
-    config: { reminderDays: [3, 7, 14] },
-    isActive: true,
-  },
-  {
-    trigger: 'lead_cold',
-    action: 'notify_user',
-    config: { inactiveDays: 7 },
-    isActive: true,
-  },
-  {
-    trigger: 'new_enquiry_form',
-    action: 'add_to_crm',
-    config: {},
-    isActive: false,
-  },
-];
+import { AutomationsService } from '../automations/automations.service';
+import { UpsertUserDto, UpdateUserDto } from './dto/upsert-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:       PrismaService,
+    private readonly automations:  AutomationsService,
+  ) {}
 
   async upsert(dto: UpsertUserDto) {
     const user = await this.prisma.user.upsert({
-      where: { id: dto.id },
-      update: {
-        email: dto.email,
-        name: dto.name,
-        ...(dto.businessName && { businessName: dto.businessName }),
-        ...(dto.businessType && { businessType: dto.businessType }),
-        ...(dto.gstNumber && { gstNumber: dto.gstNumber }),
-        ...(dto.panNumber && { panNumber: dto.panNumber }),
-        ...(dto.logoUrl && { logoUrl: dto.logoUrl }),
-      },
-      create: {
-        id: dto.id,
-        email: dto.email,
-        name: dto.name,
-        businessName: dto.businessName,
-        businessType: dto.businessType,
-        gstNumber: dto.gstNumber,
-        panNumber: dto.panNumber,
-        logoUrl: dto.logoUrl,
-        automationRules: {
-          createMany: { data: DEFAULT_AUTOMATION_RULES },
-        },
-      },
+      where:  { id: dto.id },
+      update: { email: dto.email, name: dto.name },
+      create: { id: dto.id, email: dto.email, name: dto.name },
     });
+
+    // Idempotent — safe to call on every login
+    await this.automations.seedDefaultRules(user.id);
 
     return user;
   }
@@ -73,7 +27,38 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async update(id: string, data: Partial<UpsertUserDto>) {
+  async update(id: string, data: UpdateUserDto) {
     return this.prisma.user.update({ where: { id }, data });
+  }
+
+  async saveGoogleTokens(userId: string, tokens: { accessToken: string; refreshToken: string; expiresAt: Date }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleAccessToken:       tokens.accessToken,
+        googleRefreshToken:      tokens.refreshToken,
+        googleTokenExpiresAt:    tokens.expiresAt,
+        googleCalendarConnected: true,
+      },
+    });
+  }
+
+  async getGoogleTokens(userId: string) {
+    return this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { googleAccessToken: true, googleRefreshToken: true, googleTokenExpiresAt: true },
+    });
+  }
+
+  async clearGoogleTokens(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleAccessToken:       null,
+        googleRefreshToken:      null,
+        googleTokenExpiresAt:    null,
+        googleCalendarConnected: false,
+      },
+    });
   }
 }

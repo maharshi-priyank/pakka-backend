@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
@@ -8,10 +9,13 @@ import Decimal from 'decimal.js';
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:       PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async create(userId: string, dto: CreateLeadDto) {
-    return this.prisma.lead.create({
+    const lead = await this.prisma.lead.create({
       data: {
         ...dto,
         budget: dto.budget !== undefined ? new Decimal(dto.budget) : undefined,
@@ -20,6 +24,8 @@ export class LeadsService {
       },
       include: { client: true },
     });
+    this.eventEmitter.emit('lead.created', { entityId: lead.id, userId });
+    return lead;
   }
 
   async findAll(userId: string, query: QueryLeadsDto) {
@@ -39,7 +45,7 @@ export class LeadsService {
       }),
     };
 
-    const [leads, total] = await Promise.all([
+    const [leads, total, pipelineAgg] = await Promise.all([
       this.prisma.lead.findMany({
         where,
         skip,
@@ -48,11 +54,18 @@ export class LeadsService {
         include: { client: true, proposals: { select: { id: true, status: true } } },
       }),
       this.prisma.lead.count({ where }),
+      this.prisma.lead.aggregate({
+        where: { userId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] }, budget: { not: null } },
+        _sum: { budget: true },
+      }),
     ]);
 
     return {
-      data: leads,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      items:         leads,
+      total,
+      page,
+      limit,
+      pipelineValue: (pipelineAgg._sum.budget ?? 0).toString(),
     };
   }
 

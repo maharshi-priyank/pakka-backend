@@ -12,8 +12,12 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
 
   const configService = app.get(ConfigService);
-  const corsOrigin = configService.get<string>('corsOrigin');
+  const corsOriginRaw = configService.get<string>('corsOrigin') ?? '';
   const port = configService.get<number>('port') ?? 3000;
+
+  // Support comma-separated origins: "http://localhost:5173,http://localhost:5177"
+  const allowedOrigins = corsOriginRaw.split(',').map(o => o.trim()).filter(Boolean);
+  const corsOrigin = allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
 
   app.use(helmet());
 

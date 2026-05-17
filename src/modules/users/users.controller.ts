@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Patch, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpsertUserDto } from './dto/upsert-user.dto';
+import { UpdateUserDto } from './dto/upsert-user.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Public } from '../../common/decorators/public.decorator';
+import { JwtPayloadOnly } from '../../common/decorators/jwt-payload-only.decorator';
+import type { SupabaseJwtPayload } from '../auth/jwt-payload.strategy';
 import { User } from '@prisma/client';
 
 @ApiTags('users')
@@ -12,12 +13,19 @@ import { User } from '@prisma/client';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  /**
+   * Called by the frontend immediately after Supabase login.
+   * Validates the JWT (no DB lookup), then upserts the user record using
+   * data from the token payload — no request body required.
+   */
   @Post('me')
-  @Public()
+  @JwtPayloadOnly()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Upsert user on first login (called from frontend after Supabase auth)' })
-  upsert(@Body() dto: UpsertUserDto) {
-    return this.usersService.upsert(dto);
+  @ApiOperation({ summary: 'Upsert user on first login' })
+  upsert(@Request() req: { user: SupabaseJwtPayload }) {
+    const { sub, email, user_metadata } = req.user;
+    const name = user_metadata?.name || email;
+    return this.usersService.upsert({ id: sub, email, name });
   }
 
   @Get('me')
@@ -28,7 +36,7 @@ export class UsersController {
 
   @Patch('me')
   @ApiOperation({ summary: 'Update current user profile' })
-  updateMe(@CurrentUser() user: User, @Body() dto: Partial<UpsertUserDto>) {
+  updateMe(@CurrentUser() user: User, @Body() dto: UpdateUserDto) {
     return this.usersService.update(user.id, dto);
   }
 }

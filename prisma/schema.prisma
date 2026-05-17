@@ -7,43 +7,72 @@ datasource db {
 }
 
 model User {
-  id                String           @id
-  email             String           @unique
-  name              String
-  businessName      String?
-  logoUrl           String?
-  gstNumber         String?
-  panNumber         String?
-  businessType      String?
-  razorpayAccountId String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  leads             Lead[]
-  clients           Client[]
-  proposals         Proposal[]
-  contracts         Contract[]
-  invoices          Invoice[]
-  automationRules   AutomationRule[]
+  id                      String           @id
+  email                   String           @unique
+  name                    String
+  businessName            String?
+  logoUrl                 String?
+  gstNumber               String?
+  panNumber               String?
+  businessType            String?
+  razorpayAccountId       String?
+  bankName                String?
+  bankAccountName         String?
+  bankAccountNumber       String?
+  bankIfsc                String?
+  upiId                   String?
+  googleAccessToken       String?
+  googleRefreshToken      String?
+  googleTokenExpiresAt    DateTime?
+  googleCalendarConnected Boolean          @default(false)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  leads                   Lead[]
+  clients                 Client[]
+  proposals               Proposal[]
+  contracts               Contract[]
+  invoices                Invoice[]
+  automationRules         AutomationRule[]
+  notifications           Notification[]
+  meetings                Meeting[]
+  proposalTemplates       ProposalTemplate[]
 
   @@map("users")
 }
 
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  title      String
+  body       String
+  entityId   String?
+  entityType String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("notifications")
+}
+
 model Client {
-  id        String     @id @default(cuid())
-  userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  email     String?
-  phone     String?
-  company   String?
-  gstNumber String?
-  state     String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  leads     Lead[]
-  proposals Proposal[]
-  contracts Contract[]
-  invoices  Invoice[]
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  gstNumber   String?
+  state       String?
+  portalToken String?    @unique
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  leads       Lead[]
+  proposals   Proposal[]
+  contracts   Contract[]
+  invoices    Invoice[]
+  meetings    Meeting[]
 
   @@map("clients")
 }
@@ -69,6 +98,7 @@ model Lead {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   proposals      Proposal[]
+  meetings       Meeting[]
 
   @@map("leads")
 }
@@ -198,15 +228,104 @@ enum GstType {
 }
 
 model AutomationRule {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trigger   String
-  action    String
-  config    Json
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String                @id @default(cuid())
+  userId        String
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key           String
+  name          String
+  description   String?
+  category      String
+  triggerEvent  String
+  triggerConfig Json                  @default("{}")
+  actionType    String
+  actionConfig  Json                  @default("{}")
+  isActive      Boolean               @default(true)
+  isSystem      Boolean               @default(true)
+  lastRunAt     DateTime?
+  runCount      Int                   @default(0)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  executions    AutomationExecution[]
 
+  @@unique([userId, key])
   @@map("automation_rules")
+}
+
+model AutomationExecution {
+  id         String          @id @default(cuid())
+  ruleId     String
+  rule       AutomationRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  entityId   String?
+  entityType String?
+  status     ExecutionStatus @default(SUCCESS)
+  error      String?
+  metadata   Json?
+  firedAt    DateTime        @default(now())
+
+  @@map("automation_executions")
+}
+
+enum ExecutionStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model EmailLog {
+  id          String   @id @default(cuid())
+  userId      String
+  to          String
+  subject     String
+  templateKey String
+  entityId    String?
+  entityType  String?
+  status      String
+  error       String?
+  sentAt      DateTime @default(now())
+
+  @@map("email_logs")
+}
+
+model Meeting {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId        String?
+  lead          Lead?         @relation(fields: [leadId], references: [id])
+  clientId      String?
+  client        Client?       @relation(fields: [clientId], references: [id])
+  title         String
+  agenda        String?
+  scheduledAt   DateTime
+  durationMins  Int           @default(30)
+  meetLink      String?
+  googleEventId String?
+  status        MeetingStatus @default(SCHEDULED)
+  reminderSent  Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("meetings")
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model ProposalTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  category    String?
+  content     Json
+  totalAmount Decimal  @default(0) @db.Decimal(12, 2)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("proposal_templates")
 }
