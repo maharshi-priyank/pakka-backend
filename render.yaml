@@ -2,7 +2,7 @@ services:
   - type: web
     name: pakka-api
     runtime: node
-    buildCommand: npm ci && npm run build && npx prisma generate
+    buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
