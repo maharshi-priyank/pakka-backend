@@ -76,6 +76,7 @@ export class AutomationScheduler {
   async runDailyChecks() {
     this.logger.log('[scheduler] running daily checks')
     await Promise.allSettled([
+      this.expireProposals(),
       this.checkOverdueInvoices(),
       this.checkDueSoonInvoices(),
       this.checkUnsignedContracts(),
@@ -126,29 +127,37 @@ export class AutomationScheduler {
   }
 
   // ─── Overdue invoice reminders ────────────────────────────────────────────
+  // Uses remindersSent as idempotency counter so missed daily runs catch up.
+  // d3 fires when remindersSent=0 and overdue >= 3 days
+  // d7 fires when remindersSent=1 and overdue >= 7 days
+  // d14 fires when remindersSent=2 and overdue >= 14 days
 
   private async checkOverdueInvoices() {
-    const THRESHOLDS = [3, 7, 14]
-    const ruleKeys   = THRESHOLDS.map((d) => `invoice.overdue.d${d}`)
+    const THRESHOLDS = [
+      { key: 'invoice.overdue.d3',  days: 3,  reminderIndex: 0 },
+      { key: 'invoice.overdue.d7',  days: 7,  reminderIndex: 1 },
+      { key: 'invoice.overdue.d14', days: 14, reminderIndex: 2 },
+    ]
 
     const rules = await this.prisma.automationRule.findMany({
-      where: { key: { in: ruleKeys }, isActive: true },
+      where: { key: { in: THRESHOLDS.map(t => t.key) }, isActive: true },
     })
     if (!rules.length) return
 
     const now = new Date()
 
     for (const rule of rules) {
-      const cfg  = rule.triggerConfig as { days: number }
-      const days = cfg.days
-      const from = new Date(now.getTime() - (days + 1) * 86_400_000)
-      const to   = new Date(now.getTime() - days * 86_400_000)
+      const threshold = THRESHOLDS.find(t => t.key === rule.key)
+      if (!threshold) continue
+
+      const overdueBy = new Date(now.getTime() - threshold.days * 86_400_000)
 
       const invoices = await this.prisma.invoice.findMany({
         where: {
-          userId:  rule.userId,
-          status:  'OVERDUE',
-          dueDate: { gte: from, lte: to },
+          userId:       rule.userId,
+          status:       'OVERDUE',
+          dueDate:      { lte: overdueBy },
+          remindersSent: threshold.reminderIndex,
         },
         include: { client: true },
       })
@@ -156,6 +165,10 @@ export class AutomationScheduler {
       for (const inv of invoices) {
         if (!inv.client?.email) continue
         await this.engine.executeRule(rule, inv.id, 'invoice', rule.userId)
+        await this.prisma.invoice.update({
+          where: { id: inv.id },
+          data:  { remindersSent: { increment: 1 } },
+        })
       }
     }
   }
@@ -189,6 +202,8 @@ export class AutomationScheduler {
   }
 
   // ─── Unsigned contract reminders ─────────────────────────────────────────
+  // Uses sentAt (set when contract is first sent) — not updatedAt which resets
+  // on every edit and would restart the reminder clock incorrectly.
 
   private async checkUnsignedContracts() {
     const ruleKeys = ['contract.not_signed.d3', 'contract.not_signed.d7']
@@ -207,9 +222,9 @@ export class AutomationScheduler {
 
       const contracts = await this.prisma.contract.findMany({
         where: {
-          userId:    rule.userId,
-          status:    'SENT',
-          updatedAt: { gte: from, lte: to },
+          userId:  rule.userId,
+          status:  'SENT',
+          sentAt:  { gte: from, lte: to },
         },
         include: { client: true },
       })
@@ -347,5 +362,17 @@ export class AutomationScheduler {
         await this.automations.recordExecution({ ruleId: rule.id, entityId: l.id, entityType: 'lead', status: 'SUCCESS' })
       }
     }
+  }
+
+  // ─── Expire proposals past validUntil ─────────────────────────────────────
+
+  private async expireProposals() {
+    await this.prisma.proposal.updateMany({
+      where: {
+        status:    { in: ['SENT', 'OPENED'] },
+        validUntil: { lt: new Date() },
+      },
+      data: { status: 'EXPIRED' },
+    })
   }
 }

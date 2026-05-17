@@ -167,6 +167,7 @@ model Contract {
   title      String
   status     ContractStatus @default(DRAFT)
   content    Json
+  sentAt     DateTime?
   signedAt   DateTime?
   signerOtp  String?
   auditLog   Json?
@@ -200,6 +201,7 @@ model Invoice {
   total             Decimal       @db.Decimal(12, 2)
   gstType           GstType       @default(IGST)
   tdsRate           Decimal?      @db.Decimal(5, 2)
+  amountPaid        Decimal       @default(0) @db.Decimal(12, 2)
   dueDate           DateTime?
   paidAt            DateTime?
   razorpayOrderId   String?

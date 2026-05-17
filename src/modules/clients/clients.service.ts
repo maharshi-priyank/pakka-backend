@@ -104,6 +104,13 @@ export class ClientsService {
 
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    await this.prisma.client.delete({ where: { id } });
+    await this.prisma.$transaction([
+      this.prisma.proposal.updateMany({ where: { clientId: id }, data: { clientId: null } }),
+      this.prisma.contract.updateMany({ where: { clientId: id }, data: { clientId: null } }),
+      this.prisma.invoice.updateMany({ where: { clientId: id }, data: { clientId: null } }),
+      this.prisma.meeting.updateMany({ where: { clientId: id }, data: { clientId: null } }),
+      this.prisma.lead.updateMany({ where: { clientId: id }, data: { clientId: null } }),
+      this.prisma.client.delete({ where: { id } }),
+    ]);
   }
 }

@@ -54,15 +54,16 @@ export class ContractsService {
     const c = proposal.content as Record<string, unknown>;
 
     const content = {
-      intro:           `This agreement is entered into between the service provider and the client for the project described below.`,
+      intro:              `This agreement is entered into between the service provider and the client for the project described below.`,
       projectDescription: `Project: ${proposal.title}`,
-      totalAmount:     Number(proposal.totalAmount),
-      gstAmount:       Number(proposal.gstAmount),
-      gstType:         c.gstType ?? 'IGST',
-      scopeItems:      c.scopeItems   ?? [],
-      deliverables:    c.deliverables ?? [],
-      exclusions:      c.exclusions   ?? [],
-      paymentSchedule: c.paymentSchedule ?? [],
+      totalAmount:        Number(proposal.totalAmount),
+      gstAmount:          Number(proposal.gstAmount),
+      gstType:            c.gstType ?? 'IGST',
+      tdsRate:            (c.tdsRate as number | undefined) ?? null,
+      scopeItems:         c.scopeItems   ?? [],
+      deliverables:       c.deliverables ?? [],
+      exclusions:         c.exclusions   ?? [],
+      paymentSchedule:    c.paymentSchedule ?? [],
       clauses: [
         {
           title: 'Payment Terms',
@@ -152,7 +153,7 @@ export class ContractsService {
 
     const updated = await this.prisma.contract.update({
       where: { id },
-      data:  { status: ContractStatus.SENT, signerOtp: otp },
+      data:  { status: ContractStatus.SENT, signerOtp: otp, sentAt: new Date() },
     });
 
     this.eventEmitter.emit('contract.sent', { entityId: id, userId });

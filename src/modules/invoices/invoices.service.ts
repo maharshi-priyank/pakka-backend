@@ -102,6 +102,7 @@ export class InvoicesService {
     const gstType       = (content.gstType    as GstType | undefined) ?? GstType.IGST;
     const totalAmount   = (content.totalAmount as number  | undefined) ?? 0;
     const contractGst   = (content.gstAmount   as number  | undefined) ?? 0;
+    const tdsRate       = (content.tdsRate     as number  | undefined) ?? null;
 
     const lineItems: LineItemDto[] = paymentSchedule.length > 0
       ? paymentSchedule.map(ps => ({ description: ps.milestone, qty: 1, rate: ps.amount, gstRate: 0 }))
@@ -129,6 +130,7 @@ export class InvoicesService {
         gstAmount: totals.gstAmount,
         total:     totals.total,
         gstType:   gstTypeForCalc,
+        tdsRate,
       },
       include: INCLUDE_FULL,
     });
@@ -232,11 +234,38 @@ export class InvoicesService {
 
     const paid = await this.prisma.invoice.update({
       where: { id },
-      data: { status: InvoiceStatus.PAID, paidAt: new Date() },
+      data: { status: InvoiceStatus.PAID, amountPaid: invoice.total, paidAt: new Date() },
       include: INCLUDE_FULL,
     });
     this.eventEmitter.emit('invoice.paid', { entityId: id, userId });
     return paid;
+  }
+
+  async recordPartialPayment(userId: string, id: string, amountReceived: number) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === InvoiceStatus.PAID) {
+      throw new BadRequestException('Invoice is already fully paid');
+    }
+
+    const newAmountPaid = parseFloat((Number(invoice.amountPaid) + amountReceived).toFixed(2));
+    const total         = Number(invoice.total);
+
+    if (newAmountPaid >= total) {
+      const paid = await this.prisma.invoice.update({
+        where: { id },
+        data:  { status: InvoiceStatus.PAID, amountPaid: total, paidAt: new Date() },
+        include: INCLUDE_FULL,
+      });
+      this.eventEmitter.emit('invoice.paid', { entityId: id, userId });
+      return paid;
+    }
+
+    return this.prisma.invoice.update({
+      where: { id },
+      data:  { status: InvoiceStatus.PARTIAL, amountPaid: newAmountPaid },
+      include: INCLUDE_FULL,
+    });
   }
 
   async markOverdue(userId: string, id: string) {

@@ -59,6 +59,15 @@ export class InvoicesController {
     return this.invoicesService.markPaid(user.id, id);
   }
 
+  @Post(':id/partial-payment')
+  recordPartialPayment(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body('amount') amount: number,
+  ) {
+    return this.invoicesService.recordPartialPayment(user.id, id, amount);
+  }
+
   @Post(':id/mark-overdue')
   markOverdue(@CurrentUser() user: User, @Param('id') id: string) {
     return this.invoicesService.markOverdue(user.id, id);
