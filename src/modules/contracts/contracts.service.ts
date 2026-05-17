@@ -44,12 +44,38 @@ export class ContractsService {
 
   async createFromProposal(userId: string, proposalId: string) {
     const proposal = await this.prisma.proposal.findFirst({
-      where: { id: proposalId, userId },
+      where:   { id: proposalId, userId },
+      include: { lead: true },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
 
     const existing = await this.prisma.contract.findFirst({ where: { proposalId } });
     if (existing) return existing;
+
+    // Resolve clientId: use existing client, or auto-convert lead → client
+    let clientId = proposal.clientId
+    if (!clientId && proposal.lead) {
+      const lead = proposal.lead
+      if (lead.clientId) {
+        clientId = lead.clientId
+      } else {
+        const newClient = await this.prisma.client.create({
+          data: {
+            userId,
+            name:    lead.name,
+            email:   lead.email    ?? undefined,
+            phone:   lead.phone    ?? undefined,
+            company: lead.company  ?? undefined,
+          },
+        })
+        clientId = newClient.id
+        // Link lead and proposal to the new client
+        await Promise.all([
+          this.prisma.lead.update({ where: { id: lead.id }, data: { clientId } }),
+          this.prisma.proposal.update({ where: { id: proposalId }, data: { clientId } }),
+        ])
+      }
+    }
 
     const c = proposal.content as Record<string, unknown>;
 
@@ -80,7 +106,7 @@ export class ContractsService {
       data: {
         userId,
         proposalId: proposal.id,
-        clientId:   proposal.clientId,
+        clientId,
         title:      `Contract — ${proposal.title}`,
         content:    content as object,
       },
