@@ -118,19 +118,57 @@ export class LeadsService {
       throw new ConflictException('This lead is already linked to a client');
     }
 
-    const client = await this.prisma.client.create({
-      data: {
-        userId,
-        name:    lead.name,
-        email:   lead.email   ?? undefined,
-        phone:   lead.phone   ?? undefined,
-        company: lead.company ?? undefined,
-      },
-    });
+    const [client] = await this.prisma.$transaction(async (tx) => {
+      const newClient = await tx.client.create({
+        data: {
+          userId,
+          name:    lead.name,
+          email:   lead.email   ?? undefined,
+          phone:   lead.phone   ?? undefined,
+          company: lead.company ?? undefined,
+        },
+      });
 
-    await this.prisma.lead.update({
-      where: { id: leadId },
-      data:  { clientId: client.id, stage: LeadStage.WON, lastActivityAt: new Date() },
+      await tx.lead.update({
+        where: { id: leadId },
+        data:  { clientId: newClient.id, stage: LeadStage.WON, lastActivityAt: new Date() },
+      });
+
+      // Backfill clientId on all proposals made for this lead
+      const proposals = await tx.proposal.findMany({
+        where: { leadId },
+        select: { id: true },
+      });
+      const proposalIds = proposals.map(p => p.id);
+
+      if (proposalIds.length > 0) {
+        await tx.proposal.updateMany({
+          where: { id: { in: proposalIds } },
+          data:  { clientId: newClient.id },
+        });
+
+        // Backfill clientId on contracts linked to those proposals
+        const contracts = await tx.contract.findMany({
+          where: { proposalId: { in: proposalIds } },
+          select: { id: true },
+        });
+        const contractIds = contracts.map(c => c.id);
+
+        if (contractIds.length > 0) {
+          await tx.contract.updateMany({
+            where: { id: { in: contractIds } },
+            data:  { clientId: newClient.id },
+          });
+
+          // Backfill clientId on invoices linked to those contracts
+          await tx.invoice.updateMany({
+            where: { contractId: { in: contractIds } },
+            data:  { clientId: newClient.id },
+          });
+        }
+      }
+
+      return [newClient];
     });
 
     return client;
