@@ -254,10 +254,12 @@ export class ProposalsService {
       });
     }
 
-    return this.prisma.proposal.update({
+    const declined = await this.prisma.proposal.update({
       where: { id: proposal.id },
       data:  { status: ProposalStatus.DECLINED },
     });
+    this.eventEmitter.emit('proposal.declined', { entityId: proposal.id, userId: proposal.userId });
+    return declined;
   }
 
   async remove(userId: string, id: string) {

@@ -294,22 +294,26 @@ export class InvoicesService {
       return paid;
     }
 
-    return this.prisma.invoice.update({
+    const partial = await this.prisma.invoice.update({
       where: { id },
       data:  { status: InvoiceStatus.PARTIAL, amountPaid: newAmountPaid },
       include: INCLUDE_FULL,
     });
+    this.eventEmitter.emit('invoice.partial', { entityId: id, userId, amountPaid: newAmountPaid });
+    return partial;
   }
 
   async markOverdue(userId: string, id: string) {
     const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
-    return this.prisma.invoice.update({
+    const overdue = await this.prisma.invoice.update({
       where: { id },
       data: { status: InvoiceStatus.OVERDUE },
       include: INCLUDE_FULL,
     });
+    this.eventEmitter.emit('invoice.overdue', { entityId: id, userId });
+    return overdue;
   }
 
   async delete(userId: string, id: string) {

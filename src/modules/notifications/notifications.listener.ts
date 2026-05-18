@@ -97,6 +97,66 @@ export class NotificationsListener {
     })
   }
 
+  @OnEvent('proposal.declined')
+  async onProposalDeclined({ entityId, userId }: EventPayload) {
+    const proposal = await this.prisma.proposal.findUnique({
+      where:   { id: entityId },
+      include: { client: true, lead: true },
+    })
+    const clientName = proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
+    const title      = proposal?.title ?? 'your proposal'
+
+    await this.notifications.create({
+      userId,
+      type:       'proposal.declined',
+      title:      'Proposal declined',
+      body:       `${clientName} declined "${title}"`,
+      entityId,
+      entityType: 'proposal',
+    })
+  }
+
+  @OnEvent('invoice.partial')
+  async onInvoicePartial({ entityId, userId, amountPaid }: EventPayload & { amountPaid: number }) {
+    const inv = await this.prisma.invoice.findUnique({
+      where:   { id: entityId },
+      include: { client: true },
+    })
+    const clientName = inv?.client?.name ?? 'Client'
+    const invoiceNo  = inv?.invoiceNumber ?? 'invoice'
+    const paid       = rupees(amountPaid)
+    const total      = inv ? rupees(inv.total) : ''
+
+    await this.notifications.create({
+      userId,
+      type:       'invoice.partial',
+      title:      'Partial payment received',
+      body:       `${clientName} paid ${paid}${total ? ` of ${total}` : ''} on ${invoiceNo}`,
+      entityId,
+      entityType: 'invoice',
+    })
+  }
+
+  @OnEvent('invoice.overdue')
+  async onInvoiceOverdue({ entityId, userId }: EventPayload) {
+    const inv = await this.prisma.invoice.findUnique({
+      where:   { id: entityId },
+      include: { client: true },
+    })
+    const clientName = inv?.client?.name ?? 'Client'
+    const invoiceNo  = inv?.invoiceNumber ?? 'invoice'
+    const amount     = inv ? rupees(inv.total) : ''
+
+    await this.notifications.create({
+      userId,
+      type:       'invoice.overdue',
+      title:      'Invoice overdue',
+      body:       `${invoiceNo}${amount ? ` · ${amount}` : ''} from ${clientName} is now overdue`,
+      entityId,
+      entityType: 'invoice',
+    })
+  }
+
   @OnEvent('lead.created')
   async onLeadCreated({ entityId, userId }: EventPayload) {
     const lead = await this.prisma.lead.findUnique({ where: { id: entityId } })
