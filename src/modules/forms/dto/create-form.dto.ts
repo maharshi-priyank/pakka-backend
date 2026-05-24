@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateFormDto {
@@ -14,6 +15,6 @@ export class CreateFormDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsArray()
+  @Type(() => Object)
   fields?: Record<string, unknown>[];
 }
