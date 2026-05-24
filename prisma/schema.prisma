@@ -41,6 +41,7 @@ model User {
   contracts               Contract[]
   invoices                Invoice[]
   automationRules         AutomationRule[]
+  automationWorkflows     AutomationWorkflow[]
   notifications           Notification[]
   meetings                Meeting[]
   proposalTemplates       ProposalTemplate[]
@@ -392,4 +393,47 @@ model ProposalTemplate {
   updatedAt   DateTime @updatedAt
 
   @@map("proposal_templates")
+}
+
+model AutomationWorkflow {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isActive    Boolean      @default(false)
+  trigger     Json         @default("{}")
+  steps       Json         @default("[]")
+  runCount    Int          @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  runs        WorkflowRun[]
+
+  @@map("automation_workflows")
+}
+
+model WorkflowRun {
+  id           String            @id @default(cuid())
+  workflowId   String
+  workflow     AutomationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId       String
+  entityId     String
+  entityType   String
+  status       WorkflowRunStatus @default(RUNNING)
+  pendingSteps Json              @default("[]")
+  log          Json              @default("[]")
+  nextFireAt   DateTime
+  startedAt    DateTime          @default(now())
+  completedAt  DateTime?
+
+  @@index([status, nextFireAt])
+  @@map("workflow_runs")
+}
+
+enum WorkflowRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

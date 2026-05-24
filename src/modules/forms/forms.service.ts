@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFormDto } from './dto/create-form.dto';
@@ -7,7 +8,10 @@ import { SubmitFormDto } from './dto/submit-form.dto';
 
 @Injectable()
 export class FormsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:        PrismaService,
+    private readonly eventEmitter:  EventEmitter2,
+  ) {}
 
   async create(userId: string, dto: CreateFormDto) {
     return this.prisma.intakeForm.create({
@@ -80,7 +84,7 @@ export class FormsService {
     if (!form) throw new NotFoundException('Form not found');
     if (!form.isActive) throw new BadRequestException('This form is no longer accepting responses');
 
-    return this.prisma.intakeFormSubmission.create({
+    const submission = await this.prisma.intakeFormSubmission.create({
       data: {
         formId:          form.id,
         respondentName:  dto.respondentName,
@@ -88,5 +92,13 @@ export class FormsService {
         answers:         dto.answers as unknown as object,
       },
     });
+
+    this.eventEmitter.emit('form.submitted', {
+      entityId: form.id,
+      userId:   form.userId,
+      formId:   form.id,
+    });
+
+    return submission;
   }
 }

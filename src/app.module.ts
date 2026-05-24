@@ -24,6 +24,7 @@ import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
 import { FormsModule } from './modules/forms/forms.module';
+import { WorkflowsModule } from './modules/workflows/workflows.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -65,6 +66,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     MeetingsModule,
     ProposalTemplatesModule,
     FormsModule,
+    WorkflowsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
