@@ -16,8 +16,9 @@ export class LeadsService {
   ) {}
 
   async create(userId: string, dto: CreateLeadDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
-    if (user?.plan === 'FREE') {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true } });
+    const effectivePlan = (user?.planExpiresAt && user.planExpiresAt < new Date()) ? 'FREE' : user?.plan;
+    if (effectivePlan === 'FREE') {
       const count = await this.prisma.lead.count({ where: { userId, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
     }

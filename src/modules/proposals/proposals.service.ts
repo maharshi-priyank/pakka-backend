@@ -36,8 +36,9 @@ export class ProposalsService {
   ) {}
 
   async create(userId: string, dto: CreateProposalDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
-    if (user?.plan === 'FREE') {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true } });
+    const effectivePlan = (user?.planExpiresAt && user.planExpiresAt < new Date()) ? 'FREE' : user?.plan;
+    if (effectivePlan === 'FREE') {
       const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
       const count = await this.prisma.proposal.count({ where: { userId, createdAt: { gte: start } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 proposals/month limit reached.', code: 'PLAN_LIMIT' }, 402);

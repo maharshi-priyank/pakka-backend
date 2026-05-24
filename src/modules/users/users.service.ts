@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { UpsertUserDto, UpdateUserDto } from './dto/upsert-user.dto';
@@ -60,5 +60,25 @@ export class UsersService {
         googleCalendarConnected: false,
       },
     });
+  }
+
+  async redeemPromo(userId: string, code: string) {
+    const promo = await this.prisma.promoCode.findUnique({ where: { code } });
+    if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');
+
+    const existing = await this.prisma.promoRedemption.findUnique({
+      where: { codeId_userId: { codeId: promo.id, userId } },
+    });
+    if (existing) throw new BadRequestException('You have already used this promo code');
+
+    const planExpiresAt = new Date();
+    planExpiresAt.setDate(planExpiresAt.getDate() + 30);
+
+    await this.prisma.$transaction([
+      this.prisma.promoRedemption.create({ data: { codeId: promo.id, userId } }),
+      this.prisma.user.update({ where: { id: userId }, data: { plan: promo.plan, planExpiresAt } }),
+    ]);
+
+    return { plan: promo.plan, expiresAt: planExpiresAt };
   }
 }

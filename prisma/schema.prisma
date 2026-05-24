@@ -17,6 +17,7 @@ model User {
   email                   String           @unique
   name                    String
   plan                    Plan             @default(FREE)
+  planExpiresAt           DateTime?
   businessName            String?
   logoUrl                 String?
   gstNumber               String?
@@ -43,8 +44,32 @@ model User {
   notifications           Notification[]
   meetings                Meeting[]
   proposalTemplates       ProposalTemplate[]
+  promoRedemptions        PromoRedemption[]
 
   @@map("users")
+}
+
+model PromoCode {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  plan        Plan
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  redemptions PromoRedemption[]
+
+  @@map("promo_codes")
+}
+
+model PromoRedemption {
+  id         String    @id @default(cuid())
+  codeId     String
+  code       PromoCode @relation(fields: [codeId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redeemedAt DateTime  @default(now())
+
+  @@unique([codeId, userId])
+  @@map("promo_redemptions")
 }
 
 model Notification {

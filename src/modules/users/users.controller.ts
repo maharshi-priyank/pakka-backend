@@ -39,4 +39,11 @@ export class UsersController {
   updateMe(@CurrentUser() user: User, @Body() dto: UpdateUserDto) {
     return this.usersService.update(user.id, dto);
   }
+
+  @Post('redeem-promo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Redeem a promo code to upgrade plan' })
+  redeemPromo(@CurrentUser() user: User, @Body('code') code: string) {
+    return this.usersService.redeemPromo(user.id, code);
+  }
 }
