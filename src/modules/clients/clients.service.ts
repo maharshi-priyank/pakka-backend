@@ -74,20 +74,25 @@ export class ClientsService {
       include: {
         proposals: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, title: true, status: true, totalAmount: true, createdAt: true },
+          select: { id: true, title: true, status: true, totalAmount: true, createdAt: true, acceptedAt: true },
         },
         contracts: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, title: true, status: true, createdAt: true },
+          select: { id: true, title: true, status: true, createdAt: true, sentAt: true, signedAt: true },
         },
         invoices: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, invoiceNumber: true, status: true, total: true, dueDate: true, createdAt: true },
+          select: { id: true, invoiceNumber: true, status: true, total: true, dueDate: true, createdAt: true, paidAt: true },
         },
         leads: {
           orderBy: { createdAt: 'desc' },
           where:   { isDeleted: false },
           select:  { id: true, name: true, stage: true, budget: true, source: true, createdAt: true },
+        },
+        meetings: {
+          orderBy: { scheduledAt: 'desc' },
+          where:   { status: { not: 'CANCELLED' } },
+          select:  { id: true, title: true, scheduledAt: true, status: true, meetLink: true },
         },
         _count: {
           select: { proposals: true, contracts: true, invoices: true },
