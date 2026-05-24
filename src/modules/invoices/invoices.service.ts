@@ -251,7 +251,7 @@ export class InvoicesService {
       where: { id },
       include: {
         client: true,
-        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true } },
+        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');

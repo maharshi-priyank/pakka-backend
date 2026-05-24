@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -16,6 +16,12 @@ export class LeadsService {
   ) {}
 
   async create(userId: string, dto: CreateLeadDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
+    if (user?.plan === 'FREE') {
+      const count = await this.prisma.lead.count({ where: { userId, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } } });
+      if (count >= 3) throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
+    }
+
     const lead = await this.prisma.lead.create({
       data: {
         ...dto,

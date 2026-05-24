@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, HttpException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LeadStage, ProposalStatus } from '@prisma/client';
@@ -36,6 +36,13 @@ export class ProposalsService {
   ) {}
 
   async create(userId: string, dto: CreateProposalDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
+    if (user?.plan === 'FREE') {
+      const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+      const count = await this.prisma.proposal.count({ where: { userId, createdAt: { gte: start } } });
+      if (count >= 3) throw new HttpException({ message: 'Free plan: 3 proposals/month limit reached.', code: 'PLAN_LIMIT' }, 402);
+    }
+
     const lineItems = dto.content?.lineItems ?? [];
     const gstType   = dto.content?.gstType ?? 'IGST';
     const { subtotal, gstAmount, totalAmount } = calcTotals(lineItems, gstType);
@@ -108,7 +115,7 @@ export class ProposalsService {
   async findBySlug(slug: string) {
     const proposal = await this.prisma.proposal.findUnique({
       where: { slug },
-      include: { user: { select: { name: true, businessName: true, email: true, logoUrl: true } } },
+      include: { user: { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true } } },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
     return proposal;
