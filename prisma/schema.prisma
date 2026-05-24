@@ -45,6 +45,7 @@ model User {
   meetings                Meeting[]
   proposalTemplates       ProposalTemplate[]
   promoRedemptions        PromoRedemption[]
+  intakeForms             IntakeForm[]
 
   @@map("users")
 }
@@ -70,6 +71,34 @@ model PromoRedemption {
 
   @@unique([codeId, userId])
   @@map("promo_redemptions")
+}
+
+model IntakeForm {
+  id          String                 @id @default(cuid())
+  userId      String
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  token       String                 @unique
+  fields      Json
+  isActive    Boolean                @default(true)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  submissions IntakeFormSubmission[]
+
+  @@map("intake_forms")
+}
+
+model IntakeFormSubmission {
+  id              String     @id @default(cuid())
+  formId          String
+  form            IntakeForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  respondentEmail String?
+  respondentName  String?
+  answers         Json
+  submittedAt     DateTime   @default(now())
+
+  @@map("intake_form_submissions")
 }
 
 model Notification {

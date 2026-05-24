@@ -23,6 +23,7 @@ import { PortalModule } from './modules/portal/portal.module';
 import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
+import { FormsModule } from './modules/forms/forms.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -63,6 +64,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     GoogleAuthModule,
     MeetingsModule,
     ProposalTemplatesModule,
+    FormsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
