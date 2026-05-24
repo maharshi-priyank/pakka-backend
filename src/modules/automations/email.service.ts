@@ -36,7 +36,7 @@ export class EmailService {
     entityId?:   string
     entityType?: string
   }): Promise<boolean> {
-    const from = this.config.get<string>('email.from') ?? 'Pakka <noreply@pakka.in>'
+    const from = this.config.get<string>('email.from') ?? 'Clinekt <noreply@clinekt.io>'
 
     if (!this.transporter) {
       this.logger.debug(`[email-skip] to=${opts.to} subject="${opts.subject}"`)

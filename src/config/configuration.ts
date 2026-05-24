@@ -18,7 +18,7 @@ export const validationSchema = Joi.object({
   EMAIL_PORT: Joi.number().default(587),
   EMAIL_USER: Joi.string().optional(),
   EMAIL_PASS: Joi.string().optional(),
-  EMAIL_FROM: Joi.string().default('Pakka <noreply@pakka.in>'),
+  EMAIL_FROM: Joi.string().default('Clinekt <noreply@clinekt.io>'),
   APP_URL: Joi.string().default('http://localhost:5173'),
 });
 
@@ -45,7 +45,7 @@ export const configuration = () => ({
     port: parseInt(process.env.EMAIL_PORT ?? '587', 10),
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
-    from: process.env.EMAIL_FROM ?? 'Pakka <noreply@pakka.in>',
+    from: process.env.EMAIL_FROM ?? 'Clinekt <noreply@clinekt.io>',
   },
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
   geminiApiKey: process.env.GEMINI_API_KEY,

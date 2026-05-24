@@ -22,7 +22,7 @@ function layout(content: string, businessName: string): string {
       <tr>
         <td style="background:#2563EB;padding:20px 32px;">
           <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">${businessName}</span>
-          <span style="color:#BFDBFE;font-size:12px;font-weight:500;margin-left:8px;">via Pakka</span>
+          <span style="color:#BFDBFE;font-size:12px;font-weight:500;margin-left:8px;">via Clinekt</span>
         </td>
       </tr>
 
@@ -37,7 +37,7 @@ function layout(content: string, businessName: string): string {
       <tr>
         <td style="border-top:1px solid #F2F4F7;padding:20px 32px;background:#F9FAFB;">
           <p style="margin:0;font-size:11px;color:#98A2B3;text-align:center;">
-            Sent by <strong>${businessName}</strong> using <a href="https://pakka.in" style="color:#2563EB;text-decoration:none;">Pakka</a>.
+            Sent by <strong>${businessName}</strong> using <a href="https://clinekt.io" style="color:#2563EB;text-decoration:none;">Clinekt</a>.
             If you have questions, reply to this email.
           </p>
         </td>
@@ -456,7 +456,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
           ['Open proposals', String(dv.openProposals)],
           ['Overdue invoices', String(dv.overdueCount)],
         ])}
-        ${p('Log in to Pakka to see detailed breakdowns, recent activity, and upcoming follow-ups.', true)}
+        ${p('Log in to Clinekt to see detailed breakdowns, recent activity, and upcoming follow-ups.', true)}
       `, dv.businessName)
     },
   },

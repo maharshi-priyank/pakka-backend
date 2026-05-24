@@ -41,8 +41,8 @@ async function bootstrap() {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Pakka API')
-    .setDescription('Pakka platform API — Lead → Proposal → Contract → Invoice → Payment')
+    .setTitle('Clinekt API')
+    .setDescription('Clinekt platform API — Lead → Proposal → Contract → Invoice → Payment')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -53,7 +53,7 @@ async function bootstrap() {
   });
 
   await app.listen(port);
-  console.log(`Pakka API running on http://localhost:${port}`);
+  console.log(`Clinekt API running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 
