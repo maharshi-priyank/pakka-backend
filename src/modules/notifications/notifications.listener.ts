@@ -173,4 +173,41 @@ export class NotificationsListener {
       entityType: 'lead',
     })
   }
+
+  @OnEvent('form.submitted')
+  async onFormSubmitted({ entityId, userId }: EventPayload) {
+    const form = await this.prisma.intakeForm.findUnique({
+      where:   { id: entityId },
+      include: { _count: { select: { submissions: true } } },
+    })
+    const formTitle = form?.title ?? 'your form'
+    const count     = form?._count?.submissions ?? 1
+
+    await this.notifications.create({
+      userId,
+      type:       'form.submitted',
+      title:      'New form response',
+      body:       `Someone filled out "${formTitle}" · ${count} response${count === 1 ? '' : 's'} total`,
+      entityId,
+      entityType: 'form',
+    })
+  }
+
+  @OnEvent('meeting.scheduled')
+  async onMeetingScheduled({ entityId, userId }: EventPayload) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: entityId } })
+    if (!meeting) return
+    const date = new Date(meeting.scheduledAt).toLocaleDateString('en-IN', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    })
+
+    await this.notifications.create({
+      userId,
+      type:       'meeting.scheduled',
+      title:      'Meeting scheduled',
+      body:       `"${meeting.title}" on ${date}`,
+      entityId,
+      entityType: 'meeting',
+    })
+  }
 }

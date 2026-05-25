@@ -219,6 +219,10 @@ export class ProposalsService {
         where: { id: proposal.id },
         data:  { status: ProposalStatus.OPENED },
       });
+    }
+
+    // Fire on every view so the owner is notified each time the client opens it
+    if (proposal.status !== ProposalStatus.ACCEPTED && proposal.status !== ProposalStatus.DECLINED) {
       this.eventEmitter.emit('proposal.opened', { entityId: proposal.id, userId: proposal.userId });
     }
 
