@@ -1,11 +1,16 @@
-import { Injectable, NotFoundException, ForbiddenException, HttpException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, HttpException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import * as crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LeadStage, ProposalStatus } from '@prisma/client';
+import { GstType, LeadStage, ProposalStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { CreateProposalDto, LineItemDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { QueryProposalsDto } from './dto/query-proposals.dto';
+import { VerifyDepositDto } from './dto/verify-deposit.dto';
+import { InvoicesService } from '../invoices/invoices.service';
 
 // Generates a short, URL-safe slug like "abc123xy"
 function generateSlug(): string {
@@ -30,10 +35,19 @@ function calcTotals(lineItems: LineItemDto[], gstType: string) {
 
 @Injectable()
 export class ProposalsService {
+  private readonly razorpay: Razorpay;
+
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly eventEmitter: EventEmitter2,
-  ) {}
+    private readonly prisma:        PrismaService,
+    private readonly eventEmitter:  EventEmitter2,
+    private readonly config:        ConfigService,
+    private readonly invoices:      InvoicesService,
+  ) {
+    this.razorpay = new Razorpay({
+      key_id:     this.config.get<string>('razorpay.keyId')!,
+      key_secret: this.config.get<string>('razorpay.keySecret')!,
+    });
+  }
 
   async create(userId: string, dto: CreateProposalDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true } });
@@ -234,7 +248,23 @@ export class ProposalsService {
   async acceptBySlug(slug: string) {
     const proposal = await this.prisma.proposal.findUnique({ where: { slug } });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    if (proposal.status === ProposalStatus.ACCEPTED) return proposal;
+
+    // Already accepted — if deposit order exists and is unpaid, return it so the client can still pay
+    if (proposal.status === ProposalStatus.ACCEPTED) {
+      if (proposal.depositOrderId && !proposal.depositPaid && proposal.depositAmount) {
+        return {
+          proposal,
+          depositOrder: {
+            orderId:   proposal.depositOrderId,
+            amount:    Math.round(Number(proposal.depositAmount) * 100),
+            currency:  'INR',
+            keyId:     this.config.get<string>('razorpay.keyId'),
+            milestone: 'Deposit',
+          },
+        };
+      }
+      return { proposal, depositOrder: null };
+    }
 
     const updated = await this.prisma.proposal.update({
       where: { id: proposal.id },
@@ -249,7 +279,75 @@ export class ProposalsService {
     }
 
     this.eventEmitter.emit('proposal.accepted', { entityId: proposal.id, userId: proposal.userId });
-    return updated;
+
+    // If proposal has a payment schedule, create a Razorpay order for the first milestone
+    const paymentSchedule = (proposal.content as Record<string, unknown>)
+      ?.paymentSchedule as Array<{ milestone: string; amount: number }> | undefined;
+
+    if (paymentSchedule?.length) {
+      const deposit = paymentSchedule[0];
+      try {
+        const order = await (this.razorpay.orders.create as any)({
+          amount:   Math.round(deposit.amount * 100),
+          currency: 'INR',
+          receipt:  proposal.id,
+        });
+        await this.prisma.proposal.update({
+          where: { id: proposal.id },
+          data:  { depositOrderId: order.id, depositAmount: deposit.amount },
+        });
+        return {
+          proposal: updated,
+          depositOrder: {
+            orderId:   order.id,
+            amount:    Math.round(deposit.amount * 100),
+            currency:  'INR',
+            keyId:     this.config.get<string>('razorpay.keyId'),
+            milestone: deposit.milestone,
+          },
+        };
+      } catch {
+        // Razorpay unavailable — still return accepted proposal, no deposit card
+      }
+    }
+
+    return { proposal: updated, depositOrder: null };
+  }
+
+  async verifyDeposit(slug: string, dto: VerifyDepositDto) {
+    const proposal = await this.prisma.proposal.findUnique({ where: { slug } });
+    if (!proposal) throw new NotFoundException('Proposal not found');
+    if (!proposal.depositOrderId) throw new BadRequestException('No pending deposit for this proposal');
+    if (proposal.depositPaid)     throw new BadRequestException('Deposit already paid');
+    if (proposal.depositOrderId !== dto.orderId) throw new BadRequestException('Order ID mismatch');
+
+    const keySecret = this.config.get<string>('razorpay.keySecret')!;
+    const expected  = crypto.createHmac('sha256', keySecret)
+      .update(`${dto.orderId}|${dto.paymentId}`)
+      .digest('hex');
+    if (expected !== dto.signature) throw new ForbiddenException('Invalid payment signature');
+
+    await this.prisma.proposal.update({
+      where: { id: proposal.id },
+      data:  { depositPaid: true, depositPaidAt: new Date() },
+    });
+
+    // Auto-create a DRAFT invoice for the deposit amount
+    if (proposal.depositAmount && proposal.clientId) {
+      await this.invoices.create(proposal.userId, {
+        clientId:  proposal.clientId,
+        lineItems: [{
+          description: `Deposit — ${proposal.title}`,
+          qty:         1,
+          rate:        Number(proposal.depositAmount),
+          gstRate:     0,
+        }],
+        gstType: GstType.EXEMPT,
+      } as any);
+    }
+
+    this.eventEmitter.emit('proposal.deposit_paid', { entityId: proposal.id, userId: proposal.userId });
+    return { success: true };
   }
 
   async declineBySlug(slug: string) {

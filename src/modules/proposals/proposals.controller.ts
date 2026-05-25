@@ -8,6 +8,7 @@ import { ProposalsService } from './proposals.service';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { QueryProposalsDto } from './dto/query-proposals.dto';
+import { VerifyDepositDto } from './dto/verify-deposit.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '@prisma/client';
@@ -90,5 +91,13 @@ export class ProposalsController {
   @ApiOperation({ summary: 'Client declines proposal (no auth)' })
   declineBySlug(@Param('slug') slug: string) {
     return this.svc.declineBySlug(slug);
+  }
+
+  @Post('view/:slug/verify-deposit')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify Razorpay deposit payment and mark proposal deposit as paid' })
+  verifyDeposit(@Param('slug') slug: string, @Body() dto: VerifyDepositDto) {
+    return this.svc.verifyDeposit(slug, dto);
   }
 }
