@@ -268,9 +268,17 @@ model Invoice {
   paidAt            DateTime?
   razorpayOrderId   String?
   razorpayPaymentId String?
-  remindersSent     Int           @default(0)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  remindersSent      Int           @default(0)
+  isRecurring        Boolean       @default(false)
+  recurrenceCycle    String?
+  recurrenceDay      Int?
+  recurrenceEndDate  DateTime?
+  recurrenceNextDate DateTime?
+  parentInvoiceId    String?
+  parentInvoice      Invoice?      @relation("InvoiceRecurrence", fields: [parentInvoiceId], references: [id])
+  childInvoices      Invoice[]     @relation("InvoiceRecurrence")
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@map("invoices")
 }

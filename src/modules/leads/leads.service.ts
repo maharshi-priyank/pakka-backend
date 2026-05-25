@@ -180,6 +180,7 @@ export class LeadsService {
       return [newClient];
     });
 
+    this.eventEmitter.emit('lead.converted', { entityId: leadId, userId, clientId: client.id })
     return client;
   }
 

@@ -82,22 +82,96 @@ export class InvoicesService {
     private readonly eventEmitter:  EventEmitter2,
   ) {}
 
+  private computeNextRecurrenceDate(from: Date, cycle: string, day: number): Date {
+    const next = new Date(from)
+    if (cycle === 'WEEKLY')    next.setDate(next.getDate() + 7)
+    if (cycle === 'MONTHLY')   next.setMonth(next.getMonth() + 1)
+    if (cycle === 'QUARTERLY') next.setMonth(next.getMonth() + 3)
+    if (cycle === 'YEARLY')    next.setFullYear(next.getFullYear() + 1)
+    // clamp day to last day of the computed month (handles Feb 28, etc.)
+    const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+    next.setDate(Math.min(day, lastDay))
+    return next
+  }
+
   async create(userId: string, dto: CreateInvoiceDto) {
     const gstType = dto.gstType ?? GstType.IGST;
     const { subtotal, gstAmount, total } = calcTotals(dto.lineItems, gstType);
 
+    const now = new Date()
+    const recurrenceNextDate =
+      dto.isRecurring && dto.recurrenceCycle && dto.recurrenceDay
+        ? this.computeNextRecurrenceDate(now, dto.recurrenceCycle, dto.recurrenceDay)
+        : null
+
     return createInvoiceWithRetry(this.prisma, userId, {
       userId,
-      contractId: dto.contractId,
-      clientId:   dto.clientId,
-      lineItems:  dto.lineItems as object[],
+      contractId:        dto.contractId,
+      clientId:          dto.clientId,
+      lineItems:         dto.lineItems as object[],
       subtotal,
       gstAmount,
       total,
       gstType,
-      tdsRate: dto.tdsRate  != null ? dto.tdsRate  : null,
-      dueDate: dto.dueDate  ? new Date(dto.dueDate)  : null,
+      tdsRate:           dto.tdsRate  != null ? dto.tdsRate  : null,
+      dueDate:           dto.dueDate  ? new Date(dto.dueDate)  : null,
+      isRecurring:       dto.isRecurring        ?? false,
+      recurrenceCycle:   dto.recurrenceCycle    ?? null,
+      recurrenceDay:     dto.recurrenceDay      ?? null,
+      recurrenceEndDate: dto.recurrenceEndDate  ? new Date(dto.recurrenceEndDate) : null,
+      recurrenceNextDate,
     }, INCLUDE_FULL);
+  }
+
+  async generateRecurringDrafts(): Promise<void> {
+    const now = new Date()
+    const due = await this.prisma.invoice.findMany({
+      where: {
+        isRecurring:        true,
+        recurrenceNextDate: { lte: now },
+        status:             { notIn: ['CANCELLED'] },
+        OR: [{ recurrenceEndDate: null }, { recurrenceEndDate: { gte: now } }],
+      },
+    })
+
+    for (const inv of due) {
+      if (!inv.recurrenceCycle || !inv.recurrenceDay) continue
+      const nextDate = this.computeNextRecurrenceDate(now, inv.recurrenceCycle, inv.recurrenceDay)
+
+      await createInvoiceWithRetry(this.prisma, inv.userId, {
+        userId:            inv.userId,
+        contractId:        inv.contractId    ?? undefined,
+        clientId:          inv.clientId      ?? undefined,
+        lineItems:         inv.lineItems     as object[],
+        subtotal:          inv.subtotal,
+        gstAmount:         inv.gstAmount,
+        total:             inv.total,
+        gstType:           inv.gstType,
+        tdsRate:           inv.tdsRate       ?? null,
+        isRecurring:       true,
+        recurrenceCycle:   inv.recurrenceCycle,
+        recurrenceDay:     inv.recurrenceDay,
+        recurrenceEndDate: inv.recurrenceEndDate  ?? null,
+        recurrenceNextDate: nextDate,
+        parentInvoiceId:   inv.id,
+      }, null)
+
+      await this.prisma.invoice.update({
+        where: { id: inv.id },
+        data:  { recurrenceNextDate: nextDate },
+      })
+    }
+  }
+
+  async markOverdueInvoices(): Promise<void> {
+    await this.prisma.invoice.updateMany({
+      where: {
+        status:  { in: ['SENT', 'VIEWED'] },
+        dueDate: { lt: new Date() },
+        amountPaid: 0,
+      },
+      data: { status: 'OVERDUE' },
+    })
   }
 
   async createFromContract(userId: string, contractId: string) {

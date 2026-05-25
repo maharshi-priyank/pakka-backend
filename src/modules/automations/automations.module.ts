@@ -5,9 +5,10 @@ import { AutomationEngine } from './automation.engine'
 import { AutomationScheduler } from './automation.scheduler'
 import { EmailService } from './email.service'
 import { PrismaModule } from '../../prisma/prisma.module'
+import { InvoicesModule } from '../invoices/invoices.module'
 
 @Module({
-  imports:     [PrismaModule],
+  imports:     [PrismaModule, InvoicesModule],
   controllers: [AutomationsController],
   providers:   [AutomationsService, AutomationEngine, AutomationScheduler, EmailService],
   exports:     [AutomationsService, AutomationEngine, EmailService],

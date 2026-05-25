@@ -1,6 +1,6 @@
 import {
   IsString, IsOptional, IsNumber, IsEnum, IsArray,
-  ValidateNested, IsDateString, Min, Max,
+  ValidateNested, IsDateString, Min, Max, IsBoolean, IsInt, IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -34,4 +34,10 @@ export class CreateInvoiceDto {
   @ApiPropertyOptional() @IsNumber() @Min(0) @Max(30) @IsOptional() tdsRate?: number;
   @ApiPropertyOptional() @IsDateString() @IsOptional() dueDate?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() notes?: string;
+
+  @ApiPropertyOptional() @IsBoolean() @IsOptional() isRecurring?: boolean;
+  @ApiPropertyOptional({ enum: ['MONTHLY', 'QUARTERLY', 'YEARLY', 'WEEKLY'] })
+  @IsIn(['MONTHLY', 'QUARTERLY', 'YEARLY', 'WEEKLY']) @IsOptional() recurrenceCycle?: string;
+  @ApiPropertyOptional() @IsInt() @Min(1) @Max(28) @IsOptional() recurrenceDay?: number;
+  @ApiPropertyOptional() @IsDateString() @IsOptional() recurrenceEndDate?: string;
 }

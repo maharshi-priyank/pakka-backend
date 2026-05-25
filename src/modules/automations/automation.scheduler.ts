@@ -5,6 +5,7 @@ import { AutomationEngine } from './automation.engine'
 import { AutomationsService } from './automations.service'
 import { EmailService } from './email.service'
 import { renderTemplate } from './templates/email-templates'
+import { InvoicesService } from '../invoices/invoices.service'
 
 @Injectable()
 export class AutomationScheduler {
@@ -15,6 +16,7 @@ export class AutomationScheduler {
     private readonly engine:       AutomationEngine,
     private readonly automations:  AutomationsService,
     private readonly email:        EmailService,
+    private readonly invoices:     InvoicesService,
   ) {}
 
   // ─── Hourly — meeting reminders ───────────────────────────────────────────
@@ -77,6 +79,8 @@ export class AutomationScheduler {
     this.logger.log('[scheduler] running daily checks')
     await Promise.allSettled([
       this.expireProposals(),
+      this.invoices.markOverdueInvoices(),
+      this.invoices.generateRecurringDrafts(),
       this.checkOverdueInvoices(),
       this.checkDueSoonInvoices(),
       this.checkUnsignedContracts(),
