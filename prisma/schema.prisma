@@ -49,6 +49,7 @@ model User {
   intakeForms             IntakeForm[]
   timeEntries             TimeEntry[]
   expenses                Expense[]
+  projects                Project[]
 
   @@map("users")
 }
@@ -139,6 +140,7 @@ model Client {
   meetings    Meeting[]
   timeEntries TimeEntry[]
   expenses    Expense[]
+  projects    Project[]
 
   @@map("clients")
 }
@@ -185,6 +187,8 @@ model Proposal {
   lead        Lead?          @relation(fields: [leadId], references: [id])
   clientId    String?
   client      Client?        @relation(fields: [clientId], references: [id])
+  projectId   String?
+  project     Project?       @relation(fields: [projectId], references: [id])
   title       String
   status      ProposalStatus @default(DRAFT)
   slug        String         @unique
@@ -234,6 +238,8 @@ model Contract {
   proposal   Proposal?      @relation(fields: [proposalId], references: [id])
   clientId   String?
   client     Client?        @relation(fields: [clientId], references: [id])
+  projectId  String?
+  project    Project?       @relation(fields: [projectId], references: [id])
   title      String
   status     ContractStatus @default(DRAFT)
   content    Json
@@ -263,6 +269,8 @@ model Invoice {
   contract          Contract?     @relation(fields: [contractId], references: [id])
   clientId          String?
   client            Client?       @relation(fields: [clientId], references: [id])
+  projectId         String?
+  project           Project?      @relation(fields: [projectId], references: [id])
   invoiceNumber     String        @unique
   status            InvoiceStatus @default(DRAFT)
   lineItems         Json
@@ -460,6 +468,8 @@ model TimeEntry {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientId     String?
   client       Client?  @relation(fields: [clientId], references: [id])
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id])
   description  String
   date         DateTime
   durationMins Int
@@ -478,6 +488,8 @@ model Expense {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientId    String?
   client      Client?  @relation(fields: [clientId], references: [id])
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id])
   category    String
   description String
   amount      Decimal  @db.Decimal(12, 2)
@@ -490,4 +502,34 @@ model Expense {
   updatedAt   DateTime @updatedAt
 
   @@map("expenses")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId    String?
+  client      Client?       @relation(fields: [clientId], references: [id])
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  budget      Decimal?      @db.Decimal(12, 2)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  proposals   Proposal[]
+  contracts   Contract[]
+  invoices    Invoice[]
+  timeEntries TimeEntry[]
+  expenses    Expense[]
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELLED
 }

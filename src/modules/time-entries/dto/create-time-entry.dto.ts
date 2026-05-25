@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTimeEntryDto {
   @ApiPropertyOptional() @IsString()  @IsOptional() clientId?:    string;
+  @ApiPropertyOptional() @IsString()  @IsOptional() projectId?:   string;
   @ApiProperty()         @IsString()               description:  string;
   @ApiProperty()         @IsDateString()            date:         string;
   @ApiProperty()         @IsNumber() @Min(1)        durationMins: number;

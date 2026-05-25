@@ -14,11 +14,17 @@ export class ExpensesService {
     private readonly invoices: InvoicesService,
   ) {}
 
+  private readonly projectInclude = {
+    client:  { select: { id: true, name: true } },
+    project: { select: { id: true, name: true } },
+  } as const;
+
   async create(userId: string, dto: CreateExpenseDto) {
     return this.prisma.expense.create({
       data: {
         userId,
         clientId:    dto.clientId,
+        projectId:   dto.projectId,
         category:    dto.category,
         description: dto.description,
         amount:      dto.amount,
@@ -26,20 +32,22 @@ export class ExpensesService {
         receiptUrl:  dto.receiptUrl,
         isBillable:  dto.isBillable ?? true,
       },
-      include: { client: { select: { id: true, name: true } } },
+      include: this.projectInclude,
     });
   }
 
   async findAll(userId: string, query: QueryExpensesDto) {
     const where: {
-      userId:     string;
-      clientId?:  string;
+      userId:      string;
+      clientId?:   string;
+      projectId?:  string;
       isBillable?: boolean;
-      isBilled?:  boolean;
-      date?:      { gte?: Date; lte?: Date };
+      isBilled?:   boolean;
+      date?:       { gte?: Date; lte?: Date };
     } = { userId };
 
     if (query.clientId)           where.clientId   = query.clientId;
+    if (query.projectId)          where.projectId  = query.projectId;
     if (query.isBillable != null)  where.isBillable = query.isBillable;
     if (query.isBilled   != null)  where.isBilled   = query.isBilled;
     if (query.from || query.to) {
@@ -51,7 +59,7 @@ export class ExpensesService {
     return this.prisma.expense.findMany({
       where,
       orderBy: { date: 'desc' },
-      include: { client: { select: { id: true, name: true } } },
+      include: this.projectInclude,
     });
   }
 
@@ -60,17 +68,18 @@ export class ExpensesService {
     return this.prisma.expense.update({
       where: { id },
       data: {
-        ...(dto.clientId    != null && { clientId: dto.clientId }),
-        ...(dto.category    != null && { category: dto.category }),
+        ...(dto.clientId    != null && { clientId:  dto.clientId }),
+        ...(dto.projectId   != null && { projectId: dto.projectId }),
+        ...(dto.category    != null && { category:    dto.category }),
         ...(dto.description != null && { description: dto.description }),
-        ...(dto.amount      != null && { amount: dto.amount }),
-        ...(dto.date        != null && { date: new Date(dto.date) }),
-        ...(dto.receiptUrl  != null && { receiptUrl: dto.receiptUrl }),
-        ...(dto.isBillable  != null && { isBillable: dto.isBillable }),
-        ...(dto.isBilled    != null && { isBilled: dto.isBilled }),
-        ...(dto.invoiceId   != null && { invoiceId: dto.invoiceId }),
+        ...(dto.amount      != null && { amount:      dto.amount }),
+        ...(dto.date        != null && { date:        new Date(dto.date) }),
+        ...(dto.receiptUrl  != null && { receiptUrl:  dto.receiptUrl }),
+        ...(dto.isBillable  != null && { isBillable:  dto.isBillable }),
+        ...(dto.isBilled    != null && { isBilled:    dto.isBilled }),
+        ...(dto.invoiceId   != null && { invoiceId:   dto.invoiceId }),
       },
-      include: { client: { select: { id: true, name: true } } },
+      include: this.projectInclude,
     });
   }
 

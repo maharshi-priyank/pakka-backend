@@ -3,6 +3,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateExpenseDto {
   @ApiPropertyOptional() @IsString()    @IsOptional() clientId?:    string;
+  @ApiPropertyOptional() @IsString()    @IsOptional() projectId?:   string;
   @ApiPropertyOptional() @IsString()    @IsOptional() category?:    string;
   @ApiPropertyOptional() @IsString()    @IsOptional() description?: string;
   @ApiPropertyOptional() @IsNumber() @Min(0) @IsOptional() amount?: number;

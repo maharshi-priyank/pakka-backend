@@ -28,6 +28,7 @@ import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { TimeEntriesModule } from './modules/time-entries/time-entries.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -73,6 +74,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     TimeEntriesModule,
     ExpensesModule,
     ReportsModule,
+    ProjectsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
