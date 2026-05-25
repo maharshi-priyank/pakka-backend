@@ -25,6 +25,8 @@ import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
 import { FormsModule } from './modules/forms/forms.module';
 import { WorkflowsModule } from './modules/workflows/workflows.module';
+import { TimeEntriesModule } from './modules/time-entries/time-entries.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -67,6 +69,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     ProposalTemplatesModule,
     FormsModule,
     WorkflowsModule,
+    TimeEntriesModule,
+    ExpensesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

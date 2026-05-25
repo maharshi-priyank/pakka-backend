@@ -47,6 +47,8 @@ model User {
   proposalTemplates       ProposalTemplate[]
   promoRedemptions        PromoRedemption[]
   intakeForms             IntakeForm[]
+  timeEntries             TimeEntry[]
+  expenses                Expense[]
 
   @@map("users")
 }
@@ -135,6 +137,8 @@ model Client {
   contracts   Contract[]
   invoices    Invoice[]
   meetings    Meeting[]
+  timeEntries TimeEntry[]
+  expenses    Expense[]
 
   @@map("clients")
 }
@@ -187,12 +191,16 @@ model Proposal {
   content     Json
   totalAmount Decimal        @db.Decimal(12, 2)
   gstAmount   Decimal        @default(0) @db.Decimal(12, 2)
-  validUntil  DateTime?
-  acceptedAt  DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  opens       ProposalOpen[]
-  contracts   Contract[]
+  validUntil      DateTime?
+  acceptedAt      DateTime?
+  depositOrderId  String?
+  depositAmount   Decimal?       @db.Decimal(12, 2)
+  depositPaid     Boolean        @default(false)
+  depositPaidAt   DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  opens           ProposalOpen[]
+  contracts       Contract[]
 
   @@map("proposals")
 }
@@ -444,4 +452,42 @@ enum WorkflowRunStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+model TimeEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId     String?
+  client       Client?  @relation(fields: [clientId], references: [id])
+  description  String
+  date         DateTime
+  durationMins Int
+  hourlyRate   Decimal? @db.Decimal(10, 2)
+  isBilled     Boolean  @default(false)
+  invoiceId    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("time_entries")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id])
+  category    String
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  date        DateTime
+  receiptUrl  String?
+  isBillable  Boolean  @default(true)
+  isBilled    Boolean  @default(false)
+  invoiceId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("expenses")
 }
