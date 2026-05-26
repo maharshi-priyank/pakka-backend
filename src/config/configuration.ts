@@ -20,6 +20,9 @@ export const validationSchema = Joi.object({
   EMAIL_PASS: Joi.string().optional(),
   EMAIL_FROM: Joi.string().default('Clinekt <noreply@clinekt.io>'),
   APP_URL: Joi.string().default('http://localhost:5173'),
+  VAPID_PUBLIC_KEY:  Joi.string().optional(),
+  VAPID_PRIVATE_KEY: Joi.string().optional(),
+  VAPID_SUBJECT:     Joi.string().default('mailto:noreply@clinekt.io'),
 });
 
 export const configuration = () => ({
@@ -49,4 +52,9 @@ export const configuration = () => ({
   },
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
   geminiApiKey: process.env.GEMINI_API_KEY,
+  webPush: {
+    publicKey:  process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
+    subject:    process.env.VAPID_SUBJECT ?? 'mailto:noreply@clinekt.io',
+  },
 });

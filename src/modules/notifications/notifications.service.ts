@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PushService } from './push.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly push:   PushService,
+  ) {}
 
   async create(opts: {
     userId:      string
@@ -12,8 +16,28 @@ export class NotificationsService {
     body:        string
     entityId?:   string
     entityType?: string
+    /** Optional in-app URL to open when the push is tapped (defaults inferred from entityType) */
+    url?:        string
   }) {
-    return this.prisma.notification.create({ data: opts });
+    const notification = await this.prisma.notification.create({ data: {
+      userId:     opts.userId,
+      type:       opts.type,
+      title:      opts.title,
+      body:       opts.body,
+      entityId:   opts.entityId,
+      entityType: opts.entityType,
+    } });
+
+    // Fire-and-forget push delivery — don't block the in-app notification path
+    void this.push.sendToUser(opts.userId, {
+      title: opts.title,
+      body:  opts.body,
+      type:  opts.type,
+      tag:   opts.type,        // collapse duplicates of the same kind
+      url:   opts.url ?? this.urlFor(opts.entityType, opts.entityId),
+    }).catch(() => { /* push failures shouldn't break the API */ });
+
+    return notification;
   }
 
   async findAll(userId: string) {
@@ -40,5 +64,18 @@ export class NotificationsService {
       where: { userId, read: false },
       data:  { read: true },
     });
+  }
+
+  private urlFor(entityType?: string, entityId?: string): string | undefined {
+    if (!entityType || !entityId) return undefined;
+    switch (entityType) {
+      case 'invoice':  return `/app/invoices/${entityId}`;
+      case 'proposal': return `/app/proposals/${entityId}`;
+      case 'contract': return `/app/contracts/${entityId}`;
+      case 'lead':     return `/app/leads`;
+      case 'meeting':  return `/app/meetings`;
+      case 'form':     return `/app/forms`;
+      default:         return undefined;
+    }
   }
 }
