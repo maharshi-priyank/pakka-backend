@@ -514,10 +514,11 @@ model Project {
   client      Client?       @relation(fields: [clientId], references: [id])
   name        String
   description String?
-  status      ProjectStatus @default(ACTIVE)
-  budget      Decimal?      @db.Decimal(12, 2)
-  startDate   DateTime?
-  endDate     DateTime?
+  status               ProjectStatus @default(ACTIVE)
+  budget               Decimal?      @db.Decimal(12, 2)
+  startDate            DateTime?
+  endDate              DateTime?
+  shareRateWithClient  Boolean       @default(false)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   proposals   Proposal[]

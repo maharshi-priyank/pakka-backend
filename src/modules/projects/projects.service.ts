@@ -3,13 +3,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ProjectStatus } from '@prisma/client';
 
 export interface CreateProjectDto {
-  name:        string;
-  description?: string;
-  clientId?:   string;
-  status?:     ProjectStatus;
-  budget?:     number;
-  startDate?:  string;
-  endDate?:    string;
+  name:                string;
+  description?:        string;
+  clientId?:           string;
+  status?:             ProjectStatus;
+  budget?:             number;
+  startDate?:          string;
+  endDate?:            string;
+  shareRateWithClient?: boolean;
 }
 
 export interface UpdateProjectDto extends Partial<CreateProjectDto> {}
@@ -163,13 +164,14 @@ export class ProjectsService {
     return this.prisma.project.update({
       where: { id },
       data:  {
-        name:        dto.name,
-        description: dto.description,
-        clientId:    dto.clientId,
-        status:      dto.status,
-        budget:      dto.budget,
-        startDate:   dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate:     dto.endDate   ? new Date(dto.endDate)   : undefined,
+        name:                dto.name,
+        description:         dto.description,
+        clientId:            dto.clientId,
+        status:              dto.status,
+        budget:              dto.budget,
+        startDate:           dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate:             dto.endDate   ? new Date(dto.endDate)   : undefined,
+        shareRateWithClient: dto.shareRateWithClient,
       },
       include: {
         client: { select: { id: true, name: true, company: true } },

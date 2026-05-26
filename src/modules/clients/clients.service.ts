@@ -94,8 +94,24 @@ export class ClientsService {
           where:   { status: { not: 'CANCELLED' } },
           select:  { id: true, title: true, scheduledAt: true, status: true, meetLink: true },
         },
+        projects: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true, name: true, status: true, budget: true,
+            startDate: true, endDate: true, createdAt: true, shareRateWithClient: true,
+            timeEntries: {
+              orderBy: { date: 'desc' },
+              select: { id: true, description: true, date: true, durationMins: true, hourlyRate: true, isBilled: true },
+            },
+            expenses: {
+              where:   { isBillable: true },
+              orderBy: { date: 'desc' },
+              select: { id: true, description: true, category: true, amount: true, date: true, isBilled: true },
+            },
+          },
+        },
         _count: {
-          select: { proposals: true, contracts: true, invoices: true },
+          select: { proposals: true, contracts: true, invoices: true, projects: true },
         },
       },
     });

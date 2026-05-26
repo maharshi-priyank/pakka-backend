@@ -24,7 +24,7 @@ export class PortalService {
     });
     if (!client) throw new NotFoundException('Portal link is invalid or has expired');
 
-    const [proposals, contracts, invoices, meetings] = await Promise.all([
+    const [proposals, contracts, invoices, meetings, projects] = await Promise.all([
       this.prisma.proposal.findMany({
         where: { clientId: client.id, status: { not: 'DRAFT' } },
         orderBy: { createdAt: 'desc' },
@@ -55,6 +55,23 @@ export class PortalService {
           scheduledAt: true, durationMins: true, meetLink: true, status: true,
         },
       }),
+      this.prisma.project.findMany({
+        where:   { clientId: client.id },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, name: true, status: true, budget: true,
+          startDate: true, endDate: true, shareRateWithClient: true,
+          timeEntries: {
+            orderBy: { date: 'desc' },
+            select: { id: true, description: true, date: true, durationMins: true, hourlyRate: true, isBilled: true },
+          },
+          expenses: {
+            where:   { isBillable: true },
+            orderBy: { date: 'desc' },
+            select: { id: true, description: true, category: true, amount: true, date: true, isBilled: true },
+          },
+        },
+      }),
     ]);
 
     return {
@@ -72,6 +89,7 @@ export class PortalService {
       contracts,
       invoices,
       meetings,
+      projects,
     };
   }
 
