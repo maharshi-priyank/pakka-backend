@@ -69,7 +69,8 @@ export class FormsService {
       where: { id },
       data:  {
         ...dto,
-        fields: dto.fields !== undefined ? (dto.fields as unknown as object[]) : undefined,
+        fields:       dto.fields       !== undefined ? (dto.fields as unknown as object[])       : undefined,
+        leadFieldMap: dto.leadFieldMap !== undefined ? (dto.leadFieldMap as unknown as object) : undefined,
       },
     });
   }
@@ -93,6 +94,10 @@ export class FormsService {
       },
     });
 
+    if (form.autoCreateLead) {
+      await this.createLeadFromSubmission(form, dto);
+    }
+
     this.eventEmitter.emit('form.submitted', {
       entityId: form.id,
       userId:   form.userId,
@@ -100,5 +105,45 @@ export class FormsService {
     });
 
     return submission;
+  }
+
+  private async createLeadFromSubmission(
+    form: { id: string; userId: string; title: string; leadFieldMap: unknown },
+    dto:  SubmitFormDto,
+  ) {
+    const fieldMap = (form.leadFieldMap ?? {}) as Record<string, string>;
+    const answers  = (dto.answers ?? {}) as Record<string, string | string[]>;
+
+    const get = (key: string): string | undefined => {
+      const fieldId = fieldMap[key];
+      if (!fieldId) return undefined;
+      const val = answers[fieldId];
+      if (val === undefined || val === null || val === '') return undefined;
+      return Array.isArray(val) ? val.join(', ') : String(val);
+    };
+
+    const name = get('name') || dto.respondentName || dto.respondentEmail || 'Unknown';
+
+    const rawBudget = get('budget');
+    let budget: string | undefined;
+    if (rawBudget) {
+      const n = parseFloat(rawBudget.replace(/[^0-9.]/g, ''));
+      if (!isNaN(n)) budget = String(n);
+    }
+
+    await this.prisma.lead.create({
+      data: {
+        userId:  form.userId,
+        name,
+        email:   get('email')   || dto.respondentEmail || undefined,
+        phone:   get('phone')   || undefined,
+        company: get('company') || undefined,
+        service: get('service') || undefined,
+        notes:   get('notes')   || undefined,
+        budget:  budget as any,
+        source:  `Form: ${form.title}`,
+        stage:   'ENQUIRY',
+      },
+    });
   }
 }

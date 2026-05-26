@@ -84,11 +84,13 @@ model IntakeForm {
   title       String
   description String?
   token       String                 @unique
-  fields      Json
-  isActive    Boolean                @default(true)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  submissions IntakeFormSubmission[]
+  fields         Json
+  isActive       Boolean                @default(true)
+  autoCreateLead Boolean                @default(false)
+  leadFieldMap   Json                   @default("{}")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  submissions    IntakeFormSubmission[]
 
   @@map("intake_forms")
 }

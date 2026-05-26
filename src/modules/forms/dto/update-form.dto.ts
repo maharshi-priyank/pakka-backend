@@ -10,6 +10,16 @@ export class UpdateFormDto extends PartialType(CreateFormDto) {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  autoCreateLead?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Object)
+  leadFieldMap?: Record<string, string>;
+
   // Explicitly redeclared so class-transformer @Type metadata is not lost via PartialType inheritance
   @ApiPropertyOptional()
   @IsOptional()
