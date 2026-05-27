@@ -10,6 +10,6 @@ import { MicrosoftAuthModule } from '../microsoft-auth/microsoft-auth.module.js'
   imports:     [GoogleAuthModule, MicrosoftAuthModule],
   controllers: [MeetingsController],
   providers:   [MeetingsService, GoogleCalendarService, OutlookCalendarService],
-  exports:     [MeetingsService],
+  exports:     [MeetingsService, OutlookCalendarService],
 })
 export class MeetingsModule {}

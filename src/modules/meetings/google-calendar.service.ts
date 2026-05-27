@@ -32,12 +32,19 @@ export class GoogleCalendarService {
         .filter((e, i, arr) => arr.indexOf(e) === i);
       const attendees = allEmails.map(email => ({ email }));
 
+      const contactLine = meeting.clientEmail
+        ? `Client: ${meeting.clientEmail}`
+        : meeting.leadEmail
+          ? `Lead: ${meeting.leadEmail}`
+          : ''
+      const description = [meeting.agenda, contactLine].filter(Boolean).join('\n\n')
+
       const response = await calendar.events.insert({
         calendarId:            'primary',
         conferenceDataVersion: 1,
         requestBody: {
           summary:     meeting.title,
-          description: meeting.agenda ?? undefined,
+          description: description || undefined,
           start:       { dateTime: startTime.toISOString(), timeZone: 'Asia/Kolkata' },
           end:         { dateTime: endTime.toISOString(),   timeZone: 'Asia/Kolkata' },
           attendees,
@@ -78,6 +85,35 @@ export class GoogleCalendarService {
       await calendar.events.patch({ calendarId: 'primary', eventId: googleEventId, requestBody: patch });
     } catch (err) {
       this.logger.warn(`Failed to update Google Calendar event: ${(err as Error).message}`);
+    }
+  }
+
+  async checkConflicts(userId: string, scheduledAt: Date, durationMins: number): Promise<{ hasConflict: boolean; conflicts: { title: string; start: string; end: string }[] }> {
+    try {
+      const auth     = await this.googleAuth.getAuthorizedClient(userId);
+      const calendar = google.calendar({ version: 'v3', auth });
+
+      const start = new Date(scheduledAt);
+      const end   = new Date(start.getTime() + durationMins * 60 * 1000);
+
+      const res = await calendar.events.list({
+        calendarId:   'primary',
+        timeMin:      start.toISOString(),
+        timeMax:      end.toISOString(),
+        singleEvents: true,
+        maxResults:   5,
+        fields:       'items(summary,start,end)',
+      });
+
+      const conflicts = (res.data.items ?? []).map(e => ({
+        title: e.summary ?? 'Untitled',
+        start: e.start?.dateTime ?? e.start?.date ?? '',
+        end:   e.end?.dateTime   ?? e.end?.date   ?? '',
+      }));
+
+      return { hasConflict: conflicts.length > 0, conflicts };
+    } catch {
+      return { hasConflict: false, conflicts: [] };
     }
   }
 

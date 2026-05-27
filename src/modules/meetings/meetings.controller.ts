@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { MeetingStatus } from '@prisma/client';
 import { MeetingsService } from './meetings.service';
@@ -12,6 +12,17 @@ import type { User } from '@prisma/client';
 @Controller('meetings')
 export class MeetingsController {
   constructor(private readonly meetings: MeetingsService) {}
+
+  @Get('check-conflicts')
+  checkConflicts(
+    @CurrentUser() user: User,
+    @Query('scheduledAt')  scheduledAt:  string,
+    @Query('durationMins') durationMins: string,
+    @Query('provider')     provider?:    string,
+  ) {
+    if (!scheduledAt) throw new BadRequestException('scheduledAt is required');
+    return this.meetings.checkConflicts(user.id, new Date(scheduledAt), parseInt(durationMins ?? '30', 10), provider as 'google' | 'outlook' | undefined);
+  }
 
   @Post()
   create(@CurrentUser() user: User, @Body() dto: CreateMeetingDto) {

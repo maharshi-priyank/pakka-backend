@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../../prisma/prisma.service'
 import { AutomationsService } from './automations.service'
 import { EmailService } from './email.service'
+
 import { renderTemplate } from './templates/email-templates'
 import { ContractsService } from '../contracts/contracts.service'
 import { InvoicesService } from '../invoices/invoices.service'
@@ -330,6 +331,19 @@ export class AutomationEngine {
       }
     }
 
+    const useOutlookEmail = (meeting as Record<string, unknown>)['meetProvider'] === 'outlook'
+
+    // Lazily resolve to avoid circular module dependency
+    let outlookCal: { sendEmail(userId: string, opts: { to: string; subject: string; html: string }): Promise<boolean> } | null = null
+    if (useOutlookEmail) {
+      try {
+        const { OutlookCalendarService } = await import('../meetings/outlook-calendar.service.js')
+        outlookCal = await this.moduleRef.resolve(OutlookCalendarService)
+      } catch {
+        this.logger.warn('OutlookCalendarService not available, falling back to SMTP')
+      }
+    }
+
     for (const recipient of recipients) {
       const vars: MeetingTemplateVars = {
         recipientName: recipient.name,
@@ -342,15 +356,15 @@ export class AutomationEngine {
         portalLink:    recipient.portalLink ?? null,
       }
       const { subject, html } = renderTemplate('meeting_scheduled_client', vars)
-      await this.email.send({
-        userId,
-        to:          recipient.email,
-        subject,
-        html,
-        templateKey: 'meeting_scheduled_client',
-        entityId:    meetingId,
-        entityType:  'meeting',
-      })
+
+      if (outlookCal) {
+        const sent = await outlookCal.sendEmail(userId, { to: recipient.email, subject, html })
+        if (!sent) {
+          await this.email.send({ userId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+        }
+      } else {
+        await this.email.send({ userId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+      }
     }
   }
 

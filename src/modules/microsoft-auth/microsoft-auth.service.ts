@@ -7,6 +7,7 @@ const SCOPES = [
   'email',
   'offline_access',
   'Calendars.ReadWrite',
+  'Mail.Send',
 ];
 
 interface TokenResponse {

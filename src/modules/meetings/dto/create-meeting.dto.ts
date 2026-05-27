@@ -1,4 +1,4 @@
-import { IsArray, IsEmail, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsEmail, IsIn, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateMeetingDto {
   @IsString()
@@ -29,4 +29,9 @@ export class CreateMeetingDto {
   @IsEmail({}, { each: true })
   @IsOptional()
   guestEmails?: string[];
+
+  @IsString()
+  @IsIn(['google', 'outlook'])
+  @IsOptional()
+  provider?: 'google' | 'outlook';
 }

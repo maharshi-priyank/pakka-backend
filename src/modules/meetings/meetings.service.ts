@@ -54,12 +54,18 @@ export class MeetingsService {
 
     let meetingUpdate: Record<string, unknown> | null = null;
 
-    if (user?.googleCalendarConnected) {
+    const useGoogle  = dto.provider === 'google'  ? user?.googleCalendarConnected  : undefined;
+    const useOutlook = dto.provider === 'outlook' ? user?.outlookConnected          : undefined;
+
+    const shouldUseGoogle  = useGoogle  ?? (dto.provider ? false : user?.googleCalendarConnected);
+    const shouldUseOutlook = useOutlook ?? (dto.provider ? false : user?.outlookConnected);
+
+    if (shouldUseGoogle) {
       const { meetLink, googleEventId } = await this.googleCalendar.createEvent(userId, eventPayload);
       if (meetLink || googleEventId) {
         meetingUpdate = { meetLink, googleEventId, meetProvider: 'google' };
       }
-    } else if (user?.outlookConnected) {
+    } else if (shouldUseOutlook) {
       const { meetLink, outlookEventId } = await this.outlookCalendar.createEvent(userId, eventPayload);
       if (meetLink || outlookEventId) {
         meetingUpdate = { meetLink, outlookEventId, meetProvider: 'outlook' };
@@ -78,6 +84,24 @@ export class MeetingsService {
 
     this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, userId });
     return meeting;
+  }
+
+  async checkConflicts(userId: string, scheduledAt: Date, durationMins: number, provider?: 'google' | 'outlook') {
+    const user = await this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { googleCalendarConnected: true, outlookConnected: true },
+    });
+
+    const useGoogle  = provider === 'google'  ? user?.googleCalendarConnected  : provider ? false : user?.googleCalendarConnected;
+    const useOutlook = provider === 'outlook' ? user?.outlookConnected          : provider ? false : user?.outlookConnected;
+
+    if (useGoogle) {
+      return this.googleCalendar.checkConflicts(userId, scheduledAt, durationMins);
+    }
+    if (useOutlook) {
+      return this.outlookCalendar.checkConflicts(userId, scheduledAt, durationMins);
+    }
+    return { hasConflict: false, conflicts: [] };
   }
 
   async findAll(userId: string, query: { status?: MeetingStatus; page?: number; limit?: number }) {

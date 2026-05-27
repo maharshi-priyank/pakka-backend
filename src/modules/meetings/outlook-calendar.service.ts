@@ -36,11 +36,18 @@ export class OutlookCalendarService {
         .filter((e): e is string => !!e)
         .filter((e, i, arr) => arr.indexOf(e) === i);
 
+      const contactLine = meeting.clientEmail
+        ? `Client: ${meeting.clientEmail}`
+        : meeting.leadEmail
+          ? `Lead: ${meeting.leadEmail}`
+          : ''
+      const bodyText = [meeting.agenda, contactLine].filter(Boolean).join('\n\n')
+
       const body = {
         subject: meeting.title,
         body: {
           contentType: 'text',
-          content:     meeting.agenda ?? '',
+          content:     bodyText,
         },
         start: {
           dateTime: startTime.toISOString().replace('Z', ''),
@@ -119,6 +126,53 @@ export class OutlookCalendarService {
       }
     } catch (err) {
       this.logger.warn(`Failed to update Outlook Calendar event: ${(err as Error).message}`);
+    }
+  }
+
+  async sendEmail(userId: string, opts: { to: string; subject: string; html: string }): Promise<boolean> {
+    try {
+      const token = await this.msAuth.getValidAccessToken(userId);
+      const body  = {
+        message: {
+          subject: opts.subject,
+          body: { contentType: 'HTML', content: opts.html },
+          toRecipients: [{ emailAddress: { address: opts.to } }],
+        },
+        saveToSentItems: true,
+      };
+      const res = await fetch(`${GRAPH_BASE}/me/sendMail`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        this.logger.warn(`Outlook sendMail failed ${res.status}: ${err}`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      this.logger.warn(`Outlook sendMail error: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  async checkConflicts(userId: string, scheduledAt: Date, durationMins: number): Promise<{ hasConflict: boolean; conflicts: { title: string; start: string; end: string }[] }> {
+    try {
+      const token    = await this.msAuth.getValidAccessToken(userId);
+      const start    = new Date(scheduledAt);
+      const end      = new Date(start.getTime() + durationMins * 60 * 1000);
+
+      const url = `${GRAPH_BASE}/me/calendarView?startDateTime=${start.toISOString()}&endDateTime=${end.toISOString()}&$select=subject,start,end&$top=5`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+      if (!res.ok) return { hasConflict: false, conflicts: [] };
+
+      const data = await res.json() as { value: { subject: string; start: { dateTime: string }; end: { dateTime: string } }[] };
+      const conflicts = (data.value ?? []).map(e => ({ title: e.subject, start: e.start.dateTime, end: e.end.dateTime }));
+      return { hasConflict: conflicts.length > 0, conflicts };
+    } catch {
+      return { hasConflict: false, conflicts: [] };
     }
   }
 
