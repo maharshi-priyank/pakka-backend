@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MeetingStatus } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
-import { GoogleCalendarService } from './google-calendar.service';
-import { CreateMeetingDto } from './dto/create-meeting.dto';
-import { UpdateMeetingDto } from './dto/update-meeting.dto';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GoogleCalendarService } from './google-calendar.service.js';
+import { OutlookCalendarService } from './outlook-calendar.service.js';
+import { CreateMeetingDto } from './dto/create-meeting.dto.js';
+import { UpdateMeetingDto } from './dto/update-meeting.dto.js';
 
 const INCLUDE_FULL = {
   lead:   { select: { id: true, name: true, email: true } },
@@ -16,13 +17,14 @@ export class MeetingsService {
   constructor(
     private readonly prisma:           PrismaService,
     private readonly googleCalendar:   GoogleCalendarService,
+    private readonly outlookCalendar:  OutlookCalendarService,
     private readonly eventEmitter:     EventEmitter2,
   ) {}
 
   async create(userId: string, dto: CreateMeetingDto) {
     const user = await this.prisma.user.findUnique({
       where:  { id: userId },
-      select: { googleCalendarConnected: true },
+      select: { googleCalendarConnected: true, outlookConnected: true },
     });
 
     const meeting = await this.prisma.meeting.create({
@@ -39,27 +41,39 @@ export class MeetingsService {
       include: INCLUDE_FULL,
     });
 
-    if (user?.googleCalendarConnected) {
-      const { meetLink, googleEventId } = await this.googleCalendar.createEvent(userId, {
-        id:           meeting.id,
-        title:        meeting.title,
-        agenda:       meeting.agenda,
-        scheduledAt:  meeting.scheduledAt,
-        durationMins: meeting.durationMins,
-        clientEmail:  meeting.client?.email,
-        leadEmail:    meeting.lead?.email,
-        guestEmails:  meeting.guestEmails,
-      });
+    const eventPayload = {
+      id:           meeting.id,
+      title:        meeting.title,
+      agenda:       meeting.agenda,
+      scheduledAt:  meeting.scheduledAt,
+      durationMins: meeting.durationMins,
+      clientEmail:  meeting.client?.email,
+      leadEmail:    meeting.lead?.email,
+      guestEmails:  meeting.guestEmails,
+    };
 
+    let meetingUpdate: Record<string, unknown> | null = null;
+
+    if (user?.googleCalendarConnected) {
+      const { meetLink, googleEventId } = await this.googleCalendar.createEvent(userId, eventPayload);
       if (meetLink || googleEventId) {
-        const updated = await this.prisma.meeting.update({
-          where:   { id: meeting.id },
-          data:    { meetLink, googleEventId },
-          include: INCLUDE_FULL,
-        });
-        this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, userId });
-        return updated;
+        meetingUpdate = { meetLink, googleEventId, meetProvider: 'google' };
       }
+    } else if (user?.outlookConnected) {
+      const { meetLink, outlookEventId } = await this.outlookCalendar.createEvent(userId, eventPayload);
+      if (meetLink || outlookEventId) {
+        meetingUpdate = { meetLink, outlookEventId, meetProvider: 'outlook' };
+      }
+    }
+
+    if (meetingUpdate) {
+      const updated = await this.prisma.meeting.update({
+        where:   { id: meeting.id },
+        data:    meetingUpdate,
+        include: INCLUDE_FULL,
+      });
+      this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, userId });
+      return updated;
     }
 
     this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, userId });
@@ -132,12 +146,17 @@ export class MeetingsService {
       include: INCLUDE_FULL,
     });
 
-    if (meeting.googleEventId && (dto.scheduledAt || dto.title)) {
-      await this.googleCalendar.updateEvent(userId, meeting.googleEventId, {
+    if (dto.scheduledAt || dto.title) {
+      const calUpdate = {
         title:        dto.title,
         scheduledAt:  dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
         durationMins: dto.durationMins ?? meeting.durationMins,
-      });
+      };
+      if (meeting.googleEventId) {
+        await this.googleCalendar.updateEvent(userId, meeting.googleEventId, calUpdate);
+      } else if ((meeting as Record<string, unknown>)['outlookEventId']) {
+        await this.outlookCalendar.updateEvent(userId, (meeting as Record<string, unknown>)['outlookEventId'] as string, calUpdate);
+      }
     }
 
     return updated;
@@ -149,9 +168,11 @@ export class MeetingsService {
   }
 
   async cancel(userId: string, id: string) {
-    const meeting = await this.findOne(userId, id);
-    if (meeting.googleEventId) {
-      await this.googleCalendar.deleteEvent(userId, meeting.googleEventId);
+    const meeting = await this.findOne(userId, id) as Record<string, unknown>;
+    if (meeting['googleEventId']) {
+      await this.googleCalendar.deleteEvent(userId, meeting['googleEventId'] as string);
+    } else if (meeting['outlookEventId']) {
+      await this.outlookCalendar.deleteEvent(userId, meeting['outlookEventId'] as string);
     }
     return this.prisma.meeting.update({ where: { id }, data: { status: MeetingStatus.CANCELLED }, include: INCLUDE_FULL });
   }

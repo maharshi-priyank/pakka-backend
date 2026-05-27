@@ -62,6 +62,37 @@ export class UsersService {
     });
   }
 
+  async saveOutlookTokens(userId: string, tokens: { accessToken: string; refreshToken: string; expiresAt: Date }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        outlookAccessToken:    tokens.accessToken,
+        outlookRefreshToken:   tokens.refreshToken,
+        outlookTokenExpiresAt: tokens.expiresAt,
+        outlookConnected:      true,
+      },
+    });
+  }
+
+  async getOutlookTokens(userId: string) {
+    return this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { outlookAccessToken: true, outlookRefreshToken: true, outlookTokenExpiresAt: true },
+    });
+  }
+
+  async clearOutlookTokens(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        outlookAccessToken:    null,
+        outlookRefreshToken:   null,
+        outlookTokenExpiresAt: null,
+        outlookConnected:      false,
+      },
+    });
+  }
+
   async redeemPromo(userId: string, code: string) {
     const promo = await this.prisma.promoCode.findUnique({ where: { code } });
     if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');

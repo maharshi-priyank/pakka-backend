@@ -16,6 +16,10 @@ export const validationSchema = Joi.object({
   GOOGLE_CLIENT_ID:     Joi.string().optional(),
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
   GOOGLE_REDIRECT_URI:  Joi.string().optional(),
+  MS_CLIENT_ID:         Joi.string().optional(),
+  MS_CLIENT_SECRET:     Joi.string().optional(),
+  MS_TENANT_ID:         Joi.string().default('common'),
+  MS_REDIRECT_URI:      Joi.string().optional(),
   EMAIL_HOST: Joi.string().default('smtp.gmail.com'),
   EMAIL_PORT: Joi.number().default(587),
   EMAIL_USER: Joi.string().optional(),
@@ -43,6 +47,12 @@ export const configuration = () => ({
     clientId:     process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     redirectUri:  process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/google/callback',
+  },
+  microsoft: {
+    clientId:     process.env.MS_CLIENT_ID,
+    clientSecret: process.env.MS_CLIENT_SECRET,
+    tenantId:     process.env.MS_TENANT_ID ?? 'common',
+    redirectUri:  process.env.MS_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/microsoft/callback',
   },
   corsOrigin: process.env.CORS_ORIGIN,
   email: {
