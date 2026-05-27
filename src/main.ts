@@ -1,3 +1,9 @@
+// New Relic agent must be the very first require in production
+if (process.env.NODE_ENV === 'production' && process.env.NEW_RELIC_LICENSE_KEY) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('newrelic');
+}
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
