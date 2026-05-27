@@ -21,6 +21,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AiModule } from './modules/ai/ai.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
+import { CalendlyAuthModule } from './modules/calendly-auth/calendly-auth.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
 import { FormsModule } from './modules/forms/forms.module';
@@ -67,6 +68,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     AiModule,
     PortalModule,
     GoogleAuthModule,
+    CalendlyAuthModule,
     MeetingsModule,
     ProposalTemplatesModule,
     FormsModule,

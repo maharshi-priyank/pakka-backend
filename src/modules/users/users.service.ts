@@ -62,6 +62,44 @@ export class UsersService {
     });
   }
 
+  async saveCalendlyTokens(userId: string, tokens: { accessToken: string; refreshToken: string; expiresAt: Date; schedulingUrl: string; userUri: string }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        calendlyAccessToken:    tokens.accessToken,
+        calendlyRefreshToken:   tokens.refreshToken,
+        calendlyTokenExpiresAt: tokens.expiresAt,
+        calendlyConnected:      true,
+        calendlySchedulingUrl:  tokens.schedulingUrl,
+        calendlyUserUri:        tokens.userUri,
+      },
+    });
+  }
+
+  async getCalendlyTokens(userId: string) {
+    return this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { calendlyAccessToken: true, calendlyRefreshToken: true, calendlyTokenExpiresAt: true, calendlySchedulingUrl: true },
+    });
+  }
+
+  async findByCalendlyUri(uri: string) {
+    return this.prisma.user.findFirst({ where: { calendlyUserUri: uri } });
+  }
+
+  async clearCalendlyTokens(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        calendlyAccessToken:    null,
+        calendlyRefreshToken:   null,
+        calendlyTokenExpiresAt: null,
+        calendlyConnected:      false,
+        calendlySchedulingUrl:  null,
+      },
+    });
+  }
+
   async redeemPromo(userId: string, code: string) {
     const promo = await this.prisma.promoCode.findUnique({ where: { code } });
     if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');

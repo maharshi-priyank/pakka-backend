@@ -33,6 +33,12 @@ model User {
   googleRefreshToken      String?
   googleTokenExpiresAt    DateTime?
   googleCalendarConnected Boolean          @default(false)
+  calendlyAccessToken     String?
+  calendlyRefreshToken    String?
+  calendlyTokenExpiresAt  DateTime?
+  calendlyConnected       Boolean          @default(false)
+  calendlySchedulingUrl   String?
+  calendlyUserUri         String?
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   leads                   Lead[]
@@ -404,9 +410,10 @@ model Meeting {
   agenda        String?
   scheduledAt   DateTime
   durationMins  Int           @default(30)
-  meetLink      String?
-  googleEventId String?
-  status        MeetingStatus @default(SCHEDULED)
+  meetLink          String?
+  googleEventId     String?
+  calendlyEventUri  String?
+  status            MeetingStatus @default(SCHEDULED)
   reminderSent  Boolean       @default(false)
   guestEmails   String[]      @default([])
   createdAt     DateTime      @default(now())
