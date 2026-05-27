@@ -5,6 +5,7 @@ import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NewRelicModule } from './common/newrelic/newrelic.module.js';
 
 import { configuration, validationSchema } from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
@@ -43,16 +44,25 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     }),
     LoggerModule.forRoot({
       pinoHttp: {
+        // In production: emit JSON enriched with New Relic trace/span IDs via mixin
+        // In development: human-readable pino-pretty output
         transport:
           process.env.NODE_ENV !== 'production'
             ? { target: 'pino-pretty', options: { colorize: true, singleLine: true } }
             : undefined,
         level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
+        ...(process.env.NODE_ENV === 'production' && process.env.NEW_RELIC_LICENSE_KEY
+          ? {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              mixin: require('@newrelic/pino-enricher') as () => Record<string, unknown>,
+            }
+          : {}),
       },
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
+    NewRelicModule,
     PrismaModule,
     AuthModule,
     UsersModule,

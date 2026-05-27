@@ -5,12 +5,16 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { NewRelicService } from '../newrelic/newrelic.service.js';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
+
+  constructor(@Optional() private readonly newRelic?: NewRelicService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -35,6 +39,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Error) {
       message = exception.message;
       this.logger.error(exception.message, exception.stack);
+    }
+
+    // Report 5xx errors to New Relic Errors Inbox
+    if (status >= 500 && exception instanceof Error) {
+      this.newRelic?.noticeError(exception, {
+        'http.statusCode': status,
+        'http.path': request.url,
+        'http.method': request.method,
+      });
     }
 
     response.status(status).json({
