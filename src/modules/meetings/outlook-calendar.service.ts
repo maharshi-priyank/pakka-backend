@@ -43,21 +43,20 @@ export class OutlookCalendarService {
           content:     meeting.agenda ?? '',
         },
         start: {
-          dateTime: startTime.toISOString(),
-          timeZone: 'Asia/Calcutta',
+          dateTime: startTime.toISOString().replace('Z', ''),
+          timeZone: 'India Standard Time',
         },
         end: {
-          dateTime: endTime.toISOString(),
-          timeZone: 'Asia/Calcutta',
+          dateTime: endTime.toISOString().replace('Z', ''),
+          timeZone: 'India Standard Time',
         },
         attendees: allEmails.map(email => ({
           emailAddress: { address: email },
           type: 'required',
         })),
-        isOnlineMeeting:      true,
-        onlineMeetingProvider: 'teamsForBusiness',
+        isOnlineMeeting:            true,
         reminderMinutesBeforeStart: 15,
-        isReminderOn: true,
+        isReminderOn:               true,
       };
 
       const response = await fetch(`${GRAPH_BASE}/me/events`, {
@@ -71,6 +70,7 @@ export class OutlookCalendarService {
 
       if (!response.ok) {
         const err = await response.text();
+        this.logger.error(`Graph API createEvent ${response.status}: ${err}`);
         throw new Error(`Graph API error ${response.status}: ${err}`);
       }
 
