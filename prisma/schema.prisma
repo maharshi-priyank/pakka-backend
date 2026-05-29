@@ -55,6 +55,7 @@ model User {
   timeEntries             TimeEntry[]
   expenses                Expense[]
   projects                Project[]
+  emailTemplates          EmailTemplate[]
 
   @@map("users")
 }
@@ -557,4 +558,18 @@ enum ProjectStatus {
   COMPLETED
   ON_HOLD
   CANCELLED
+}
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateKey String
+  subject     String
+  bodyHtml    String   @db.Text
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, templateKey])
+  @@map("email_templates")
 }
