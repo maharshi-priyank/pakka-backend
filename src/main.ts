@@ -47,8 +47,8 @@ async function bootstrap() {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Clinekt API')
-    .setDescription('Clinekt platform API — Lead → Proposal → Contract → Invoice → Payment')
+    .setTitle('Rupway API')
+    .setDescription('Rupway platform API — Lead → Proposal → Contract → Invoice → Payment')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -59,7 +59,7 @@ async function bootstrap() {
   });
 
   await app.listen(port);
-  console.log(`Clinekt API running on http://localhost:${port}`);
+  console.log(`Rupway API running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 

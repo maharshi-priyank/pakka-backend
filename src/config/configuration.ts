@@ -24,11 +24,11 @@ export const validationSchema = Joi.object({
   EMAIL_PORT: Joi.number().default(587),
   EMAIL_USER: Joi.string().optional(),
   EMAIL_PASS: Joi.string().optional(),
-  EMAIL_FROM: Joi.string().default('Clinekt <noreply@clinekt.io>'),
+  EMAIL_FROM: Joi.string().default('Rupway <noreply@rupway.in>'),
   APP_URL: Joi.string().default('http://localhost:5173'),
   VAPID_PUBLIC_KEY:  Joi.string().optional(),
   VAPID_PRIVATE_KEY: Joi.string().optional(),
-  VAPID_SUBJECT:     Joi.string().default('mailto:noreply@clinekt.io'),
+  VAPID_SUBJECT:     Joi.string().default('mailto:noreply@rupway.in'),
 });
 
 export const configuration = () => ({
@@ -60,7 +60,7 @@ export const configuration = () => ({
     port: parseInt(process.env.EMAIL_PORT ?? '587', 10),
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
-    from: process.env.EMAIL_FROM ?? 'Clinekt <noreply@clinekt.io>',
+    from: process.env.EMAIL_FROM ?? 'Rupway <noreply@rupway.in>',
   },
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
   geminiApiKey: process.env.GEMINI_API_KEY,
@@ -71,6 +71,6 @@ export const configuration = () => ({
   webPush: {
     publicKey:  process.env.VAPID_PUBLIC_KEY,
     privateKey: process.env.VAPID_PRIVATE_KEY,
-    subject:    process.env.VAPID_SUBJECT ?? 'mailto:noreply@clinekt.io',
+    subject:    process.env.VAPID_SUBJECT ?? 'mailto:noreply@rupway.in',
   },
 });

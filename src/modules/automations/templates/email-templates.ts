@@ -45,7 +45,7 @@ export function layout(content: string, businessName: string, preheaderText = ''
                     </table>
                   </td>
                   <td align="right" style="vertical-align:middle;">
-                    <span style="font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif;font-weight:500;">Powered by Clinekt</span>
+                    <span style="font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif;font-weight:500;">Powered by Rupway</span>
                   </td>
                 </tr>
               </table>
@@ -64,7 +64,7 @@ export function layout(content: string, businessName: string, preheaderText = ''
             <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;border-radius:0 0 12px 12px;padding:20px 40px;">
               <p style="margin:0 0 6px;font-size:12px;color:#6B7280;text-align:center;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
                 This email was sent by <strong style="color:#374151;">${businessName}</strong> using
-                <a href="https://clinekt.io" style="color:#4F46E5;text-decoration:none;font-weight:600;">Clinekt</a>.
+                <a href="https://rupway.in" style="color:#4F46E5;text-decoration:none;font-weight:600;">Rupway</a>.
               </p>
               <p style="margin:0;font-size:11px;color:#9CA3AF;text-align:center;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
                 If you have questions about this email, please reply directly to this message.
@@ -638,7 +638,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
           ? alert(`${dv.followUpsCount} follow-up${dv.followUpsCount > 1 ? 's' : ''} scheduled this week`, 'warning')
           : ''}
         ${divider()}
-        ${p('Log in to Clinekt to see detailed breakdowns and manage your pipeline.', true)}
+        ${p('Log in to Rupway to see detailed breakdowns and manage your pipeline.', true)}
       `, dv.businessName, `Your weekly business snapshot for ${dv.businessName}`)
     },
   },
@@ -666,7 +666,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
           : alert('All invoices settled — excellent month!', 'success')
         }
         ${divider()}
-        ${p('Log in to Clinekt for detailed reporting, upcoming follow-ups, and your full pipeline view.', true)}
+        ${p('Log in to Rupway for detailed reporting, upcoming follow-ups, and your full pipeline view.', true)}
       `, dv.businessName, `Monthly summary for ${dv.businessName}`)
     },
   },
