@@ -36,10 +36,7 @@ export function layout(content: string, businessName: string, preheaderText = ''
                     <table role="presentation" cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="vertical-align:middle;">
-                          <!--[if !mso]><!-->
-                          <img src="https://rupway.in/logo/rupway_full_dark.svg" alt="Rupway" width="100" height="28" style="display:block;border:0;outline:none;width:100px;height:28px;object-fit:contain;" />
-                          <!--<![endif]-->
-                          <!--[if mso]><span style="font-size:18px;font-weight:800;color:#4F46E5;font-family:Arial,sans-serif;letter-spacing:-0.5px;">Rupway</span><![endif]-->
+                          <span style="font-size:22px;font-weight:900;color:#0f172a;font-family:Georgia,'Times New Roman',serif;letter-spacing:-1px;line-height:1;">Rupway</span>
                         </td>
                         <td style="padding-left:12px;vertical-align:middle;">
                           <span style="font-size:13px;color:#6B7280;font-family:Arial,Helvetica,sans-serif;">via <strong style="color:#111827;">${businessName}</strong></span>
@@ -68,12 +65,9 @@ export function layout(content: string, businessName: string, preheaderText = ''
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding-bottom:10px;">
-                    <!--[if !mso]><!-->
-                    <a href="https://rupway.in" style="display:inline-block;border:0;text-decoration:none;">
-                      <img src="https://rupway.in/logo/rupway_full_dark.svg" alt="Rupway" width="80" height="22" style="display:block;border:0;outline:none;width:80px;height:22px;object-fit:contain;opacity:0.5;" />
+                    <a href="https://rupway.in" style="text-decoration:none;display:inline-block;">
+                      <span style="font-size:16px;font-weight:900;color:#9CA3AF;font-family:Georgia,'Times New Roman',serif;letter-spacing:-0.8px;line-height:1;">Rupway</span>
                     </a>
-                    <!--<![endif]-->
-                    <!--[if mso]><a href="https://rupway.in" style="font-size:13px;font-weight:700;color:#9CA3AF;font-family:Arial,sans-serif;text-decoration:none;">Rupway</a><![endif]-->
                   </td>
                 </tr>
                 <tr>
