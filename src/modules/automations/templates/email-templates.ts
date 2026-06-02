@@ -35,11 +35,14 @@ export function layout(content: string, businessName: string, preheaderText = ''
                   <td>
                     <table role="presentation" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="background:#4F46E5;border-radius:8px;width:32px;height:32px;text-align:center;vertical-align:middle;">
-                          <span style="color:#ffffff;font-size:16px;font-weight:800;font-family:Arial,sans-serif;line-height:32px;display:block;">C</span>
+                        <td style="vertical-align:middle;">
+                          <!--[if !mso]><!-->
+                          <img src="https://rupway.in/logo/rupway_full_dark.svg" alt="Rupway" width="100" height="28" style="display:block;border:0;outline:none;width:100px;height:28px;object-fit:contain;" />
+                          <!--<![endif]-->
+                          <!--[if mso]><span style="font-size:18px;font-weight:800;color:#4F46E5;font-family:Arial,sans-serif;letter-spacing:-0.5px;">Rupway</span><![endif]-->
                         </td>
-                        <td style="padding-left:10px;vertical-align:middle;">
-                          <span style="font-size:16px;font-weight:700;color:#111827;font-family:Arial,Helvetica,sans-serif;letter-spacing:-0.3px;">${businessName}</span>
+                        <td style="padding-left:12px;vertical-align:middle;">
+                          <span style="font-size:13px;color:#6B7280;font-family:Arial,Helvetica,sans-serif;">via <strong style="color:#111827;">${businessName}</strong></span>
                         </td>
                       </tr>
                     </table>
@@ -62,13 +65,28 @@ export function layout(content: string, businessName: string, preheaderText = ''
           <!-- ── Footer ── -->
           <tr>
             <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;border-radius:0 0 12px 12px;padding:20px 40px;">
-              <p style="margin:0 0 6px;font-size:12px;color:#6B7280;text-align:center;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
-                This email was sent by <strong style="color:#374151;">${businessName}</strong> using
-                <a href="https://rupway.in" style="color:#4F46E5;text-decoration:none;font-weight:600;">Rupway</a>.
-              </p>
-              <p style="margin:0;font-size:11px;color:#9CA3AF;text-align:center;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
-                If you have questions about this email, please reply directly to this message.
-              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding-bottom:10px;">
+                    <!--[if !mso]><!-->
+                    <a href="https://rupway.in" style="display:inline-block;border:0;text-decoration:none;">
+                      <img src="https://rupway.in/logo/rupway_full_dark.svg" alt="Rupway" width="80" height="22" style="display:block;border:0;outline:none;width:80px;height:22px;object-fit:contain;opacity:0.5;" />
+                    </a>
+                    <!--<![endif]-->
+                    <!--[if mso]><a href="https://rupway.in" style="font-size:13px;font-weight:700;color:#9CA3AF;font-family:Arial,sans-serif;text-decoration:none;">Rupway</a><![endif]-->
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <p style="margin:0 0 4px;font-size:12px;color:#6B7280;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
+                      This email was sent by <strong style="color:#374151;">${businessName}</strong> via Rupway.
+                    </p>
+                    <p style="margin:0;font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
+                      If you have questions, reply directly to this message.
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
