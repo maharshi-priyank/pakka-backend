@@ -6,6 +6,8 @@ import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
+import { AddDeliverableDto } from './dto/add-deliverable.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import type { User } from '@prisma/client';
@@ -68,6 +70,15 @@ export class InvoicesController {
     return this.invoicesService.recordPartialPayment(user.id, id, amount);
   }
 
+  @Post(':id/record-payment')
+  recordPayment(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: RecordPaymentDto,
+  ) {
+    return this.invoicesService.recordPayment(user.id, id, dto);
+  }
+
   @Post(':id/mark-overdue')
   markOverdue(@CurrentUser() user: User, @Param('id') id: string) {
     return this.invoicesService.markOverdue(user.id, id);
@@ -76,5 +87,22 @@ export class InvoicesController {
   @Delete(':id')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.invoicesService.delete(user.id, id);
+  }
+
+  // ── Deliverables ────────────────────────────────────────────────────────────
+
+  @Post(':id/deliverables')
+  addDeliverable(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: AddDeliverableDto) {
+    return this.invoicesService.addDeliverable(user.id, id, dto);
+  }
+
+  @Get(':id/deliverables')
+  listDeliverables(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.invoicesService.listDeliverables(user.id, id);
+  }
+
+  @Delete(':id/deliverables/:delivId')
+  deleteDeliverable(@CurrentUser() user: User, @Param('id') id: string, @Param('delivId') delivId: string) {
+    return this.invoicesService.deleteDeliverable(user.id, id, delivId);
   }
 }

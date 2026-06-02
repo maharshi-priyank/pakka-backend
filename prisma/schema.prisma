@@ -29,6 +29,7 @@ model User {
   bankAccountNumber       String?
   bankIfsc                String?
   upiId                   String?
+  upiQrUrl                String?
   googleAccessToken       String?
   googleRefreshToken      String?
   googleTokenExpiresAt    DateTime?
@@ -56,6 +57,7 @@ model User {
   expenses                Expense[]
   projects                Project[]
   emailTemplates          EmailTemplate[]
+  deliverables            Deliverable[]
 
   @@map("users")
 }
@@ -302,6 +304,7 @@ model Invoice {
   total             Decimal       @db.Decimal(12, 2)
   gstType           GstType       @default(IGST)
   tdsRate           Decimal?      @db.Decimal(5, 2)
+  tdsDeducted       Decimal       @default(0) @db.Decimal(12, 2)
   amountPaid        Decimal       @default(0) @db.Decimal(12, 2)
   dueDate           DateTime?
   paidAt            DateTime?
@@ -316,6 +319,7 @@ model Invoice {
   parentInvoiceId    String?
   parentInvoice      Invoice?      @relation("InvoiceRecurrence", fields: [parentInvoiceId], references: [id])
   childInvoices      Invoice[]     @relation("InvoiceRecurrence")
+  deliverables       Deliverable[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -572,4 +576,20 @@ model EmailTemplate {
 
   @@unique([userId, templateKey])
   @@map("email_templates")
+}
+
+model Deliverable {
+  id        String   @id @default(cuid())
+  userId    String
+  invoiceId String
+  fileName  String
+  fileUrl   String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("deliverables")
 }

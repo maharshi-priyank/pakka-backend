@@ -69,4 +69,9 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   upiId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  upiQrUrl?: string;
 }
