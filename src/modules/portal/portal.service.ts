@@ -5,16 +5,21 @@ import Razorpay from 'razorpay';
 
 @Injectable()
 export class PortalService {
-  private razorpay: Razorpay;
+  private _razorpay: Razorpay | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {
-    this.razorpay = new Razorpay({
-      key_id:     this.config.get<string>('razorpay.keyId')!,
-      key_secret: this.config.get<string>('razorpay.keySecret')!,
-    });
+  ) {}
+
+  private get razorpay(): Razorpay {
+    if (!this._razorpay) {
+      const keyId     = this.config.get<string>('razorpay.keyId')
+      const keySecret = this.config.get<string>('razorpay.keySecret')
+      if (!keyId || !keySecret) throw new BadRequestException('Razorpay is not configured')
+      this._razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret })
+    }
+    return this._razorpay
   }
 
   async getPortalData(token: string) {
