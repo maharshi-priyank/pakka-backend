@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
+import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { LeadStage } from '@prisma/client';
 import Decimal from 'decimal.js';
 
@@ -119,21 +120,21 @@ export class LeadsService {
     return this.prisma.lead.update({ where: { id }, data: { isDeleted: true } });
   }
 
-  async convertToClient(userId: string, leadId: string) {
+  async convertToClient(userId: string, leadId: string, dto?: ConvertLeadDto) {
     const lead = await this.findOne(userId, leadId);
 
     if (lead.clientId) {
       throw new ConflictException('This lead is already linked to a client');
     }
 
-    const [client] = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const newClient = await tx.client.create({
         data: {
           userId,
-          name:        lead.name,
-          email:       lead.email   ?? undefined,
-          phone:       lead.phone   ?? undefined,
-          company:     lead.company ?? undefined,
+          name:        dto?.name    ?? lead.name,
+          email:       dto?.email   ?? lead.email   ?? undefined,
+          phone:       dto?.phone   ?? lead.phone   ?? undefined,
+          company:     dto?.company ?? lead.company ?? undefined,
           portalToken: nanoid(21),
         },
       });
@@ -177,11 +178,28 @@ export class LeadsService {
         }
       }
 
-      return [newClient];
+      // Optionally create a project linked to the new client
+      let newProject: { id: string; name: string } | null = null;
+      if (dto?.createProject && dto?.projectName) {
+        newProject = await tx.project.create({
+          data: {
+            userId,
+            name:      dto.projectName,
+            clientId:  newClient.id,
+            status:    'ACTIVE',
+            ...(dto.projectBudget    && { budget:    dto.projectBudget }),
+            ...(dto.projectStartDate && { startDate: new Date(dto.projectStartDate) }),
+            ...(dto.projectEndDate   && { endDate:   new Date(dto.projectEndDate) }),
+          },
+          select: { id: true, name: true },
+        });
+      }
+
+      return { client: newClient, project: newProject };
     });
 
-    this.eventEmitter.emit('lead.converted', { entityId: leadId, userId, clientId: client.id })
-    return client;
+    this.eventEmitter.emit('lead.converted', { entityId: leadId, userId, clientId: result.client.id })
+    return result;
   }
 
   async getPipelineValue(userId: string) {

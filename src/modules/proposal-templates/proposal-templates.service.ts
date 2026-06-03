@@ -21,6 +21,12 @@ export class ProposalTemplatesService {
     ];
   }
 
+  async findOne(userId: string, id: string) {
+    const template = await this.prisma.proposalTemplate.findFirst({ where: { id, userId } });
+    if (!template) throw new NotFoundException('Template not found');
+    return { ...template, isSystem: false, totalAmount: Number(template.totalAmount) };
+  }
+
   async create(userId: string, dto: CreateTemplateDto) {
     const template = await this.prisma.proposalTemplate.create({
       data: {

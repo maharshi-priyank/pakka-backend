@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ProposalTemplatesService } from './proposal-templates.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
@@ -18,6 +18,11 @@ export class ProposalTemplatesController {
     return this.templates.list(user.id);
   }
 
+  @Get(':id')
+  findOne(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.templates.findOne(user.id, id);
+  }
+
   @Post()
   create(@CurrentUser() user: User, @Body() dto: CreateTemplateDto) {
     return this.templates.create(user.id, dto);
@@ -31,6 +36,12 @@ export class ProposalTemplatesController {
   @Delete(':id')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.templates.remove(user.id, id);
+  }
+
+  @Post(':id/use')
+  @HttpCode(HttpStatus.OK)
+  recordUse(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.templates.incrementUsage(user.id, id);
   }
 
   @Post('from-proposal/:proposalId')

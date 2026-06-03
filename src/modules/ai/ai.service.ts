@@ -1,5 +1,9 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse')
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mammoth  = require('mammoth')
 import type { ExtractLeadDto, ExtractProposalDto } from './dto/extract.dto'
 
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent'
@@ -94,6 +98,43 @@ Rules:
 - suggestedClient: extract client name/email if mentioned
 - confidence: 0.0–1.0`
 
+const PARSE_TEMPLATE_SYSTEM_PROMPT = (context?: string) => `You are a template extraction assistant for Rupway, a business management app for Indian freelancers and agencies.
+
+An existing proposal or template document has been provided as text. Your job is to EXTRACT its structure — do NOT invent new content. Read the actual document text and identify:
+- The title/name of the service or template
+- Scope of work items (what is included)
+- Deliverables (tangible outputs)
+- Exclusions (what is not included)
+- Line items with pricing (billing breakdown)
+- Payment schedule
+- Terms and conditions
+${context ? `\nAdditional context from the user: "${context}"` : ''}
+
+Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
+
+JSON schema:
+{
+  "title": string,
+  "scopeItems": string[],
+  "deliverables": string[],
+  "exclusions": string[],
+  "lineItems": [{ "description": string, "qty": number, "rate": number, "gstRate": number }],
+  "paymentSchedule": [{ "milestone": string, "percentage": number }],
+  "pricingNotes": string,
+  "terms": string,
+  "validUntil": null,
+  "suggestedClient": { "name": null, "email": null },
+  "confidence": number
+}
+
+Rules:
+- Extract content faithfully from the document — do not add or invent scope items or terms
+- If rates are mentioned, use them; if amounts include GST, back-calculate the base rate
+- gstRate: use 18 as default if not explicitly mentioned, 0 if document says exempt
+- paymentSchedule percentages must sum to 100
+- confidence: 0.0–1.0 reflecting how complete/clear the extracted content is
+- If a section is not present in the document, return an empty array for that field`
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -139,22 +180,30 @@ export class AiService {
       },
     }
 
-    const res = await fetch(GEMINI_API, {
-      method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'X-goog-api-key': this.apiKey,
-      },
-      body: JSON.stringify(body),
-    })
-
-    if (!res.ok) {
-      const err = await res.text()
-      this.logger.error(`Gemini error ${res.status}: ${err}`)
-      throw new BadRequestException('AI extraction failed — please try again')
+    let res: Response | undefined
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500))
+      res = await fetch(GEMINI_API, {
+        method:  'POST',
+        headers: {
+          'Content-Type':   'application/json',
+          'X-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(body),
+      })
+      if (res.status !== 503) break
     }
 
-    const json = await res.json() as {
+    if (!res!.ok) {
+      const err = await res!.text()
+      this.logger.error(`Gemini error ${res!.status}: ${err}`)
+      const msg = res!.status === 503
+        ? 'AI service is temporarily busy — please try again in a moment'
+        : 'AI extraction failed — please try again'
+      throw new BadRequestException(msg)
+    }
+
+    const json = await res!.json() as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
     }
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
@@ -203,6 +252,50 @@ export class AiService {
     } catch {
       this.logger.error('Proposal JSON parse failed', raw)
       throw new BadRequestException('Could not parse AI response — try rephrasing')
+    }
+  }
+
+  async parseTemplate(file: Express.Multer.File, context?: string): Promise<ExtractedProposal> {
+    if (!file) throw new BadRequestException('A PDF or DOCX file is required')
+
+    let extractedText = ''
+    const mime = file.mimetype
+
+    if (mime === 'application/pdf') {
+      const result = await pdfParse(file.buffer)
+      extractedText = result.text?.trim() ?? ''
+    } else if (
+      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mime === 'application/msword'
+    ) {
+      const result = await mammoth.extractRawText({ buffer: file.buffer })
+      extractedText = result.value?.trim() ?? ''
+    } else {
+      throw new BadRequestException('Only PDF and DOCX files are supported')
+    }
+
+    if (!extractedText) throw new BadRequestException('Could not extract text from the file — ensure it is not a scanned image')
+
+    const systemPrompt = PARSE_TEMPLATE_SYSTEM_PROMPT(context)
+    const raw = await this.callGemini(systemPrompt, { text: extractedText })
+    try {
+      const parsed = JSON.parse(raw) as ExtractedProposal
+      return {
+        title:           parsed.title           || 'Untitled Template',
+        scopeItems:      Array.isArray(parsed.scopeItems)      ? parsed.scopeItems      : [],
+        deliverables:    Array.isArray(parsed.deliverables)    ? parsed.deliverables    : [],
+        exclusions:      Array.isArray(parsed.exclusions)      ? parsed.exclusions      : [],
+        lineItems:       Array.isArray(parsed.lineItems)       ? parsed.lineItems       : [],
+        paymentSchedule: Array.isArray(parsed.paymentSchedule) ? parsed.paymentSchedule : [],
+        pricingNotes:    parsed.pricingNotes    || '',
+        terms:           parsed.terms           || '',
+        validUntil:      null,
+        suggestedClient: { name: null, email: null },
+        confidence:      typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+      }
+    } catch {
+      this.logger.error('Template parse JSON failed', raw)
+      throw new BadRequestException('Could not parse AI response — try again')
     }
   }
 }

@@ -7,6 +7,7 @@ import { LeadsService } from './leads.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
+import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User, LeadStage } from '@prisma/client';
 import { IsEnum } from 'class-validator';
@@ -62,9 +63,9 @@ export class LeadsController {
 
   @Post(':id/convert-to-client')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Convert a lead to a client and link them' })
-  convertToClient(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.leadsService.convertToClient(user.id, id);
+  @ApiOperation({ summary: 'Convert a lead to a client and optionally create a project' })
+  convertToClient(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ConvertLeadDto) {
+    return this.leadsService.convertToClient(user.id, id, dto);
   }
 
   @Delete(':id')

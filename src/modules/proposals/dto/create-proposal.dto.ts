@@ -100,6 +100,7 @@ export class CreateProposalDto {
   @ApiProperty() @IsString() title: string;
   @ApiPropertyOptional() @IsString() @IsOptional() leadId?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientId?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() projectId?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientName?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientEmail?: string;
   @ApiPropertyOptional()

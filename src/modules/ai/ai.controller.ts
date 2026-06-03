@@ -1,5 +1,6 @@
-import { Controller, Post, Body, HttpCode } from '@nestjs/common'
-import { ApiTags, ApiOperation } from '@nestjs/swagger'
+import { Controller, Post, Body, HttpCode, UploadedFile, UseInterceptors } from '@nestjs/common'
+import { ApiTags, ApiOperation, ApiConsumes } from '@nestjs/swagger'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { AiService } from './ai.service'
 import { ExtractLeadDto, ExtractProposalDto } from './dto/extract.dto'
 
@@ -20,5 +21,17 @@ export class AiController {
   @ApiOperation({ summary: 'Generate proposal draft from brief using Gemini' })
   extractProposal(@Body() dto: ExtractProposalDto) {
     return this.ai.extractProposal(dto)
+  }
+
+  @Post('parse-template')
+  @HttpCode(200)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Parse an uploaded PDF or DOCX into a proposal template structure' })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  parseTemplate(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('context') context?: string,
+  ) {
+    return this.ai.parseTemplate(file, context)
   }
 }

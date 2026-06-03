@@ -16,6 +16,7 @@ const INCLUDE_FULL = {
 const INCLUDE_LIST = {
   client:   { select: { id: true, name: true, company: true } },
   contract: { select: { id: true, title: true } },
+  project:  { select: { id: true, name: true } },
 } as const;
 
 function calcTotals(lineItems: LineItemDto[], gstType: GstType) {
@@ -297,6 +298,7 @@ export class InvoicesService {
         dueDate:    dto.dueDate  ? new Date(dto.dueDate)  : undefined,
         clientId:   dto.clientId,
         contractId: dto.contractId,
+        ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
       },
       include: INCLUDE_FULL,
     });

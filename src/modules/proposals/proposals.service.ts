@@ -100,10 +100,11 @@ export class ProposalsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          lead:   { select: { id: true, name: true } },
-          client: { select: { id: true, name: true, company: true } },
-          opens:  { select: { id: true, openedAt: true } },
-          _count: { select: { opens: true } },
+          lead:    { select: { id: true, name: true } },
+          client:  { select: { id: true, name: true, company: true } },
+          project: { select: { id: true, name: true } },
+          opens:   { select: { id: true, openedAt: true } },
+          _count:  { select: { opens: true } },
         },
       }),
       this.prisma.proposal.count({ where }),
@@ -151,7 +152,8 @@ export class ProposalsService {
       data: {
         ...(dto.title      && { title: dto.title }),
         ...(dto.leadId     && { leadId: dto.leadId }),
-        ...(dto.clientId   && { clientId: dto.clientId }),
+        ...(dto.clientId                !== undefined && { clientId:  dto.clientId }),
+        ...(dto.projectId               !== undefined && { projectId: dto.projectId ?? null }),
         ...(dto.status     && { status: dto.status }),
         ...(dto.validUntil && { validUntil: new Date(dto.validUntil) }),
         ...(dto.content && {

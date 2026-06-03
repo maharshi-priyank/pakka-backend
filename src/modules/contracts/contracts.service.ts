@@ -19,7 +19,8 @@ const INCLUDE_FULL = {
 } as const;
 
 const INCLUDE_LIST = {
-  client: { select: { id: true, name: true, company: true } },
+  client:  { select: { id: true, name: true, company: true } },
+  project: { select: { id: true, name: true } },
 } as const;
 
 @Injectable()
@@ -162,8 +163,9 @@ export class ContractsService {
       data: {
         ...(dto.title   && { title:   dto.title }),
         ...(dto.status  && { status:  dto.status }),
-        ...(dto.clientId && { clientId: dto.clientId }),
-        ...(dto.content && { content: dto.content as object }),
+        ...(dto.clientId  && { clientId:  dto.clientId }),
+        ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
+        ...(dto.content   && { content: dto.content as object }),
       },
       include: INCLUDE_FULL,
     });

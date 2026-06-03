@@ -10,10 +10,12 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
+import * as express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // bodyParser: false — we register our own below with a higher limit
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
 
   app.useLogger(app.get(Logger));
 
@@ -24,6 +26,9 @@ async function bootstrap() {
   // Support comma-separated origins: "http://localhost:5173,http://localhost:5177"
   const allowedOrigins = corsOriginRaw.split(',').map(o => o.trim()).filter(Boolean);
   const corsOrigin = allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
+
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   app.use(helmet());
 

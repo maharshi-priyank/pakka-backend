@@ -61,6 +61,7 @@ export class CreateContractDto {
   @ApiProperty() @IsString() title: string;
   @ApiPropertyOptional() @IsString() @IsOptional() proposalId?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientId?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() projectId?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientName?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientEmail?: string;
   @ApiPropertyOptional()

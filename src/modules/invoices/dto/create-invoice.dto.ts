@@ -17,6 +17,7 @@ export class CreateInvoiceDto {
   @ApiPropertyOptional() @IsString() @IsOptional() title?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() contractId?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientId?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() projectId?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientName?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() clientEmail?: string;
 
