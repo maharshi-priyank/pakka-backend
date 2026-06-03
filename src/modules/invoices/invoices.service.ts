@@ -9,9 +9,8 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
 
 const INCLUDE_FULL = {
-  contract:     { select: { id: true, title: true } },
-  client:       true,
-  deliverables: true,
+  contract: { select: { id: true, title: true } },
+  client:   true,
 } as const;
 
 const INCLUDE_LIST = {
@@ -325,23 +324,12 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
-        client:       true,
-        deliverables: true,
-        user:         { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true } },
+        client: true,
+        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    const isPaid = invoice.status === InvoiceStatus.PAID;
-    return {
-      ...invoice,
-      deliverables: invoice.deliverables.map(d => ({
-        id:       d.id,
-        fileName: d.fileName,
-        fileSize: d.fileSize,
-        mimeType: d.mimeType,
-        fileUrl:  isPaid ? d.fileUrl : null,
-      })),
-    };
+    return invoice;
   }
 
   async markPaid(userId: string, id: string) {
@@ -431,28 +419,6 @@ export class InvoicesService {
     });
     this.eventEmitter.emit('invoice.overdue', { entityId: id, userId });
     return overdue;
-  }
-
-  // ── Deliverables ──────────────────────────────────────────────────────────
-
-  async addDeliverable(userId: string, invoiceId: string, dto: { fileName: string; fileUrl: string; fileSize: number; mimeType: string }) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id: invoiceId, userId } });
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status === InvoiceStatus.CANCELLED) throw new BadRequestException('Cannot add deliverables to a cancelled invoice');
-    return this.prisma.deliverable.create({ data: { userId, invoiceId, ...dto } });
-  }
-
-  async listDeliverables(userId: string, invoiceId: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id: invoiceId, userId } });
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    return this.prisma.deliverable.findMany({ where: { invoiceId }, orderBy: { createdAt: 'asc' } });
-  }
-
-  async deleteDeliverable(userId: string, invoiceId: string, delivId: string) {
-    const deliverable = await this.prisma.deliverable.findFirst({ where: { id: delivId, invoiceId, userId } });
-    if (!deliverable) throw new NotFoundException('Deliverable not found');
-    await this.prisma.deliverable.delete({ where: { id: delivId } });
-    return { success: true };
   }
 
   async delete(userId: string, id: string) {

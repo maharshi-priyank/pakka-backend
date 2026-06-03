@@ -130,7 +130,10 @@ export class ProposalsService {
   async findBySlug(slug: string) {
     const proposal = await this.prisma.proposal.findUnique({
       where: { slug },
-      include: { user: { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true } } },
+      include: {
+        user:        { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true } },
+        attachments: { orderBy: { createdAt: 'asc' }, select: { id: true, fileName: true, fileSize: true, mimeType: true, fileUrl: true, createdAt: true } },
+      },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
     return proposal;
@@ -156,6 +159,7 @@ export class ProposalsService {
           totalAmount,
           gstAmount,
         }),
+        ...(dto.hidePricingTable !== undefined && { hidePricingTable: dto.hidePricingTable }),
       },
       include: { lead: { select: { id: true, name: true } }, client: true, opens: true },
     });

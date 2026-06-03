@@ -57,7 +57,7 @@ model User {
   expenses                Expense[]
   projects                Project[]
   emailTemplates          EmailTemplate[]
-  deliverables            Deliverable[]
+  attachments             Attachment[]
 
   @@map("users")
 }
@@ -166,6 +166,7 @@ model Client {
   timeEntries TimeEntry[]
   expenses    Expense[]
   projects    Project[]
+  attachments Attachment[]
 
   @@map("clients")
 }
@@ -220,6 +221,7 @@ model Proposal {
   content     Json
   totalAmount Decimal        @db.Decimal(12, 2)
   gstAmount   Decimal        @default(0) @db.Decimal(12, 2)
+  hidePricingTable Boolean   @default(false)
   validUntil      DateTime?
   acceptedAt      DateTime?
   depositOrderId  String?
@@ -230,6 +232,7 @@ model Proposal {
   updatedAt       DateTime       @updatedAt
   opens           ProposalOpen[]
   contracts       Contract[]
+  attachments     Attachment[]
 
   @@map("proposals")
 }
@@ -319,7 +322,8 @@ model Invoice {
   parentInvoiceId    String?
   parentInvoice      Invoice?      @relation("InvoiceRecurrence", fields: [parentInvoiceId], references: [id])
   childInvoices      Invoice[]     @relation("InvoiceRecurrence")
-  deliverables       Deliverable[]
+  attachments        Attachment[]  @relation("InvoiceAttachments")
+  gatedAttachments   Attachment[]  @relation("InvoiceGate")
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -553,6 +557,7 @@ model Project {
   invoices    Invoice[]
   timeEntries TimeEntry[]
   expenses    Expense[]
+  attachments Attachment[]
 
   @@map("projects")
 }
@@ -578,18 +583,31 @@ model EmailTemplate {
   @@map("email_templates")
 }
 
-model Deliverable {
-  id        String   @id @default(cuid())
-  userId    String
-  invoiceId String
+model Attachment {
+  id         String   @id @default(cuid())
+  userId     String
+
+  // Polymorphic parent — exactly one of these should be set
+  projectId  String?
+  proposalId String?
+  invoiceId  String?
+  clientId   String?
+
+  // Optional payment gate — null = freely downloadable
+  gateInvoiceId String?
+
   fileName  String
   fileUrl   String
   fileSize  Int
   mimeType  String
   createdAt DateTime @default(now())
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId],     references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId],  references: [id], onDelete: Cascade)
+  proposal    Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  invoice     Invoice?  @relation("InvoiceAttachments", fields: [invoiceId],     references: [id], onDelete: Cascade)
+  client      Client?   @relation(fields: [clientId],   references: [id], onDelete: Cascade)
+  gateInvoice Invoice?  @relation("InvoiceGate",        fields: [gateInvoiceId], references: [id])
 
-  @@map("deliverables")
+  @@map("attachments")
 }
