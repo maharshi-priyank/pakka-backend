@@ -36,7 +36,7 @@ export function layout(content: string, businessName: string, preheaderText = ''
                     <table role="presentation" cellpadding="0" cellspacing="0">
                       <tr>
                         <td style="vertical-align:middle;">
-                          <span style="font-size:22px;font-weight:900;color:#0f172a;font-family:Georgia,'Times New Roman',serif;letter-spacing:-1px;line-height:1;">Rupway</span>
+                          <span style="font-size:22px;font-weight:900;color:#0f172a;font-family:Georgia,'Times New Roman',serif;letter-spacing:-1px;line-height:1;">ClearWork</span>
                         </td>
                         <td style="padding-left:12px;vertical-align:middle;">
                           <span style="font-size:13px;color:#6B7280;font-family:Arial,Helvetica,sans-serif;">via <strong style="color:#111827;">${businessName}</strong></span>
@@ -45,7 +45,7 @@ export function layout(content: string, businessName: string, preheaderText = ''
                     </table>
                   </td>
                   <td align="right" style="vertical-align:middle;">
-                    <span style="font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif;font-weight:500;">Powered by Rupway</span>
+                    <span style="font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif;font-weight:500;">Powered by ClearWork</span>
                   </td>
                 </tr>
               </table>
@@ -65,15 +65,15 @@ export function layout(content: string, businessName: string, preheaderText = ''
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding-bottom:10px;">
-                    <a href="https://rupway.in" style="text-decoration:none;display:inline-block;">
-                      <span style="font-size:16px;font-weight:900;color:#9CA3AF;font-family:Georgia,'Times New Roman',serif;letter-spacing:-0.8px;line-height:1;">Rupway</span>
+                    <a href="https://clearwork.in" style="text-decoration:none;display:inline-block;">
+                      <span style="font-size:16px;font-weight:900;color:#9CA3AF;font-family:Georgia,'Times New Roman',serif;letter-spacing:-0.8px;line-height:1;">ClearWork</span>
                     </a>
                   </td>
                 </tr>
                 <tr>
                   <td align="center">
                     <p style="margin:0 0 4px;font-size:12px;color:#6B7280;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
-                      This email was sent by <strong style="color:#374151;">${businessName}</strong> via Rupway.
+                      This email was sent by <strong style="color:#374151;">${businessName}</strong> via ClearWork.
                     </p>
                     <p style="margin:0;font-size:11px;color:#9CA3AF;font-family:Arial,Helvetica,sans-serif;line-height:1.6;">
                       If you have questions, reply directly to this message.
@@ -650,7 +650,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
           ? alert(`${dv.followUpsCount} follow-up${dv.followUpsCount > 1 ? 's' : ''} scheduled this week`, 'warning')
           : ''}
         ${divider()}
-        ${p('Log in to Rupway to see detailed breakdowns and manage your pipeline.', true)}
+        ${p('Log in to ClearWork to see detailed breakdowns and manage your pipeline.', true)}
       `, dv.businessName, `Your weekly business snapshot for ${dv.businessName}`)
     },
   },
@@ -678,7 +678,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
           : alert('All invoices settled — excellent month!', 'success')
         }
         ${divider()}
-        ${p('Log in to Rupway for detailed reporting, upcoming follow-ups, and your full pipeline view.', true)}
+        ${p('Log in to ClearWork for detailed reporting, upcoming follow-ups, and your full pipeline view.', true)}
       `, dv.businessName, `Monthly summary for ${dv.businessName}`)
     },
   },

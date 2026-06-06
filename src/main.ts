@@ -52,8 +52,8 @@ async function bootstrap() {
   );
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Rupway API')
-    .setDescription('Rupway platform API — Lead → Proposal → Contract → Invoice → Payment')
+    .setTitle('ClearWork API')
+    .setDescription('ClearWork platform API — Lead → Proposal → Contract → Invoice → Payment')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -64,7 +64,7 @@ async function bootstrap() {
   });
 
   await app.listen(port);
-  console.log(`Rupway API running on http://localhost:${port}`);
+  console.log(`ClearWork API running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 

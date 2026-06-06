@@ -38,7 +38,7 @@ export interface ExtractedProposal {
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
-const LEAD_SYSTEM_PROMPT = `You are a lead extraction assistant for Rupway, a business management app for Indian freelancers and agencies.
+const LEAD_SYSTEM_PROMPT = `You are a lead extraction assistant for ClearWork, a business management app for Indian freelancers and agencies.
 
 Extract lead/prospect information from the provided conversation, email, or description.
 Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
@@ -63,7 +63,7 @@ Rules:
 - confidence: 0.0–1.0 reflecting how complete/clear the extraction is
 - name is the most important field — always try to find it`
 
-const PROPOSAL_SYSTEM_PROMPT = (pricingContext?: string) => `You are a proposal drafting assistant for Rupway, a business management app for Indian freelancers and agencies.
+const PROPOSAL_SYSTEM_PROMPT = (pricingContext?: string) => `You are a proposal drafting assistant for ClearWork, a business management app for Indian freelancers and agencies.
 
 Generate a structured proposal draft from the provided project brief, requirement, or client conversation.
 Return ONLY a valid JSON object — no markdown, no explanation, no code fences.
@@ -98,7 +98,7 @@ Rules:
 - suggestedClient: extract client name/email if mentioned
 - confidence: 0.0–1.0`
 
-const PARSE_TEMPLATE_SYSTEM_PROMPT = (context?: string) => `You are a template extraction assistant for Rupway, a business management app for Indian freelancers and agencies.
+const PARSE_TEMPLATE_SYSTEM_PROMPT = (context?: string) => `You are a template extraction assistant for ClearWork, a business management app for Indian freelancers and agencies.
 
 An existing proposal or template document has been provided as text. Your job is to EXTRACT its structure — do NOT invent new content. Read the actual document text and identify:
 - The title/name of the service or template

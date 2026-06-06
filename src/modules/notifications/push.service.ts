@@ -24,7 +24,7 @@ export class PushService implements OnModuleInit {
   onModuleInit() {
     const publicKey  = this.config.get<string>('webPush.publicKey');
     const privateKey = this.config.get<string>('webPush.privateKey');
-    const subject    = this.config.get<string>('webPush.subject') ?? 'mailto:noreply@rupway.in';
+    const subject    = this.config.get<string>('webPush.subject') ?? 'mailto:noreply@clearwork.in';
 
     if (!publicKey || !privateKey) {
       this.log.warn('VAPID keys not configured — push notifications disabled');

@@ -25,7 +25,7 @@ const COMMON_INVOICE_VARS: TemplateVarMeta[] = [
   { name: 'total',         description: 'Total amount with ₹ symbol',    sample: '₹25,000'          },
   { name: 'dueDate',       description: 'Due date (formatted)',           sample: '5 Jun 2026'       },
   { name: 'businessName',  description: 'Your business name',            sample: 'Studio Rao'       },
-  { name: 'viewUrl',       description: 'Link to view invoice in portal', sample: 'https://app.rupway.in/portal/...' },
+  { name: 'viewUrl',       description: 'Link to view invoice in portal', sample: 'https://app.clearwork.in/portal/...' },
   { name: 'paymentLink',   description: 'Razorpay payment link (if set)', sample: 'https://rzp.io/...' },
 ]
 
@@ -86,7 +86,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'total',         description: 'Amount paid',                   sample: '₹25,000'        },
       { name: 'paidAt',        description: 'Payment timestamp (formatted)', sample: '28 May 2026, 4:32 PM' },
       { name: 'businessName',  description: 'Your business name',            sample: 'Studio Rao'     },
-      { name: 'viewUrl',       description: 'Link to portal',                sample: 'https://app.rupway.in/portal/...' },
+      { name: 'viewUrl',       description: 'Link to portal',                sample: 'https://app.clearwork.in/portal/...' },
     ],
   },
 
@@ -101,7 +101,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'proposalTitle', description: 'Proposal title',           sample: 'Brand Identity Package'         },
       { name: 'totalAmount',  description: 'Proposal total',            sample: '₹45,000'                       },
       { name: 'validUntil',   description: 'Valid-until date',          sample: '15 Jun 2026'                    },
-      { name: 'proposalUrl',  description: 'Link to view proposal',     sample: 'https://app.rupway.in/p/...'   },
+      { name: 'proposalUrl',  description: 'Link to view proposal',     sample: 'https://app.clearwork.in/p/...'   },
       { name: 'businessName', description: 'Your business name',        sample: 'Studio Rao'                     },
     ],
   },
@@ -114,7 +114,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'clientName',    description: 'Client full name',    sample: 'Prashant Mehta'               },
       { name: 'proposalTitle', description: 'Proposal title',      sample: 'Brand Identity Package'       },
       { name: 'validUntil',    description: 'Expiry date',         sample: '15 Jun 2026'                  },
-      { name: 'proposalUrl',   description: 'Link to proposal',    sample: 'https://app.rupway.in/p/...' },
+      { name: 'proposalUrl',   description: 'Link to proposal',    sample: 'https://app.clearwork.in/p/...' },
       { name: 'businessName',  description: 'Your business name',  sample: 'Studio Rao'                   },
     ],
   },
@@ -127,7 +127,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'clientName',    description: 'Client name',         sample: 'Prashant Mehta'               },
       { name: 'proposalTitle', description: 'Proposal title',      sample: 'Brand Identity Package'       },
       { name: 'sentAgo',       description: 'When it was sent',    sample: '2 days ago'                   },
-      { name: 'proposalUrl',   description: 'Link to proposal',    sample: 'https://app.rupway.in/p/...' },
+      { name: 'proposalUrl',   description: 'Link to proposal',    sample: 'https://app.clearwork.in/p/...' },
     ],
   },
   {
@@ -139,7 +139,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'clientName',    description: 'Client name',                sample: 'Prashant Mehta'               },
       { name: 'proposalTitle', description: 'Proposal title',             sample: 'Brand Identity Package'       },
       { name: 'viewedAt',      description: 'When they opened it',        sample: '28 May 2026, 3:15 PM'         },
-      { name: 'proposalUrl',   description: 'Link to proposal',           sample: 'https://app.rupway.in/p/...' },
+      { name: 'proposalUrl',   description: 'Link to proposal',           sample: 'https://app.clearwork.in/p/...' },
     ],
   },
 
@@ -152,7 +152,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
     vars: [
       { name: 'clientName',    description: 'Client full name',       sample: 'Prashant Mehta'                    },
       { name: 'contractTitle', description: 'Contract title',         sample: 'Brand Identity Contract'            },
-      { name: 'signUrl',       description: 'Link to sign contract',  sample: 'https://app.rupway.in/sign/...'    },
+      { name: 'signUrl',       description: 'Link to sign contract',  sample: 'https://app.clearwork.in/sign/...'    },
       { name: 'businessName',  description: 'Your business name',     sample: 'Studio Rao'                         },
     ],
   },
@@ -168,7 +168,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'company',   description: 'Lead company (if set)',   sample: 'Verma & Co.'   },
       { name: 'stage',     description: 'Current pipeline stage',  sample: 'PROPOSAL_SENT' },
       { name: 'inactiveSince', description: 'Days since last activity', sample: '7'       },
-      { name: 'leadUrl',   description: 'Link to the lead',        sample: 'https://app.rupway.in/app/leads/...' },
+      { name: 'leadUrl',   description: 'Link to the lead',        sample: 'https://app.clearwork.in/app/leads/...' },
     ],
   },
   {
@@ -182,7 +182,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'phone',     description: 'Lead phone (if set)',    sample: '+91 98765 43210' },
       { name: 'source',    description: 'Lead source',            sample: 'Instagram'    },
       { name: 'service',   description: 'Service enquired about', sample: 'Logo Design'  },
-      { name: 'leadUrl',   description: 'Link to the lead',       sample: 'https://app.rupway.in/app/leads/...' },
+      { name: 'leadUrl',   description: 'Link to the lead',       sample: 'https://app.clearwork.in/app/leads/...' },
     ],
   },
 
@@ -229,7 +229,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'totalInvoiced', description: 'Total invoiced',         sample: '₹1,20,000'       },
       { name: 'totalGst',      description: 'Total GST collected',    sample: '₹21,600'         },
       { name: 'invoiceCount',  description: 'Number of invoices',     sample: '8'               },
-      { name: 'reportUrl',     description: 'Link to GST report',     sample: 'https://app.rupway.in/app/reports' },
+      { name: 'reportUrl',     description: 'Link to GST report',     sample: 'https://app.clearwork.in/app/reports' },
     ],
   },
   {
@@ -244,7 +244,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'collected',      description: 'Amount collected this week', sample: '₹25,000'      },
       { name: 'overdueCount',   description: 'Overdue invoice count',      sample: '2'            },
       { name: 'openLeadCount',  description: 'Open leads count',           sample: '5'            },
-      { name: 'dashboardUrl',   description: 'Dashboard link',             sample: 'https://app.rupway.in/app/dashboard' },
+      { name: 'dashboardUrl',   description: 'Dashboard link',             sample: 'https://app.clearwork.in/app/dashboard' },
     ],
   },
   {
@@ -260,7 +260,7 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'overdueCount',  description: 'Overdue invoice count',       sample: '1'              },
       { name: 'openLeadCount', description: 'Open leads count',            sample: '8'              },
       { name: 'expenses',      description: 'Total expenses this month',   sample: '₹12,000'       },
-      { name: 'dashboardUrl',  description: 'Dashboard link',              sample: 'https://app.rupway.in/app/dashboard' },
+      { name: 'dashboardUrl',  description: 'Dashboard link',              sample: 'https://app.clearwork.in/app/dashboard' },
     ],
   },
 ]
