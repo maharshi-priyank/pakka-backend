@@ -30,6 +30,11 @@ model User {
   bankIfsc                String?
   upiId                   String?
   upiQrUrl                String?
+  defaultHsnSac           String?
+  defaultLutNumber        String?
+  onboardingComplete      Boolean  @default(false)
+  razorpayKeyId           String?
+  razorpayKeySecret       String?
   googleAccessToken       String?
   googleRefreshToken      String?
   googleTokenExpiresAt    DateTime?
@@ -307,6 +312,9 @@ model Invoice {
   total             Decimal       @db.Decimal(12, 2)
   gstType           GstType       @default(IGST)
   tdsRate           Decimal?      @db.Decimal(5, 2)
+  currency          String        @default("INR")
+  exchangeRate      Decimal?
+  lutNumber         String?
   tdsDeducted       Decimal       @default(0) @db.Decimal(12, 2)
   amountPaid        Decimal       @default(0) @db.Decimal(12, 2)
   dueDate           DateTime?
