@@ -11,10 +11,9 @@ const prisma = new PrismaClient({ adapter })
 
 async function main() {
   const result = await prisma.user.updateMany({
-    where: { onboardingComplete: false },
-    data:  { onboardingComplete: true },
+    data: { onboardingComplete: false },
   })
-  console.log(`Set onboardingComplete=true for ${result.count} existing users`)
+  console.log(`Reset onboardingComplete=false for ${result.count} users`)
 }
 
 main()
