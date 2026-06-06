@@ -1,25 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import Razorpay from 'razorpay';
 
 @Injectable()
 export class PortalService {
-  private _razorpay: Razorpay | null = null;
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
   ) {}
 
-  private get razorpay(): Razorpay {
-    if (!this._razorpay) {
-      const keyId     = this.config.get<string>('razorpay.keyId')
-      const keySecret = this.config.get<string>('razorpay.keySecret')
-      if (!keyId || !keySecret) throw new BadRequestException('Razorpay is not configured')
-      this._razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret })
+  private makeRazorpay(keyId: string | null, keySecret: string | null): Razorpay {
+    if (!keyId || !keySecret) {
+      throw new BadRequestException('Connect your Razorpay account in Settings to enable online payments')
     }
-    return this._razorpay
+    return new Razorpay({ key_id: keyId, key_secret: keySecret })
   }
 
   async getPortalData(token: string) {
@@ -99,7 +92,12 @@ export class PortalService {
   }
 
   async createInvoiceOrder(token: string, invoiceId: string) {
-    const client = await this.prisma.client.findUnique({ where: { portalToken: token } });
+    const client = await this.prisma.client.findUnique({
+      where: { portalToken: token },
+      include: {
+        user: { select: { razorpayKeyId: true, razorpayKeySecret: true } },
+      },
+    });
     if (!client) throw new NotFoundException('Portal link is invalid or has expired');
 
     const invoice = await this.prisma.invoice.findFirst({
@@ -110,8 +108,13 @@ export class PortalService {
       throw new BadRequestException('Invoice is not payable');
     }
 
+    const razorpay = this.makeRazorpay(
+      client.user.razorpayKeyId,
+      client.user.razorpayKeySecret,
+    );
+
     const amountPaise = Math.round(Number(invoice.total) * 100);
-    const order = await (this.razorpay.orders.create as any)({
+    const order = await (razorpay.orders.create as any)({
       amount:   amountPaise,
       currency: 'INR',
       receipt:  invoice.invoiceNumber,
@@ -126,7 +129,7 @@ export class PortalService {
       orderId:  order.id,
       amount:   amountPaise,
       currency: 'INR',
-      keyId:    this.config.get<string>('razorpay.keyId'),
+      keyId:    client.user.razorpayKeyId,
     };
   }
 }

@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, ForbiddenException, HttpException, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
 import Razorpay from 'razorpay';
@@ -35,18 +34,17 @@ function calcTotals(lineItems: LineItemDto[], gstType: string) {
 
 @Injectable()
 export class ProposalsService {
-  private readonly razorpay: Razorpay;
-
   constructor(
     private readonly prisma:        PrismaService,
     private readonly eventEmitter:  EventEmitter2,
-    private readonly config:        ConfigService,
     private readonly invoices:      InvoicesService,
-  ) {
-    this.razorpay = new Razorpay({
-      key_id:     this.config.get<string>('razorpay.keyId')!,
-      key_secret: this.config.get<string>('razorpay.keySecret')!,
-    });
+  ) {}
+
+  private makeRazorpay(keyId: string | null, keySecret: string | null): Razorpay {
+    if (!keyId || !keySecret) {
+      throw new BadRequestException('Connect your Razorpay account in Settings to enable online payments')
+    }
+    return new Razorpay({ key_id: keyId, key_secret: keySecret })
   }
 
   async create(userId: string, dto: CreateProposalDto) {
@@ -258,13 +256,17 @@ export class ProposalsService {
     // Already accepted — if deposit order exists and is unpaid, return it so the client can still pay
     if (proposal.status === ProposalStatus.ACCEPTED) {
       if (proposal.depositOrderId && !proposal.depositPaid && proposal.depositAmount) {
+        const proposalUser = await this.prisma.user.findUnique({
+          where: { id: proposal.userId },
+          select: { razorpayKeyId: true },
+        });
         return {
           proposal,
           depositOrder: {
             orderId:   proposal.depositOrderId,
             amount:    Math.round(Number(proposal.depositAmount) * 100),
             currency:  'INR',
-            keyId:     this.config.get<string>('razorpay.keyId'),
+            keyId:     proposalUser?.razorpayKeyId ?? null,
             milestone: 'Deposit',
           },
         };
@@ -293,7 +295,15 @@ export class ProposalsService {
     if (paymentSchedule?.length) {
       const deposit = paymentSchedule[0];
       try {
-        const order = await (this.razorpay.orders.create as any)({
+        const proposalUser = await this.prisma.user.findUnique({
+          where: { id: proposal.userId },
+          select: { razorpayKeyId: true, razorpayKeySecret: true },
+        });
+        const razorpay = this.makeRazorpay(
+          proposalUser?.razorpayKeyId ?? null,
+          proposalUser?.razorpayKeySecret ?? null,
+        );
+        const order = await (razorpay.orders.create as any)({
           amount:   Math.round(deposit.amount * 100),
           currency: 'INR',
           receipt:  proposal.id,
@@ -308,7 +318,7 @@ export class ProposalsService {
             orderId:   order.id,
             amount:    Math.round(deposit.amount * 100),
             currency:  'INR',
-            keyId:     this.config.get<string>('razorpay.keyId'),
+            keyId:     proposalUser?.razorpayKeyId ?? null,
             milestone: deposit.milestone,
           },
         };
@@ -327,8 +337,14 @@ export class ProposalsService {
     if (proposal.depositPaid)     throw new BadRequestException('Deposit already paid');
     if (proposal.depositOrderId !== dto.orderId) throw new BadRequestException('Order ID mismatch');
 
-    const keySecret = this.config.get<string>('razorpay.keySecret')!;
-    const expected  = crypto.createHmac('sha256', keySecret)
+    const proposalUser = await this.prisma.user.findUnique({
+      where: { id: proposal.userId },
+      select: { razorpayKeySecret: true },
+    });
+    if (!proposalUser?.razorpayKeySecret) {
+      throw new BadRequestException('Connect your Razorpay account in Settings to enable online payments');
+    }
+    const expected  = crypto.createHmac('sha256', proposalUser.razorpayKeySecret)
       .update(`${dto.orderId}|${dto.paymentId}`)
       .digest('hex');
     if (expected !== dto.signature) throw new ForbiddenException('Invalid payment signature');
