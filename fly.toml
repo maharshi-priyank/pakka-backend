@@ -1,5 +1,4 @@
-[app]
-name = "rupway-backend"
+app = "rupway-backend"
 primary_region = "bom"
 
 [build]
