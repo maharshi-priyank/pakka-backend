@@ -11,6 +11,11 @@ export class LineItemDto {
   @ApiProperty() @IsNumber() @Min(0) qty: number;
   @ApiProperty() @IsNumber() @Min(0) rate: number;
   @ApiProperty() @IsNumber() @Min(0) @Max(28) gstRate: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  hsnSac?: string;
 }
 
 export class CreateInvoiceDto {
@@ -35,6 +40,21 @@ export class CreateInvoiceDto {
   @ApiPropertyOptional() @IsNumber() @Min(0) @Max(30) @IsOptional() tdsRate?: number;
   @ApiPropertyOptional() @IsDateString() @IsOptional() dueDate?: string;
   @ApiPropertyOptional() @IsString() @IsOptional() notes?: string;
+
+  @ApiPropertyOptional({ default: 'INR', enum: ['INR', 'USD', 'EUR', 'GBP', 'AED'] })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  exchangeRate?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  lutNumber?: string;
 
   @ApiPropertyOptional() @IsBoolean() @IsOptional() isRecurring?: boolean;
   @ApiPropertyOptional({ enum: ['MONTHLY', 'QUARTERLY', 'YEARLY', 'WEEKLY'] })

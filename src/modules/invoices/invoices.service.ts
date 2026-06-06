@@ -96,14 +96,28 @@ export class InvoicesService {
   }
 
   async create(userId: string, dto: CreateInvoiceDto) {
-    const gstType = dto.gstType ?? GstType.IGST;
+    const currency = dto.currency ?? 'INR';
+    const isExport = currency !== 'INR';
+
+    // For export invoices, force EXEMPT so calcTotals skips GST entirely
+    const gstType = isExport ? GstType.EXEMPT : (dto.gstType ?? GstType.IGST);
     const { subtotal, gstAmount, total } = calcTotals(dto.lineItems, gstType);
 
-    const now = new Date()
+    // Copy lutNumber from user profile if not supplied on the invoice
+    let lutNumber = dto.lutNumber ?? null;
+    if (isExport && !lutNumber) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { defaultLutNumber: true },
+      });
+      lutNumber = user?.defaultLutNumber ?? null;
+    }
+
+    const now = new Date();
     const recurrenceNextDate =
       dto.isRecurring && dto.recurrenceCycle && dto.recurrenceDay
         ? this.computeNextRecurrenceDate(now, dto.recurrenceCycle, dto.recurrenceDay)
-        : null
+        : null;
 
     return createInvoiceWithRetry(this.prisma, userId, {
       userId,
@@ -116,6 +130,9 @@ export class InvoicesService {
       gstType,
       tdsRate:           dto.tdsRate  != null ? dto.tdsRate  : null,
       dueDate:           dto.dueDate  ? new Date(dto.dueDate)  : null,
+      currency,
+      exchangeRate:      dto.exchangeRate ?? null,
+      lutNumber,
       isRecurring:       dto.isRecurring        ?? false,
       recurrenceCycle:   dto.recurrenceCycle    ?? null,
       recurrenceDay:     dto.recurrenceDay      ?? null,
