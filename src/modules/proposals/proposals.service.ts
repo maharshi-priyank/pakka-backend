@@ -322,7 +322,8 @@ export class ProposalsService {
             milestone: deposit.milestone,
           },
         };
-      } catch {
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
         // Razorpay unavailable — still return accepted proposal, no deposit card
       }
     }
@@ -347,7 +348,11 @@ export class ProposalsService {
     const expected  = crypto.createHmac('sha256', proposalUser.razorpayKeySecret)
       .update(`${dto.orderId}|${dto.paymentId}`)
       .digest('hex');
-    if (expected !== dto.signature) throw new ForbiddenException('Invalid payment signature');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const actualBuf   = Buffer.from(dto.signature, 'utf8');
+    if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
+      throw new ForbiddenException('Invalid payment signature');
+    }
 
     await this.prisma.proposal.update({
       where: { id: proposal.id },
