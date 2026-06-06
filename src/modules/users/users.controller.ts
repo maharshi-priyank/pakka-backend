@@ -37,6 +37,7 @@ export class UsersController {
       googleRefreshToken,
       outlookAccessToken,
       outlookRefreshToken,
+      clickUpAccessToken,
       ...safeUser
     } = user;
     return safeUser;
