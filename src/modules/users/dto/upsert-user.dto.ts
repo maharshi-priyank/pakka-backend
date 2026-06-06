@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsBoolean } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 // Used internally by the service (populated from JWT, not request body)
@@ -74,4 +74,29 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   upiQrUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  defaultHsnSac?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  defaultLutNumber?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  razorpayKeyId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  razorpayKeySecret?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  onboardingComplete?: boolean;
 }
