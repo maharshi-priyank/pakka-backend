@@ -31,7 +31,15 @@ export class UsersController {
   @Get('me')
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   getMe(@CurrentUser() user: User) {
-    return user;
+    const {
+      razorpayKeySecret,
+      googleAccessToken,
+      googleRefreshToken,
+      outlookAccessToken,
+      outlookRefreshToken,
+      ...safeUser
+    } = user;
+    return safeUser;
   }
 
   @Patch('me')

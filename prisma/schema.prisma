@@ -313,7 +313,7 @@ model Invoice {
   gstType           GstType       @default(IGST)
   tdsRate           Decimal?      @db.Decimal(5, 2)
   currency          String        @default("INR")
-  exchangeRate      Decimal?
+  exchangeRate      Decimal?  @db.Decimal(10, 6)
   lutNumber         String?
   tdsDeducted       Decimal       @default(0) @db.Decimal(12, 2)
   amountPaid        Decimal       @default(0) @db.Decimal(12, 2)
