@@ -43,7 +43,7 @@ export class CreateInvoiceDto {
 
   @ApiPropertyOptional({ default: 'INR', enum: ['INR', 'USD', 'EUR', 'GBP', 'AED'] })
   @IsOptional()
-  @IsString()
+  @IsIn(['INR', 'USD', 'EUR', 'GBP', 'AED'])
   currency?: string;
 
   @ApiPropertyOptional()
