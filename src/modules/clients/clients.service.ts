@@ -128,6 +128,26 @@ export class ClientsService {
     });
   }
 
+  async listNotes(userId: string, clientId: string) {
+    await this.findOne(userId, clientId);
+    return this.prisma.clientNote.findMany({
+      where: { clientId, userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createNote(userId: string, clientId: string, content: string) {
+    await this.findOne(userId, clientId);
+    return this.prisma.clientNote.create({
+      data: { userId, clientId, content },
+    });
+  }
+
+  async deleteNote(userId: string, clientId: string, noteId: string) {
+    await this.findOne(userId, clientId);
+    await this.prisma.clientNote.deleteMany({ where: { id: noteId, userId, clientId } });
+  }
+
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
     await this.prisma.$transaction([

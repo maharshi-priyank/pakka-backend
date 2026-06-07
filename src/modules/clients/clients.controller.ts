@@ -2,6 +2,11 @@ import {
   Controller, Get, Post, Patch, Delete,
   Param, Body, Query, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import { IsString, MinLength } from 'class-validator';
+
+class CreateNoteDto {
+  @IsString() @MinLength(1) content: string;
+}
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { User } from '@prisma/client';
 import { ClientsService } from './clients.service';
@@ -49,5 +54,23 @@ export class ClientsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.clientsService.remove(user.id, id);
+  }
+
+  // ── Notes ──────────────────────────────────────────────────────────────────
+
+  @Get(':id/notes')
+  listNotes(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.clientsService.listNotes(user.id, id);
+  }
+
+  @Post(':id/notes')
+  createNote(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: CreateNoteDto) {
+    return this.clientsService.createNote(user.id, id, dto.content);
+  }
+
+  @Delete(':id/notes/:noteId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteNote(@CurrentUser() user: User, @Param('id') id: string, @Param('noteId') noteId: string) {
+    return this.clientsService.deleteNote(user.id, id, noteId);
   }
 }

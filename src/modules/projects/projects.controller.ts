@@ -2,9 +2,14 @@ import {
   Controller, Get, Post, Patch, Delete,
   Param, Body, Query, HttpCode, HttpStatus,
 } from '@nestjs/common';
+import { IsString, MinLength } from 'class-validator';
 import { ProjectsService, CreateProjectDto, UpdateProjectDto, QueryProjectsDto } from './projects.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ProjectStatus } from '@prisma/client';
+
+class CreateNoteDto {
+  @IsString() @MinLength(1) content: string;
+}
 
 @Controller('projects')
 export class ProjectsController {
@@ -69,5 +74,23 @@ export class ProjectsController {
     @Param('id')   id: string,
   ) {
     return this.projectsService.remove(user.id, id);
+  }
+
+  // ── Notes ──────────────────────────────────────────────────────────────────
+
+  @Get(':id/notes')
+  listNotes(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.projectsService.listNotes(user.id, id);
+  }
+
+  @Post(':id/notes')
+  createNote(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: CreateNoteDto) {
+    return this.projectsService.createNote(user.id, id, dto.content);
+  }
+
+  @Delete(':id/notes/:noteId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteNote(@CurrentUser() user: { id: string }, @Param('id') id: string, @Param('noteId') noteId: string) {
+    return this.projectsService.deleteNote(user.id, id, noteId);
   }
 }
