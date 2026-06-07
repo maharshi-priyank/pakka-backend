@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, Query } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Param, Body, Query, HttpCode, HttpStatus } from '@nestjs/common'
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { AutomationsService } from './automations.service'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
@@ -33,5 +33,17 @@ export class AutomationsController {
   @Get(':id/executions')
   getExecutions(@CurrentUser() user: User, @Param('id') id: string) {
     return this.automationsService.getExecutions(user.id, id)
+  }
+
+  @Post('ai-generate')
+  @HttpCode(HttpStatus.OK)
+  async aiGenerate(@CurrentUser() user: User, @Body('prompt') prompt: string) {
+    const rules = await this.automationsService.generateWithAI(prompt)
+    return { rules }
+  }
+
+  @Post('ai-create')
+  async aiCreate(@CurrentUser() user: User, @Body('rules') rules: any[]) {
+    return this.automationsService.createFromAI(user.id, rules)
   }
 }
