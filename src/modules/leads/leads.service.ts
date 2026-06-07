@@ -109,10 +109,14 @@ export class LeadsService {
   async updateStage(userId: string, id: string, stage: LeadStage) {
     await this.findOne(userId, id);
 
-    return this.prisma.lead.update({
+    const lead = await this.prisma.lead.update({
       where: { id },
       data: { stage, lastActivityAt: new Date() },
     });
+
+    this.eventEmitter.emit('lead.updated', { entityId: id, userId, stage });
+
+    return lead;
   }
 
   async remove(userId: string, id: string) {

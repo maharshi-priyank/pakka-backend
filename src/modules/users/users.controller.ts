@@ -38,6 +38,9 @@ export class UsersController {
       outlookAccessToken,
       outlookRefreshToken,
       clickUpAccessToken,
+      canvaAccessToken,
+      canvaRefreshToken,
+      flodeskApiKey,
       ...safeUser
     } = user;
     return safeUser;

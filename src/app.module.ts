@@ -25,6 +25,9 @@ import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
 import { MicrosoftAuthModule } from './modules/microsoft-auth/microsoft-auth.module';
 import { ClickUpAuthModule } from './modules/clickup-auth/clickup-auth.module';
 import { ClickUpModule } from './modules/clickup/clickup.module';
+import { FlodeskModule } from './modules/flodesk/flodesk.module';
+import { CanvaAuthModule } from './modules/canva-auth/canva-auth.module';
+import { CanvaModule } from './modules/canva/canva.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
 import { FormsModule } from './modules/forms/forms.module';
@@ -86,6 +89,9 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     MicrosoftAuthModule,
     ClickUpAuthModule,
     ClickUpModule,
+    FlodeskModule,
+    CanvaAuthModule,
+    CanvaModule,
     MeetingsModule,
     ProposalTemplatesModule,
     FormsModule,

@@ -122,6 +122,58 @@ export class UsersService {
     });
   }
 
+  async saveCanvaTokens(userId: string, tokens: { accessToken: string; refreshToken: string; expiresAt: Date }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        canvaAccessToken:    tokens.accessToken,
+        canvaRefreshToken:   tokens.refreshToken,
+        canvaTokenExpiresAt: tokens.expiresAt,
+        canvaConnected:      true,
+      },
+    });
+  }
+
+  async getCanvaTokens(userId: string) {
+    return this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { canvaAccessToken: true, canvaRefreshToken: true, canvaTokenExpiresAt: true },
+    });
+  }
+
+  async clearCanvaTokens(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        canvaAccessToken:    null,
+        canvaRefreshToken:   null,
+        canvaTokenExpiresAt: null,
+        canvaConnected:      false,
+      },
+    });
+  }
+
+  async saveFlodeskApiKey(userId: string, apiKey: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data:  { flodeskApiKey: apiKey, flodeskConnected: true },
+    });
+  }
+
+  async getFlodeskApiKey(userId: string) {
+    return this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { flodeskApiKey: true },
+    });
+  }
+
+  async clearFlodeskApiKey(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data:  { flodeskApiKey: null, flodeskConnected: false },
+    });
+  }
+
   async redeemPromo(userId: string, code: string) {
     const promo = await this.prisma.promoCode.findUnique({ where: { code } });
     if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');

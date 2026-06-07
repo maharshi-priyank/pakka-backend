@@ -23,6 +23,9 @@ export const validationSchema = Joi.object({
   CLICKUP_CLIENT_ID:     Joi.string().optional(),
   CLICKUP_CLIENT_SECRET: Joi.string().optional(),
   CLICKUP_REDIRECT_URI:  Joi.string().optional(),
+  CANVA_CLIENT_ID:       Joi.string().optional(),
+  CANVA_CLIENT_SECRET:   Joi.string().optional(),
+  CANVA_REDIRECT_URI:    Joi.string().optional(),
   EMAIL_HOST: Joi.string().default('smtp.gmail.com'),
   EMAIL_PORT: Joi.number().default(587),
   EMAIL_USER: Joi.string().optional(),
@@ -61,6 +64,11 @@ export const configuration = () => ({
     clientId:     process.env.CLICKUP_CLIENT_ID,
     clientSecret: process.env.CLICKUP_CLIENT_SECRET,
     redirectUri:  process.env.CLICKUP_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/clickup/callback',
+  },
+  canva: {
+    clientId:     process.env.CANVA_CLIENT_ID,
+    clientSecret: process.env.CANVA_CLIENT_SECRET,
+    redirectUri:  process.env.CANVA_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/canva/callback',
   },
   corsOrigin: process.env.CORS_ORIGIN,
   email: {

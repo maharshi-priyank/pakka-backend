@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -9,14 +10,17 @@ import { QueryClientsDto } from './dto/query-clients.dto';
 @Injectable()
 export class ClientsService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly prisma:        PrismaService,
+    private readonly config:        ConfigService,
+    private readonly eventEmitter:  EventEmitter2,
   ) {}
 
   async create(userId: string, dto: CreateClientDto) {
-    return this.prisma.client.create({
+    const client = await this.prisma.client.create({
       data: { ...dto, userId, portalToken: nanoid(21) },
     });
+    this.eventEmitter.emit('client.created', { entityId: client.id, userId });
+    return client;
   }
 
   async regeneratePortalToken(userId: string, id: string) {

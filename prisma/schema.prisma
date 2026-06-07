@@ -46,6 +46,12 @@ model User {
   clickUpAccessToken      String?
   clickUpConnected        Boolean          @default(false)
   clickUpWorkspaceId      String?
+  flodeskApiKey           String?
+  flodeskConnected        Boolean          @default(false)
+  canvaAccessToken        String?
+  canvaRefreshToken       String?
+  canvaTokenExpiresAt     DateTime?
+  canvaConnected          Boolean          @default(false)
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   leads                   Lead[]
