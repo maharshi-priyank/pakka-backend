@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const compression = require('compression');
 import * as express from 'express';
 import { AppModule } from './app.module';
 
@@ -30,6 +32,7 @@ async function bootstrap() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+  app.use(compression());
   app.use(helmet());
 
   app.enableCors({
