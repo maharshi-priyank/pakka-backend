@@ -23,6 +23,8 @@ import { AiModule } from './modules/ai/ai.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { GoogleAuthModule } from './modules/google-auth/google-auth.module';
 import { MicrosoftAuthModule } from './modules/microsoft-auth/microsoft-auth.module';
+import { ClickUpAuthModule } from './modules/clickup-auth/clickup-auth.module';
+import { ClickUpModule } from './modules/clickup/clickup.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
 import { FormsModule } from './modules/forms/forms.module';
@@ -82,6 +84,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     PortalModule,
     GoogleAuthModule,
     MicrosoftAuthModule,
+    ClickUpAuthModule,
+    ClickUpModule,
     MeetingsModule,
     ProposalTemplatesModule,
     FormsModule,

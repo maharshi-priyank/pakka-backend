@@ -1,0 +1,12 @@
+id: 019e9cab-05f1-70ab-a95e-168367d42a86
+name: Rupway-backend
+environments:
+  development:
+    type: development
+  local:
+    type: local
+  production:
+    type: production
+  testing:
+    type: testing
+deployment_provider: other
