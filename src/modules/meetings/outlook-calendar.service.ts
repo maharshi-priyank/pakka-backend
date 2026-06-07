@@ -192,4 +192,29 @@ export class OutlookCalendarService {
       this.logger.warn(`Failed to delete Outlook Calendar event: ${(err as Error).message}`);
     }
   }
+
+  async listEvents(userId: string, from: Date, to: Date): Promise<{ id: string; title: string; start: string; end: string; meetLink: string | null }[]> {
+    try {
+      const token = await this.msAuth.getValidAccessToken(userId);
+      const url   = `${GRAPH_BASE}/me/calendarView?startDateTime=${from.toISOString()}&endDateTime=${to.toISOString()}&$select=id,subject,start,end,onlineMeeting&$top=100`;
+      const res   = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Graph API error ${res.status}: ${err}`);
+      }
+
+      const data = await res.json() as { value: { id: string; subject: string; start: { dateTime: string }; end: { dateTime: string }; onlineMeeting?: { joinUrl?: string } }[] };
+      return (data.value ?? []).map(e => ({
+        id:       e.id,
+        title:    e.subject ?? 'Untitled',
+        start:    e.start.dateTime,
+        end:      e.end.dateTime,
+        meetLink: e.onlineMeeting?.joinUrl ?? null,
+      }));
+    } catch (err) {
+      this.logger.warn(`Failed to list Outlook Calendar events: ${(err as Error).message}`);
+      return [];
+    }
+  }
 }

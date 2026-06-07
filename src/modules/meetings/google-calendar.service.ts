@@ -126,4 +126,31 @@ export class GoogleCalendarService {
       this.logger.warn(`Failed to delete Google Calendar event: ${(err as Error).message}`);
     }
   }
+
+  async listEvents(userId: string, from: Date, to: Date): Promise<{ id: string; title: string; start: string; end: string; meetLink: string | null }[]> {
+    try {
+      const auth     = await this.googleAuth.getAuthorizedClient(userId);
+      const calendar = google.calendar({ version: 'v3', auth });
+      const res = await calendar.events.list({
+        calendarId:   'primary',
+        timeMin:      from.toISOString(),
+        timeMax:      to.toISOString(),
+        singleEvents: true,
+        maxResults:   100,
+        fields:       'items(id,summary,start,end,hangoutLink,conferenceData)',
+      });
+      return (res.data.items ?? [])
+        .filter(e => e.id && (e.start?.dateTime || e.start?.date))
+        .map(e => ({
+          id:       e.id!,
+          title:    e.summary ?? 'Untitled',
+          start:    e.start?.dateTime ?? e.start?.date ?? from.toISOString(),
+          end:      e.end?.dateTime   ?? e.end?.date   ?? from.toISOString(),
+          meetLink: e.hangoutLink ?? e.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri ?? null,
+        }));
+    } catch (err) {
+      this.logger.warn(`Failed to list Google Calendar events: ${(err as Error).message}`);
+      return [];
+    }
+  }
 }

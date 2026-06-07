@@ -33,6 +33,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { EmailTemplatesModule } from './modules/email-templates/email-templates.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -91,6 +92,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     ProjectsModule,
     EmailTemplatesModule,
     AttachmentsModule,
+    CalendarModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
