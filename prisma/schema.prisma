@@ -43,6 +43,9 @@ model User {
   outlookRefreshToken     String?
   outlookTokenExpiresAt   DateTime?
   outlookConnected        Boolean          @default(false)
+  clickUpAccessToken      String?
+  clickUpConnected        Boolean          @default(false)
+  clickUpWorkspaceId      String?
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   leads                   Lead[]
@@ -160,8 +163,9 @@ model Client {
   company     String?
   gstNumber   String?
   state       String?
-  portalToken String?    @unique
-  createdAt   DateTime   @default(now())
+  portalToken     String?    @unique
+  clickupMemberId String?    @unique
+  createdAt       DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   leads       Lead[]
   proposals   Proposal[]
@@ -515,10 +519,11 @@ model TimeEntry {
   date         DateTime
   durationMins Int
   hourlyRate   Decimal? @db.Decimal(10, 2)
-  isBilled     Boolean  @default(false)
-  invoiceId    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isBilled      Boolean  @default(false)
+  invoiceId     String?
+  clickupTaskId String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@map("time_entries")
 }
@@ -558,6 +563,7 @@ model Project {
   startDate            DateTime?
   endDate              DateTime?
   shareRateWithClient  Boolean       @default(false)
+  clickupListId        String?       @unique
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   proposals   Proposal[]

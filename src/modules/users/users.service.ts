@@ -93,6 +93,35 @@ export class UsersService {
     });
   }
 
+  async saveClickUpTokens(userId: string, tokens: { accessToken: string; workspaceId: string }) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        clickUpAccessToken: tokens.accessToken,
+        clickUpWorkspaceId: tokens.workspaceId,
+        clickUpConnected:   true,
+      },
+    });
+  }
+
+  async getClickUpTokens(userId: string) {
+    return this.prisma.user.findUnique({
+      where:  { id: userId },
+      select: { clickUpAccessToken: true, clickUpWorkspaceId: true },
+    });
+  }
+
+  async clearClickUpTokens(userId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        clickUpAccessToken: null,
+        clickUpWorkspaceId: null,
+        clickUpConnected:   false,
+      },
+    });
+  }
+
   async redeemPromo(userId: string, code: string) {
     const promo = await this.prisma.promoCode.findUnique({ where: { code } });
     if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');

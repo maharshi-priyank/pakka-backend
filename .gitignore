@@ -1,8 +1,26 @@
-node_modules
-# Keep environment variables out of version control
-.env
-
-/generated/prisma
-.env
+node_modules/
 dist/
 generated/
+/generated/prisma
+
+# Environment variables — keep all .env variants out except the example
+.env
+.env.*
+!.env.example
+
+# Ghostable secrets & state (ghostable.yaml is safe to commit, state is not)
+.ghostable/state/
+
+# Logs
+*.log
+logs/
+newrelic_agent.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Upload / temp
+uploads/
+tmp/
