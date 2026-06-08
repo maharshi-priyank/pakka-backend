@@ -341,9 +341,10 @@ Rules:
     }
 
     if (!res!.ok) {
-      const err = await res!.text()
-      this.logger.error(`Gemini chat error ${res!.status}: ${err}`)
-      throw new BadRequestException('AI is temporarily unavailable — please try again')
+      const errBody = await res!.text()
+      this.logger.error(`Gemini chat error ${res!.status}: ${errBody}`)
+      const detail = `${res!.status}: ${errBody.slice(0, 300)}`
+      throw new BadRequestException(`AI unavailable — ${detail}`)
     }
 
     const json = await res!.json() as {

@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsIn } from 'class-validator'
+import { IsString, IsOptional, IsArray, ValidateNested } from 'class-validator'
+import { Type } from 'class-transformer'
 import { ApiPropertyOptional } from '@nestjs/swagger'
 
 export class ExtractDto {
@@ -41,5 +42,8 @@ export class ChatDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChatTurnDto)
   history?: ChatTurnDto[]
 }
