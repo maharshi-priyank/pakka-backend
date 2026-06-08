@@ -309,7 +309,8 @@ Rules:
 - Use ₹ for currency amounts and Indian examples
 - If a question is outside your domain (not business/tax/freelance related), politely redirect
 - Never give definitive legal or financial advice — suggest consulting a CA for complex situations
-- Respond in the same language as the user (Hindi or English)`
+- Respond in the same language as the user (Hindi or English)
+- Do not use markdown formatting — no **, ##, *, bullet hyphens, or backticks. Plain text only.`
 
     const contents = [
       ...(dto.history ?? []).map(h => ({
