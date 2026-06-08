@@ -26,3 +26,20 @@ export class ExtractProposalDto extends ExtractDto {
   @IsString()
   pricingContext?: string
 }
+
+export class ChatTurnDto {
+  @IsString()
+  role!: 'user' | 'model'
+
+  @IsString()
+  content!: string
+}
+
+export class ChatDto {
+  @IsString()
+  message!: string
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  history?: ChatTurnDto[]
+}

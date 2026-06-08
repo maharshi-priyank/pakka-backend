@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config'
 const pdfParse = require('pdf-parse')
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mammoth  = require('mammoth')
-import type { ExtractLeadDto, ExtractProposalDto } from './dto/extract.dto'
+import type { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent'
 
@@ -297,5 +297,58 @@ export class AiService {
       this.logger.error('Template parse JSON failed', raw)
       throw new BadRequestException('Could not parse AI response — try again')
     }
+  }
+
+  async chat(dto: ChatDto): Promise<{ reply: string }> {
+    const SYSTEM_PROMPT = `You are ClearWork Assistant, a knowledgeable and friendly advisor for Indian freelancers and agencies.
+You help with: GST registration, IGST vs CGST/SGST, TDS rates (194J, 194C, 194H), income tax (old vs new regime, Section 44ADA presumptive taxation), invoicing best practices, freelance contracts, payment terms, late fees, Razorpay/UPI payments, GST filing (GSTR-1, GSTR-3B), ITR filing, Form 26AS, advance tax, and general freelance business questions in India.
+
+Rules:
+- Answer in clear, plain language — avoid jargon unless you explain it
+- Keep responses concise (2-5 sentences for simple questions, up to 10 for complex ones)
+- Use ₹ for currency amounts and Indian examples
+- If a question is outside your domain (not business/tax/freelance related), politely redirect
+- Never give definitive legal or financial advice — suggest consulting a CA for complex situations
+- Respond in the same language as the user (Hindi or English)`
+
+    const contents = [
+      ...(dto.history ?? []).map(h => ({
+        role:  h.role,
+        parts: [{ text: h.content }],
+      })),
+      { role: 'user', parts: [{ text: dto.message }] },
+    ]
+
+    const body = {
+      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents,
+      generationConfig: {
+        temperature:     0.6,
+        maxOutputTokens: 512,
+      },
+    }
+
+    let res: Response | undefined
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500))
+      res = await fetch(GEMINI_API, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-goog-api-key': this.apiKey },
+        body:    JSON.stringify(body),
+      })
+      if (res.status !== 503) break
+    }
+
+    if (!res!.ok) {
+      const err = await res!.text()
+      this.logger.error(`Gemini chat error ${res!.status}: ${err}`)
+      throw new BadRequestException('AI is temporarily unavailable — please try again')
+    }
+
+    const json = await res!.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+    }
+    const reply = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? 'Sorry, I could not generate a response. Please try again.'
+    return { reply }
   }
 }

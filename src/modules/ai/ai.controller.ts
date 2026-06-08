@@ -2,7 +2,7 @@ import { Controller, Post, Body, HttpCode, UploadedFile, UseInterceptors } from 
 import { ApiTags, ApiOperation, ApiConsumes } from '@nestjs/swagger'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { AiService } from './ai.service'
-import { ExtractLeadDto, ExtractProposalDto } from './dto/extract.dto'
+import { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
 @ApiTags('ai')
 @Controller('ai')
@@ -21,6 +21,13 @@ export class AiController {
   @ApiOperation({ summary: 'Generate proposal draft from brief using Gemini' })
   extractProposal(@Body() dto: ExtractProposalDto) {
     return this.ai.extractProposal(dto)
+  }
+
+  @Post('chat')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Chat with the ClearWork AI assistant (freelance & tax advisor)' })
+  chat(@Body() dto: ChatDto) {
+    return this.ai.chat(dto)
   }
 
   @Post('parse-template')
