@@ -16,10 +16,11 @@ export class EmailService {
     const pass = this.config.get<string>('email.pass')
 
     if (user && pass) {
+      const port = this.config.get<number>('email.port') ?? 587
       this.transporter = nodemailer.createTransport({
         host:   this.config.get<string>('email.host'),
-        port:   this.config.get<number>('email.port'),
-        secure: false,
+        port,
+        secure: port === 465,
         auth:   { user, pass },
       })
     } else {
