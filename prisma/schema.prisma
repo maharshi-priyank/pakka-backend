@@ -54,6 +54,25 @@ model User {
   canvaConnected          Boolean          @default(false)
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
+  // Public Profile
+  publicUsername          String?          @unique
+  publicProfileEnabled    Boolean          @default(false)
+  publicUsernameChanged   Boolean          @default(false)
+  publicBio               String?
+  publicCity              String?
+  publicWhatsapp          String?
+  publicLanguages         String[]         @default([])
+  publicSkills            String[]         @default([])
+  publicServices          Json             @default("[]")
+  publicPortfolio         Json             @default("[]")
+  publicAccentColor       String           @default("indigo")
+  // Cached stats (recalculated nightly)
+  statsProjectsCompleted  Int              @default(0)
+  statsTotalEarned        Decimal          @default(0) @db.Decimal(14, 2)
+  statsRepeatClientPct    Int              @default(0)
+  statsAcceptanceRate     Int              @default(0)
+  statsAvgResponseHrs     Int              @default(0)
+  statsLastCalculatedAt   DateTime?
   leads                   Lead[]
   clients                 Client[]
   proposals               Proposal[]
@@ -74,6 +93,7 @@ model User {
   attachments             Attachment[]
   clientNotes             ClientNote[]
   projectNotes            ProjectNote[]
+  profileEnquiries        PublicProfileEnquiry[]
 
   @@map("users")
 }
@@ -662,4 +682,19 @@ model Attachment {
   gateInvoice Invoice?  @relation("InvoiceGate",        fields: [gateInvoiceId], references: [id])
 
   @@map("attachments")
+}
+
+model PublicProfileEnquiry {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderName    String
+  senderPhone   String?
+  senderEmail   String?
+  budget        String?
+  serviceNeeded String?
+  brief         String?
+  createdAt     DateTime @default(now())
+
+  @@map("public_profile_enquiries")
 }
