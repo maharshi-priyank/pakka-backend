@@ -17,7 +17,7 @@ export class CanvaAuthController {
     private readonly config:    ConfigService,
   ) {}
 
-  @Get('connect')
+  @Post('connect')
   async connect(@CurrentUser() user: User) {
     const authUrl = await this.canvaAuth.getAuthUrl(user.id);
     return { authUrl };
