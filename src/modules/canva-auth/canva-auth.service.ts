@@ -13,8 +13,6 @@ interface CanvaTokenResponse {
 @Injectable()
 export class CanvaAuthService {
   private readonly logger = new Logger(CanvaAuthService.name);
-  // state → { codeVerifier, userId }
-  private readonly pkceStore = new Map<string, { codeVerifier: string; userId: string }>();
 
   constructor(
     private readonly config: ConfigService,
@@ -22,17 +20,18 @@ export class CanvaAuthService {
   ) {}
 
   getAuthUrl(userId: string): string {
-    const clientId   = this.config.get<string>('canva.clientId')!;
+    const clientId    = this.config.get<string>('canva.clientId')!;
     const redirectUri = this.config.get<string>('canva.redirectUri')!;
 
     const codeVerifier  = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
     const state         = randomBytes(16).toString('hex');
 
-    this.pkceStore.set(state, { codeVerifier, userId });
-
-    // Clean up stale entries after 10 minutes
-    setTimeout(() => this.pkceStore.delete(state), 10 * 60 * 1000);
+    // Persist PKCE in DB — survives instance restarts on fly.io
+    // Fire-and-forget is fine here; if it fails, handleCallback will return null and show a clean error
+    this.users.saveCanvaPkce(userId, state, codeVerifier).catch((err) =>
+      this.logger.error(`Failed to save Canva PKCE state for user ${userId}`, err),
+    );
 
     const params = new URLSearchParams({
       response_type:         'code',
@@ -48,12 +47,11 @@ export class CanvaAuthService {
   }
 
   async handleCallback(code: string, state: string): Promise<void> {
-    const entry = this.pkceStore.get(state);
-    if (!entry) throw new UnauthorizedException('Invalid or expired OAuth state');
+    // Look up PKCE from DB — works even if the callback hits a different fly.io instance
+    const pkce = await this.users.consumeCanvaPkce(state);
+    if (!pkce) throw new UnauthorizedException('Invalid or expired OAuth state');
 
-    this.pkceStore.delete(state);
-
-    const { codeVerifier, userId } = entry;
+    const { userId, codeVerifier } = pkce;
     const clientId     = this.config.get<string>('canva.clientId')!;
     const clientSecret = this.config.get<string>('canva.clientSecret')!;
     const redirectUri  = this.config.get<string>('canva.redirectUri')!;
@@ -67,7 +65,7 @@ export class CanvaAuthService {
       code_verifier: codeVerifier,
     });
 
-    const tokenRes = await fetch('https://api.canva.com/rest/v1/oauth/token', {
+    const tokenRes  = await fetch('https://api.canva.com/rest/v1/oauth/token', {
       method:  'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body:    body.toString(),
@@ -76,7 +74,7 @@ export class CanvaAuthService {
     const tokenJson = await tokenRes.json() as CanvaTokenResponse & { error?: string };
 
     if (!tokenRes.ok || tokenJson.error) {
-      this.logger.error(`Canva token exchange failed: ${tokenJson.error}`);
+      this.logger.error(`Canva token exchange failed [${tokenRes.status}]: ${JSON.stringify(tokenJson)}`);
       throw new UnauthorizedException(`Canva auth failed: ${tokenJson.error}`);
     }
 
@@ -112,7 +110,7 @@ export class CanvaAuthService {
     const json = await res.json() as CanvaTokenResponse & { error?: string };
 
     if (!res.ok || json.error) {
-      this.logger.error(`Canva token refresh failed: ${json.error}`);
+      this.logger.error(`Canva token refresh failed [${res.status}]: ${JSON.stringify(json)}`);
       throw new UnauthorizedException('Canva token refresh failed');
     }
 

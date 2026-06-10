@@ -167,6 +167,31 @@ export class UsersService {
     });
   }
 
+  async saveCanvaPkce(userId: string, state: string, codeVerifier: string) {
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    return this.prisma.user.update({
+      where: { id: userId },
+      data:  { canvaPkceState: state, canvaPkceVerifier: codeVerifier, canvaPkceExpiresAt: expiresAt },
+    });
+  }
+
+  async consumeCanvaPkce(state: string): Promise<{ userId: string; codeVerifier: string } | null> {
+    const user = await this.prisma.user.findFirst({
+      where:  { canvaPkceState: state },
+      select: { id: true, canvaPkceVerifier: true, canvaPkceExpiresAt: true },
+    });
+    if (!user || !user.canvaPkceVerifier) return null;
+    if (user.canvaPkceExpiresAt && user.canvaPkceExpiresAt < new Date()) return null;
+
+    // Clear PKCE fields after consuming (one-time use)
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data:  { canvaPkceState: null, canvaPkceVerifier: null, canvaPkceExpiresAt: null },
+    });
+
+    return { userId: user.id, codeVerifier: user.canvaPkceVerifier };
+  }
+
   async saveFlodeskApiKey(userId: string, apiKey: string) {
     return this.prisma.user.update({
       where: { id: userId },
