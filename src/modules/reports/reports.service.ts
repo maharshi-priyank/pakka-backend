@@ -55,6 +55,32 @@ export interface TimeRow {
   billableValue: number;
 }
 
+// ─── P&L types ────────────────────────────────────────────────────────────────
+
+export interface PlMonthlyPoint {
+  period:      string; // YYYY-MM
+  revenue:     number;
+  expenses:    number;
+  grossProfit: number;
+}
+
+export interface PlProjectRow {
+  projectId:   string;
+  projectName: string;
+  clientName:  string | null;
+  revenue:     number;
+  expenses:    number;
+  grossProfit: number;
+  margin:      number | null;
+}
+
+export interface PlTotals {
+  revenue:     number;
+  expenses:    number;
+  grossProfit: number;
+  margin:      number | null;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -77,6 +103,12 @@ export class ReportsService {
     if (from) range.gte = new Date(from);
     if (to)   range.lte = new Date(to + 'T23:59:59.999Z');
     return range;
+  }
+
+  private toIsoMonthKey(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
   }
 
   // ── Revenue Report ──────────────────────────────────────────────────────────
@@ -312,5 +344,135 @@ export class ReportsService {
     );
 
     return { byClient, monthly, totals };
+  }
+
+  // ── P&L Report ────────────────────────────────────────────────────────────────
+
+  async getPlReport(
+    userId: string,
+    from?: string,
+    to?: string,
+    basis: 'accrual' | 'cash' = 'accrual',
+  ) {
+    const dateFilter = this.dateRange(from, to);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        userId,
+        ...(basis === 'accrual'
+          ? { status: { notIn: [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED] } }
+          : {}),
+        ...(dateFilter && { createdAt: dateFilter }),
+      },
+      select: {
+        subtotal:   true,
+        amountPaid: true,
+        createdAt:  true,
+        projectId:  true,
+        project: {
+          select: {
+            name:   true,
+            client: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const expenses = await this.prisma.expense.findMany({
+      where: {
+        userId,
+        ...(dateFilter && { date: dateFilter }),
+      },
+      select: {
+        amount:    true,
+        date:      true,
+        projectId: true,
+        project: {
+          select: {
+            name:   true,
+            client: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const revenueByMonth  = new Map<string, number>();
+    const expenseByMonth  = new Map<string, number>();
+    const projectRevenue  = new Map<string, { name: string; clientName: string | null; revenue: number }>();
+    const projectExpenses = new Map<string, number>();
+
+    let totalRevenue = 0;
+
+    for (const inv of invoices) {
+      const amount = basis === 'accrual' ? this.n(inv.subtotal) : this.n(inv.amountPaid);
+      totalRevenue += amount;
+
+      const key = this.toIsoMonthKey(inv.createdAt);
+      revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + amount);
+
+      if (inv.projectId) {
+        if (!projectRevenue.has(inv.projectId)) {
+          projectRevenue.set(inv.projectId, {
+            name:       inv.project?.name ?? 'Unknown',
+            clientName: inv.project?.client?.name ?? null,
+            revenue:    0,
+          });
+        }
+        projectRevenue.get(inv.projectId)!.revenue += amount;
+      }
+    }
+
+    let totalExpenses = 0;
+
+    for (const exp of expenses) {
+      const amount = this.n(exp.amount);
+      totalExpenses += amount;
+
+      const key = this.toIsoMonthKey(exp.date);
+      expenseByMonth.set(key, (expenseByMonth.get(key) ?? 0) + amount);
+
+      if (exp.projectId) {
+        projectExpenses.set(exp.projectId, (projectExpenses.get(exp.projectId) ?? 0) + amount);
+      }
+    }
+
+    const allMonths = new Set([...revenueByMonth.keys(), ...expenseByMonth.keys()]);
+    const monthly: PlMonthlyPoint[] = [...allMonths].sort().map(period => {
+      const rev = revenueByMonth.get(period) ?? 0;
+      const exp = expenseByMonth.get(period) ?? 0;
+      return { period, revenue: rev, expenses: exp, grossProfit: rev - exp };
+    });
+
+    const allProjectIds = new Set([...projectRevenue.keys(), ...projectExpenses.keys()]);
+    const byProject: PlProjectRow[] = [...allProjectIds]
+      .map(projectId => {
+        const rev     = projectRevenue.get(projectId);
+        const expAmt  = projectExpenses.get(projectId) ?? 0;
+        const revenue = rev?.revenue ?? 0;
+        const grossProfit = revenue - expAmt;
+        const margin  = revenue > 0
+          ? parseFloat(((grossProfit / revenue) * 100).toFixed(1))
+          : null;
+        return {
+          projectId,
+          projectName: rev?.name ?? 'Unknown',
+          clientName:  rev?.clientName ?? null,
+          revenue,
+          expenses:    expAmt,
+          grossProfit,
+          margin,
+        };
+      })
+      .filter(r => r.revenue > 0 || r.expenses > 0)
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const grossProfit = totalRevenue - totalExpenses;
+    const margin = totalRevenue > 0
+      ? parseFloat(((grossProfit / totalRevenue) * 100).toFixed(1))
+      : null;
+
+    const totals: PlTotals = { revenue: totalRevenue, expenses: totalExpenses, grossProfit, margin };
+
+    return { totals, monthly, byProject };
   }
 }

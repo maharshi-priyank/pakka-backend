@@ -68,4 +68,19 @@ export class ReportsController {
   ) {
     return this.svc.timeReport(user.id, from, to);
   }
+
+  @Get('pl')
+  @ApiOperation({ summary: 'P&L report — revenue, expenses, gross profit by month and project' })
+  @ApiQuery({ name: 'from',  required: false })
+  @ApiQuery({ name: 'to',    required: false })
+  @ApiQuery({ name: 'basis', required: false, enum: ['accrual', 'cash'] })
+  pl(
+    @CurrentUser() user: { id: string },
+    @Query('from')  from?:  string,
+    @Query('to')    to?:    string,
+    @Query('basis') basis?: string,
+  ) {
+    const b = basis === 'cash' ? 'cash' : 'accrual';
+    return this.svc.getPlReport(user.id, from, to, b);
+  }
 }
