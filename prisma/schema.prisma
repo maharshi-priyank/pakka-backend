@@ -119,6 +119,7 @@ model User {
   intakeForms             IntakeForm[]
   timeEntries             TimeEntry[]
   expenses                Expense[]
+  expenseCategories       UserExpenseCategory[]
   projects                Project[]
   emailTemplates          EmailTemplate[]
   attachments             Attachment[]
@@ -626,10 +627,25 @@ model Expense {
   isBillable  Boolean  @default(true)
   isBilled    Boolean  @default(false)
   invoiceId   String?
+  vendor      String?
+  gstRate     Decimal? @db.Decimal(5, 2)
+  gstAmount   Decimal? @db.Decimal(12, 2)
+  tdsSection  String?
+  tdsRate     Decimal? @db.Decimal(5, 2)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("expenses")
+}
+
+model UserExpenseCategory {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+
+  @@unique([userId, name])
+  @@map("user_expense_categories")
 }
 
 model Project {
