@@ -36,6 +36,11 @@ export const validationSchema = Joi.object({
   VAPID_PUBLIC_KEY:  Joi.string().optional(),
   VAPID_PRIVATE_KEY: Joi.string().optional(),
   VAPID_SUBJECT:     Joi.string().default('mailto:noreply@clearwork.in'),
+  CASHFREE_APP_ID:       Joi.string().required(),
+  CASHFREE_SECRET_KEY:   Joi.string().required(),
+  CASHFREE_ENVIRONMENT:  Joi.string().valid('sandbox', 'production').default('sandbox'),
+  CASHFREE_WEBHOOK_SECRET: Joi.string().required(),
+  APP_FRONTEND_URL: Joi.string().default('http://localhost:5173'),
 });
 
 export const configuration = () => ({
@@ -91,4 +96,11 @@ export const configuration = () => ({
     privateKey: process.env.VAPID_PRIVATE_KEY,
     subject:    process.env.VAPID_SUBJECT ?? 'mailto:noreply@clearwork.in',
   },
+  cashfree: {
+    appId:         process.env.CASHFREE_APP_ID,
+    secretKey:     process.env.CASHFREE_SECRET_KEY,
+    environment:   process.env.CASHFREE_ENVIRONMENT ?? 'sandbox',
+    webhookSecret: process.env.CASHFREE_WEBHOOK_SECRET,
+  },
+  frontendUrl: process.env.APP_FRONTEND_URL ?? 'http://localhost:5173',
 });

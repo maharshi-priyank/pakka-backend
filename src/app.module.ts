@@ -43,6 +43,8 @@ import { PublicProfilesModule } from './modules/public-profiles/public-profiles.
 import { GoogleFormsModule } from './modules/google-forms/google-forms.module';
 import { GoogleDocsModule } from './modules/google-docs/google-docs.module';
 import { GoogleSheetsModule } from './modules/google-sheets/google-sheets.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { TeamModule } from './modules/team/team.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -111,6 +113,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     GoogleFormsModule,
     GoogleDocsModule,
     GoogleSheetsModule,
+    PaymentsModule,
+    TeamModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

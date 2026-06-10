@@ -8,6 +8,7 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
+import { effectivePlan } from '../users/effective-plan';
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -147,13 +148,14 @@ export class ContractsService {
     const contract = await this.prisma.contract.findUnique({
       where: { id },
       include: {
-        user:   { select: { name: true, businessName: true, email: true, logoUrl: true } },
+        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true, planExpiresAt: true, subscriptionStatus: true } },
         client: { select: { id: true, name: true, company: true, email: true } },
       },
     });
     if (!contract) throw new NotFoundException('Contract not found');
-    // Never expose the OTP over the public endpoint
-    return { ...contract, signerOtp: undefined };
+    const hideBranding = effectivePlan(contract.user) === 'STUDIO';
+    const { planExpiresAt: _pe, subscriptionStatus: _ss, ...userPublic } = contract.user;
+    return { ...contract, user: userPublic, hideBranding, signerOtp: undefined };
   }
 
   async update(userId: string, id: string, dto: UpdateContractDto) {

@@ -10,6 +10,7 @@ import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { QueryProposalsDto } from './dto/query-proposals.dto';
 import { VerifyDepositDto } from './dto/verify-deposit.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { effectiveUserId } from '../users/effective-user-id';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '@prisma/client';
 
@@ -22,39 +23,39 @@ export class ProposalsController {
   @Post()
   @ApiOperation({ summary: 'Create a new proposal' })
   create(@CurrentUser() user: User, @Body() dto: CreateProposalDto) {
-    return this.svc.create(user.id, dto);
+    return this.svc.create(effectiveUserId(user), dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List proposals' })
   findAll(@CurrentUser() user: User, @Query() query: QueryProposalsDto) {
-    return this.svc.findAll(user.id, query);
+    return this.svc.findAll(effectiveUserId(user), query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a proposal by ID (authenticated)' })
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.findOne(user.id, id);
+    return this.svc.findOne(effectiveUserId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update proposal content or status' })
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateProposalDto) {
-    return this.svc.update(user.id, id, dto);
+    return this.svc.update(effectiveUserId(user), id, dto);
   }
 
   @Post(':id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark proposal as sent and return shareable link' })
   send(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.send(user.id, id);
+    return this.svc.send(effectiveUserId(user), id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a proposal' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.remove(user.id, id);
+    return this.svc.remove(effectiveUserId(user), id);
   }
 
   // ── Public routes (no auth) ──────────────────────────────────────────────

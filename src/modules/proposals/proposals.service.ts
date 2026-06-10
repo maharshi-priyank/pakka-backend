@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GstType, LeadStage, ProposalStatus } from '@prisma/client';
+import { effectivePlan } from '../users/effective-plan';
 import Decimal from 'decimal.js';
 import { CreateProposalDto, LineItemDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
@@ -48,9 +49,8 @@ export class ProposalsService {
   }
 
   async create(userId: string, dto: CreateProposalDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true } });
-    const effectivePlan = (user?.planExpiresAt && user.planExpiresAt < new Date()) ? 'FREE' : user?.plan;
-    if (effectivePlan === 'FREE') {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
+    if (effectivePlan(user!) === 'FREE') {
       const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
       const count = await this.prisma.proposal.count({ where: { userId, createdAt: { gte: start } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 proposals/month limit reached.', code: 'PLAN_LIMIT' }, 402);
@@ -130,12 +130,14 @@ export class ProposalsService {
     const proposal = await this.prisma.proposal.findUnique({
       where: { slug },
       include: {
-        user:        { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true } },
+        user:        { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true, planExpiresAt: true, subscriptionStatus: true } },
         attachments: { orderBy: { createdAt: 'asc' }, select: { id: true, fileName: true, fileSize: true, mimeType: true, fileUrl: true, createdAt: true } },
       },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    return proposal;
+    const hideBranding = effectivePlan(proposal.user) === 'STUDIO';
+    const { planExpiresAt: _pe, subscriptionStatus: _ss, ...userPublic } = proposal.user;
+    return { ...proposal, user: userPublic, hideBranding };
   }
 
   async update(userId: string, id: string, dto: UpdateProposalDto) {

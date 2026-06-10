@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
@@ -6,6 +6,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { QueryClientsDto } from './dto/query-clients.dto';
+import { effectivePlan } from '../users/effective-plan';
+
+const CLIENT_LIMITS = { FREE: 5, SOLO: 25, STUDIO: Infinity } as const;
 
 @Injectable()
 export class ClientsService {
@@ -16,6 +19,21 @@ export class ClientsService {
   ) {}
 
   async create(userId: string, dto: CreateClientDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
+    const plan = effectivePlan(user!);
+    const limit = CLIENT_LIMITS[plan];
+    if (isFinite(limit)) {
+      const count = await this.prisma.client.count({ where: { userId } });
+      if (count >= limit) {
+        throw new HttpException(
+          { message: `${plan === 'FREE' ? 'Free' : 'Solo'} plan: ${limit} client limit reached. Upgrade to add more.`, code: 'PLAN_LIMIT' },
+          402,
+        );
+      }
+    }
     const client = await this.prisma.client.create({
       data: { ...dto, userId, portalToken: nanoid(21) },
     });

@@ -7,6 +7,7 @@ import { GstType, InvoiceStatus } from '@prisma/client';
 import { CreateInvoiceDto, LineItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
+import { effectivePlan } from '../users/effective-plan';
 
 const INCLUDE_FULL = {
   contract: { select: { id: true, title: true } },
@@ -344,11 +345,13 @@ export class InvoicesService {
       where: { id },
       include: {
         client: true,
-        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true } },
+        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, planExpiresAt: true, subscriptionStatus: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    return invoice;
+    const hideBranding = effectivePlan(invoice.user) === 'STUDIO';
+    const { planExpiresAt: _pe, subscriptionStatus: _ss, ...userPublic } = invoice.user;
+    return { ...invoice, user: userPublic, hideBranding };
   }
 
   async markPaid(userId: string, id: string) {

@@ -12,12 +12,29 @@ enum Plan {
   STUDIO
 }
 
+enum SubscriptionStatus {
+  NONE
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  PAUSED
+}
+
+enum DiscountType {
+  FULL_ACCESS
+  PERCENTAGE
+}
+
 model User {
   id                      String           @id
   email                   String           @unique
   name                    String
   plan                    Plan             @default(FREE)
   planExpiresAt           DateTime?
+  cashfreeSubscriptionId  String?
+  cashfreePlanId          String?
+  subscriptionStatus      SubscriptionStatus @default(NONE)
+  billingAnchorDate       DateTime?
   businessName            String?
   logoUrl                 String?
   gstNumber               String?
@@ -35,10 +52,15 @@ model User {
   onboardingComplete      Boolean  @default(false)
   razorpayKeyId           String?
   razorpayKeySecret       String?
-  googleAccessToken       String?
-  googleRefreshToken      String?
-  googleTokenExpiresAt    DateTime?
-  googleCalendarConnected Boolean          @default(false)
+  googleAccessToken         String?
+  googleRefreshToken        String?
+  googleTokenExpiresAt      DateTime?
+  googleCalendarConnected   Boolean          @default(false)
+  googleDocsConnected       Boolean          @default(false)
+  googleFormsConnected      Boolean          @default(false)
+  googleFormsWebhookToken   String?          @unique
+  googleSheetsConnected     Boolean          @default(false)
+  googleSheetsId            String?
   outlookAccessToken      String?
   outlookRefreshToken     String?
   outlookTokenExpiresAt   DateTime?
@@ -78,6 +100,12 @@ model User {
   statsAcceptanceRate     Int              @default(0)
   statsAvgResponseHrs     Int              @default(0)
   statsLastCalculatedAt   DateTime?
+  // Team
+  ownerId                 String?
+  owner                   User?            @relation("TeamMembers", fields: [ownerId], references: [id])
+  teamMembers             User[]           @relation("TeamMembers")
+  teamInvitesSent         TeamInvite[]
+
   leads                   Lead[]
   clients                 Client[]
   proposals               Proposal[]
@@ -104,14 +132,36 @@ model User {
 }
 
 model PromoCode {
-  id          String            @id @default(cuid())
-  code        String            @unique
-  plan        Plan
-  isActive    Boolean           @default(true)
-  createdAt   DateTime          @default(now())
-  redemptions PromoRedemption[]
+  id             String            @id @default(cuid())
+  code           String            @unique
+  plan           Plan
+  discountType   DiscountType      @default(FULL_ACCESS)
+  durationMonths Int?
+  maxRedemptions Int?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  redemptions    PromoRedemption[]
 
   @@map("promo_codes")
+}
+
+model BillingConfig {
+  id                    String   @id @default("singleton")
+  foundingPeriodEnds    DateTime
+  earlyAccessPeriodEnds DateTime
+
+  @@map("billing_configs")
+}
+
+model BillingEvent {
+  id          String   @id @default(cuid())
+  eventType   String
+  cashfreeRef String   @unique
+  userId      String?
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@map("billing_events")
 }
 
 model PromoRedemption {
@@ -687,6 +737,29 @@ model Attachment {
   gateInvoice Invoice?  @relation("InvoiceGate",        fields: [gateInvoiceId], references: [id])
 
   @@map("attachments")
+}
+
+model TeamInvite {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  email     String
+  token     String   @unique
+  accepted  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, email])
+  @@map("team_invites")
+}
+
+model WaitlistSignup {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("waitlist_signups")
 }
 
 model PublicProfileEnquiry {

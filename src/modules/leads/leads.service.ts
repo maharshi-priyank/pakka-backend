@@ -7,6 +7,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { LeadStage } from '@prisma/client';
+import { effectivePlan } from '../users/effective-plan';
 import Decimal from 'decimal.js';
 
 @Injectable()
@@ -17,9 +18,8 @@ export class LeadsService {
   ) {}
 
   async create(userId: string, dto: CreateLeadDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true } });
-    const effectivePlan = (user?.planExpiresAt && user.planExpiresAt < new Date()) ? 'FREE' : user?.plan;
-    if (effectivePlan === 'FREE') {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
+    if (effectivePlan(user!) === 'FREE') {
       const count = await this.prisma.lead.count({ where: { userId, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
     }

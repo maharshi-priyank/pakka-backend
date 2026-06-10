@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import Razorpay from 'razorpay';
+import { effectivePlan } from '../users/effective-plan';
 
 @Injectable()
 export class PortalService {
@@ -18,7 +19,7 @@ export class PortalService {
   async getPortalData(token: string) {
     const client = await this.prisma.client.findUnique({
       where: { portalToken: token },
-      include: { user: { select: { businessName: true, logoUrl: true, email: true } } },
+      include: { user: { select: { businessName: true, logoUrl: true, email: true, plan: true, planExpiresAt: true, subscriptionStatus: true } } },
     });
     if (!client) throw new NotFoundException('Portal link is invalid or has expired');
 
@@ -82,6 +83,7 @@ export class PortalService {
       freelancer: {
         businessName: client.user.businessName,
         logoUrl:      client.user.logoUrl,
+        hideBranding: effectivePlan(client.user) === 'STUDIO',
       },
       proposals,
       contracts,

@@ -189,7 +189,10 @@ export class UsersService {
   }
 
   async redeemPromo(userId: string, code: string) {
-    const promo = await this.prisma.promoCode.findUnique({ where: { code } });
+    const promo = await this.prisma.promoCode.findUnique({
+      where: { code },
+      include: { _count: { select: { redemptions: true } } },
+    });
     if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');
 
     const existing = await this.prisma.promoRedemption.findUnique({
@@ -197,8 +200,16 @@ export class UsersService {
     });
     if (existing) throw new BadRequestException('You have already used this promo code');
 
-    const planExpiresAt = new Date();
-    planExpiresAt.setDate(planExpiresAt.getDate() + 30);
+    if (promo.maxRedemptions !== null && promo._count.redemptions >= promo.maxRedemptions) {
+      throw new BadRequestException('This promo code has reached its maximum redemptions');
+    }
+
+    // durationMonths null = permanent (planExpiresAt = null)
+    let planExpiresAt: Date | null = null;
+    if (promo.durationMonths !== null) {
+      planExpiresAt = new Date();
+      planExpiresAt.setMonth(planExpiresAt.getMonth() + promo.durationMonths);
+    }
 
     await this.prisma.$transaction([
       this.prisma.promoRedemption.create({ data: { codeId: promo.id, userId } }),
