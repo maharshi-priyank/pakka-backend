@@ -7,6 +7,7 @@ import { User } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import type { CashfreeWebhookEvent } from './dto/webhook-event.dto';
@@ -45,6 +46,7 @@ export class PaymentsController {
     return this.payments.currentPricing();
   }
 
+  @Public()
   @Get('subscription-return')
   @Post('subscription-return')
   subscriptionReturn(@Res() res: Response) {
@@ -52,6 +54,7 @@ export class PaymentsController {
     return res.redirect(302, `${frontendUrl}/billing/success`);
   }
 
+  @Public()
   @Get('subscription-cancel')
   @Post('subscription-cancel')
   subscriptionCancel(@Res() res: Response) {
@@ -59,6 +62,7 @@ export class PaymentsController {
     return res.redirect(302, `${frontendUrl}/billing/cancelled`);
   }
 
+  @Public()
   @Post('webhook')
   @HttpCode(200)
   async webhook(
