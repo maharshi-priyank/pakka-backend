@@ -26,38 +26,77 @@ export class CanvaService {
   private readonly logger = new Logger(CanvaService.name);
 
   constructor(
-    private readonly users:    UsersService,
+    private readonly users:     UsersService,
     private readonly canvaAuth: CanvaAuthService,
   ) {}
+
+  // ─── Token helpers ────────────────────────────────────────────────────────
 
   private async getValidToken(userId: string): Promise<string> {
     const tokens = await this.users.getCanvaTokens(userId);
     if (!tokens?.canvaAccessToken) throw new UnauthorizedException('Canva not connected');
 
-    // Refresh if expired or expiring within 2 minutes
-    if (tokens.canvaTokenExpiresAt && tokens.canvaTokenExpiresAt.getTime() < Date.now() + 2 * 60 * 1000) {
-      return this.canvaAuth.refreshAccessToken(userId);
+    // Refresh if: no expiry recorded, already expired, or expiring within 5 minutes
+    const expiresAt = tokens.canvaTokenExpiresAt;
+    const needsRefresh = !expiresAt || expiresAt.getTime() < Date.now() + 5 * 60 * 1000;
+
+    if (needsRefresh) {
+      try {
+        return await this.canvaAuth.refreshAccessToken(userId);
+      } catch (err) {
+        this.logger.warn(`Canva proactive refresh failed for user ${userId}, trying stored token`);
+        // Fall through and try with the current token — maybe the expiry is wrong
+      }
     }
 
     return tokens.canvaAccessToken;
   }
 
-  async getDesigns(userId: string, query?: string): Promise<{ designs: CanvaDesign[]; continuation?: string }> {
+  // Force refresh and retry on 401 from Canva API
+  private async fetchWithRetry(
+    userId: string,
+    url: string,
+    options: RequestInit = {},
+  ): Promise<Response> {
     const token = await this.getValidToken(userId);
+    const headers = { ...options.headers as Record<string, string>, Authorization: `Bearer ${token}` };
 
+    let res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+      this.logger.warn(`Canva 401 on first attempt for user ${userId}, force-refreshing token`);
+      try {
+        const freshToken = await this.canvaAuth.refreshAccessToken(userId);
+        res = await fetch(url, {
+          ...options,
+          headers: { ...options.headers as Record<string, string>, Authorization: `Bearer ${freshToken}` },
+        });
+      } catch (refreshErr) {
+        this.logger.error(`Canva token refresh failed for user ${userId}`, refreshErr);
+        // Clear bad tokens so the UI shows "reconnect" instead of looping on 401
+        await this.users.clearCanvaTokens(userId).catch(() => {});
+        throw new UnauthorizedException('Canva session expired — please reconnect Canva in Settings');
+      }
+    }
+
+    return res;
+  }
+
+  // ─── API methods ──────────────────────────────────────────────────────────
+
+  async getDesigns(userId: string, query?: string): Promise<{ designs: CanvaDesign[]; continuation?: string }> {
     const params = new URLSearchParams({ limit: '20' });
     if (query) params.set('query', query);
 
-    const res = await fetch(`https://api.canva.com/rest/v1/designs?${params.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    const res = await this.fetchWithRetry(
+      userId,
+      `https://api.canva.com/rest/v1/designs?${params.toString()}`,
+      { headers: { 'Content-Type': 'application/json' } },
+    );
 
     if (!res.ok) {
       const err = await res.text();
-      this.logger.error(`Canva designs fetch failed: ${err}`);
+      this.logger.error(`Canva designs fetch failed [${res.status}]: ${err}`);
       throw new UnauthorizedException('Failed to fetch Canva designs');
     }
 
@@ -77,15 +116,14 @@ export class CanvaService {
   }
 
   async getDesign(userId: string, designId: string): Promise<CanvaDesign> {
-    const token = await this.getValidToken(userId);
-
-    const res = await fetch(`https://api.canva.com/rest/v1/designs/${designId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await this.fetchWithRetry(
+      userId,
+      `https://api.canva.com/rest/v1/designs/${designId}`,
+    );
 
     if (!res.ok) {
       const err = await res.text();
-      this.logger.error(`Canva design fetch failed: ${err}`);
+      this.logger.error(`Canva design fetch failed [${res.status}]: ${err}`);
       throw new UnauthorizedException('Failed to fetch Canva design');
     }
 
