@@ -46,14 +46,13 @@ export class PaymentsController {
   async webhook(
     @Req() req: Request & { rawBody?: Buffer },
     @Headers('x-webhook-signature') signature: string,
-    @Headers('x-cashfree-signature') signatureAlt: string,
+    @Headers('x-webhook-timestamp') timestamp: string,
     @Body() body: CashfreeWebhookEvent,
   ) {
-    const sig = signature ?? signatureAlt;
     const rawBody = req.rawBody;
 
-    if (rawBody && sig) {
-      const valid = this.payments.verifyWebhookSignature(rawBody, sig);
+    if (rawBody && signature && timestamp) {
+      const valid = this.payments.verifyWebhookSignature(rawBody, signature, timestamp);
       if (!valid) throw new UnauthorizedException('Invalid webhook signature');
     }
 

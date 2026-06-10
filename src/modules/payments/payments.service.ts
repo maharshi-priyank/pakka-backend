@@ -109,11 +109,12 @@ export class PaymentsService {
 
   // ── Webhook ────────────────────────────────────────────────────────────────
 
-  verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
-    const secret = this.config.get<string>('cashfree.webhookSecret') ?? '';
+  verifyWebhookSignature(rawBody: Buffer, signature: string, timestamp: string): boolean {
+    const secret = this.config.get<string>('cashfree.secretKey') ?? '';
+    const signedPayload = timestamp + rawBody.toString();
     const computed = crypto
       .createHmac('sha256', secret)
-      .update(rawBody)
+      .update(signedPayload)
       .digest('base64');
     return computed === signature;
   }
