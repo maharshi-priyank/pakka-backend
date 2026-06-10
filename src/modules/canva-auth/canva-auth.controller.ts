@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Logger, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
@@ -10,14 +10,16 @@ import { User } from '@prisma/client';
 @Controller('auth/canva')
 @UseGuards(JwtAuthGuard)
 export class CanvaAuthController {
+  private readonly logger = new Logger(CanvaAuthController.name);
+
   constructor(
     private readonly canvaAuth: CanvaAuthService,
     private readonly config:    ConfigService,
   ) {}
 
   @Get('connect')
-  connect(@CurrentUser() user: User) {
-    const authUrl = this.canvaAuth.getAuthUrl(user.id);
+  async connect(@CurrentUser() user: User) {
+    const authUrl = await this.canvaAuth.getAuthUrl(user.id);
     return { authUrl };
   }
 
@@ -28,9 +30,14 @@ export class CanvaAuthController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
-    await this.canvaAuth.handleCallback(code, state);
-    const appUrl = this.config.get<string>('appUrl');
-    return res.redirect(`${appUrl}/settings?tab=integrations&canvaConnected=true`);
+    const appUrl = this.config.get<string>('appUrl') ?? 'http://localhost:5173';
+    try {
+      await this.canvaAuth.handleCallback(code, state);
+      return res.redirect(`${appUrl}/settings?tab=integrations&canvaConnected=true`);
+    } catch (err: any) {
+      this.logger.error('Canva callback failed', err?.message);
+      return res.redirect(`${appUrl}/settings?tab=integrations&canvaError=true`);
+    }
   }
 
   @Post('disconnect')
