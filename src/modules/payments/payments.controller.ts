@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, Headers, HttpCode,
+  All, Body, Controller, Delete, Get, Headers, HttpCode,
   Post, Req, Res, UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -47,16 +47,14 @@ export class PaymentsController {
   }
 
   @Public()
-  @Get('subscription-return')
-  @Post('subscription-return')
+  @All('subscription-return')
   subscriptionReturn(@Res() res: Response) {
     const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
     return res.redirect(302, `${frontendUrl}/billing/success`);
   }
 
   @Public()
-  @Get('subscription-cancel')
-  @Post('subscription-cancel')
+  @All('subscription-cancel')
   subscriptionCancel(@Res() res: Response) {
     const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
     return res.redirect(302, `${frontendUrl}/billing/cancelled`);
