@@ -10,4 +10,9 @@ export class CreateExpenseDto {
   @ApiProperty()         @IsDateString()            date:          string;
   @ApiPropertyOptional() @IsString()    @IsOptional() receiptUrl?:  string;
   @ApiPropertyOptional() @IsBoolean()  @IsOptional() isBillable?:  boolean;
+  @ApiPropertyOptional() @IsString()    @IsOptional() vendor?:      string;
+  @ApiPropertyOptional() @IsNumber()    @IsOptional() gstRate?:     number;
+  @ApiPropertyOptional() @IsNumber()    @IsOptional() gstAmount?:   number;
+  @ApiPropertyOptional() @IsString()    @IsOptional() tdsSection?:  string;
+  @ApiPropertyOptional() @IsNumber()    @IsOptional() tdsRate?:     number;
 }
