@@ -12,8 +12,8 @@ export class CashfreeProvider implements PaymentProvider {
   constructor(private readonly config: ConfigService) {
     const env = config.get<string>('cashfree.environment') ?? 'sandbox';
     this.baseUrl = env === 'production'
-      ? 'https://api.cashfree.com'
-      : 'https://sandbox.cashfree.com';
+      ? 'https://api.cashfree.com/pg'
+      : 'https://sandbox.cashfree.com/pg';
     this.appId    = config.get<string>('cashfree.appId')!;
     this.secretKey = config.get<string>('cashfree.secretKey')!;
   }
@@ -23,27 +23,33 @@ export class CashfreeProvider implements PaymentProvider {
       'Content-Type': 'application/json',
       'x-client-id': this.appId,
       'x-client-secret': this.secretKey,
-      'x-api-version': '2023-08-01',
+      'x-api-version': '2025-01-01',
     };
   }
 
   async createSubscription(params: CreateSubscriptionParams): Promise<{ checkoutUrl: string; subscriptionId: string }> {
+    const subscriptionId = params.userId + '_' + Date.now();
     const body = {
-      subscription_id:    params.userId + '_' + Date.now(),
-      plan_id:            params.planId,
+      subscription_id: subscriptionId,
+      plan_details: {
+        plan_id: params.planId,
+      },
       customer_details: {
         customer_id:    params.userId,
         customer_email: params.customerEmail,
         customer_name:  params.customerName,
-        customer_phone: params.customerPhone ?? '',
+        customer_phone: params.customerPhone ?? '9999999999',
       },
       authorization_details: {
-        authorization_amount: 0,
+        authorization_amount: 1,
+        authorization_amount_refund: true,
       },
-      return_url: params.returnUrl,
+      subscription_meta: {
+        return_url: params.returnUrl,
+      },
     };
 
-    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions`, {
+    const res = await fetch(`${this.baseUrl}/subscriptions`, {
       method:  'POST',
       headers: this.headers,
       body:    JSON.stringify(body),
@@ -57,13 +63,13 @@ export class CashfreeProvider implements PaymentProvider {
     }
 
     return {
-      checkoutUrl:    data.authorization_details?.authorization_url ?? data.payment_link,
-      subscriptionId: data.subscription_id ?? body.subscription_id,
+      checkoutUrl:    data.subscription_session_id,
+      subscriptionId: data.subscription_id ?? subscriptionId,
     };
   }
 
   async cancelSubscription(subscriptionId: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions/${subscriptionId}/cancel`, {
+    const res = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}/cancel`, {
       method:  'POST',
       headers: this.headers,
     });
@@ -75,7 +81,7 @@ export class CashfreeProvider implements PaymentProvider {
   }
 
   async getSubscription(subscriptionId: string): Promise<SubscriptionState> {
-    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions/${subscriptionId}`, {
+    const res = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}`, {
       headers: this.headers,
     });
 

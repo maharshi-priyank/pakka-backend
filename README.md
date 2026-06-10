@@ -1,98 +1,206 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Rupway API (pakka-api)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS + Prisma backend for [ClearWork](https://getclearwork.in) — India-first freelancer SaaS.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- **Runtime:** Node.js 20, NestJS 10, Prisma 7
+- **Database:** PostgreSQL via Supabase
+- **Auth:** Supabase JWT (validated via JWKS)
+- **Payments:** Cashfree Subscriptions
+- **Deployed on:** Fly.io (`rupway-backend`)
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Local development
 
-## Project setup
+### 1. Install dependencies
 
 ```bash
-$ npm install
+npm install
 ```
 
-## Compile and run the project
+### 2. Set up environment variables
+
+Copy the example and fill in values:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env
 ```
 
-## Run tests
+Minimum required for local dev:
+
+```env
+DATABASE_URL=postgresql://...
+DIRECT_URL=postgresql://...
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_JWT_SECRET=...
+GEMINI_API_KEY=...
+EMAIL_HOST=...
+EMAIL_USER=...
+EMAIL_PASS=...
+NODE_ENV=development
+```
+
+### 3. Run database migrations
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npx prisma db push
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 4. Start the dev server
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+API runs at `http://localhost:3000`.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## Cashfree Subscriptions — Test setup
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Step 1 — Get sandbox API keys
 
-## Support
+1. Log in to [merchant.cashfree.com](https://merchant.cashfree.com)
+2. Toggle to **Test Environment** (top bar)
+3. Go to **Developers → API Keys** (under Payment Gateway)
+4. Copy **Client ID** and **Client Secret**
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Add to `.env`:
 
-## Stay in touch
+```env
+CASHFREE_APP_ID=TEST_xxxxxxxxxx
+CASHFREE_SECRET_KEY=cfsk_ma_test_xxxxxxxxxx
+CASHFREE_ENVIRONMENT=sandbox
+CASHFREE_WEBHOOK_SECRET=cfsk_ma_test_xxxxxxxxxx   # same as secret key
+APP_FRONTEND_URL=http://localhost:5173
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Step 2 — Register the webhook
 
-## License
+1. Dashboard → **Subscriptions → Webhooks**
+2. Add URL:
+   - **Local:** use [ngrok](https://ngrok.com) — `ngrok http 3000` → `https://xxx.ngrok.io/payments/webhook`
+   - **Staging/prod:** `https://rupway-backend.fly.dev/payments/webhook`
+3. Select events:
+   - `SUBSCRIPTION_STATUS_CHANGED`
+   - `SUBSCRIPTION_PAYMENT_SUCCESS`
+   - `SUBSCRIPTION_PAYMENT_FAILED`
+   - `SUBSCRIPTION_AUTH_STATUS`
+4. Save
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+> The webhook is verified using `HMAC-SHA256(timestamp + rawBody, clientSecret)` against the `x-webhook-signature` header. No separate webhook secret — the `CASHFREE_WEBHOOK_SECRET` env var should equal your `CASHFREE_SECRET_KEY`.
+
+### Step 3 — Create subscription plans
+
+Plans must be created via API (no dashboard UI). Run the seed script once against sandbox:
+
+```bash
+npx ts-node scripts/create-cashfree-plans.ts
+```
+
+This creates 6 plans: `plan_solo_founding`, `plan_solo_earlyaccess`, `plan_solo_regular`, `plan_studio_founding`, `plan_studio_earlyaccess`, `plan_studio_regular`.
+
+> Plan names must be alphanumeric only — no em dashes or special characters.
+
+### Step 4 — Test the flow
+
+1. Start the API locally
+2. Use the app at `http://localhost:5173` → Settings → Billing → upgrade
+3. You'll be redirected to Cashfree's sandbox checkout
+4. Use test card: `4111 1111 1111 1111`, any future expiry, any CVV
+5. After payment, Cashfree fires a webhook → your API updates the user's plan
+
+---
+
+## Cashfree Subscriptions — Production setup
+
+### Step 1 — Get production API keys
+
+1. Log in to [merchant.cashfree.com](https://merchant.cashfree.com)
+2. Switch to **Production** (top bar)
+3. Complete KYC if not done (required for live payments)
+4. **Developers → API Keys** → copy live Client ID and Secret
+
+### Step 2 — Set Fly.io secrets
+
+```bash
+flyctl secrets set \
+  CASHFREE_APP_ID=<live_client_id> \
+  CASHFREE_SECRET_KEY=<live_client_secret> \
+  CASHFREE_ENVIRONMENT=production \
+  CASHFREE_WEBHOOK_SECRET=<live_client_secret> \
+  APP_FRONTEND_URL=https://app.getclearwork.in \
+  -a rupway-backend
+```
+
+### Step 3 — Register the production webhook
+
+1. Switch Cashfree dashboard to **Production**
+2. **Subscriptions → Webhooks** → add `https://rupway-backend.fly.dev/payments/webhook`
+3. Select the same 4 events as test
+
+### Step 4 — Create production subscription plans
+
+```bash
+CASHFREE_ENVIRONMENT=production \
+CASHFREE_APP_ID=<live_id> \
+CASHFREE_SECRET_KEY=<live_secret> \
+npx ts-node scripts/create-cashfree-plans.ts
+```
+
+### Step 5 — Deploy
+
+```bash
+flyctl deploy -a rupway-backend
+```
+
+---
+
+## Environment variables reference
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | yes | Postgres connection string (pooled for runtime) |
+| `DIRECT_URL` | yes | Postgres direct connection (for migrations) |
+| `SUPABASE_URL` | yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | Supabase service role key (server-side only) |
+| `SUPABASE_JWT_SECRET` | yes | JWT secret for verifying Supabase auth tokens |
+| `CASHFREE_APP_ID` | yes | Cashfree Client ID |
+| `CASHFREE_SECRET_KEY` | yes | Cashfree Client Secret |
+| `CASHFREE_ENVIRONMENT` | yes | `sandbox` or `production` |
+| `CASHFREE_WEBHOOK_SECRET` | yes | Same as `CASHFREE_SECRET_KEY` |
+| `APP_FRONTEND_URL` | yes | Frontend URL for Cashfree return redirects |
+| `GEMINI_API_KEY` | yes | Google Gemini API key (AI features) |
+| `EMAIL_HOST` | yes | SMTP host |
+| `EMAIL_PORT` | no | SMTP port (default 465) |
+| `EMAIL_USER` | yes | SMTP username |
+| `EMAIL_PASS` | yes | SMTP password |
+| `EMAIL_FROM` | no | From address (default `ClearWork <noreply@clearwork.in>`) |
+| `RAZORPAY_KEY_ID` | no | Razorpay key (invoice deposits) |
+| `RAZORPAY_KEY_SECRET` | no | Razorpay secret |
+| `VAPID_PUBLIC_KEY` | no | Web push public key |
+| `VAPID_PRIVATE_KEY` | no | Web push private key |
+| `VAPID_SUBJECT` | no | Web push subject (mailto:) |
+| `NODE_ENV` | no | `development` or `production` |
+| `PORT` | no | Server port (default 3000) |
+| `CORS_ORIGIN` | no | Comma-separated allowed origins |
+
+---
+
+## Deployment (Fly.io)
+
+```bash
+# Deploy
+flyctl deploy -a rupway-backend
+
+# View logs
+flyctl logs -a rupway-backend
+
+# SSH into running instance
+flyctl ssh console -a rupway-backend
+
+# View/set secrets
+flyctl secrets list -a rupway-backend
+flyctl secrets set KEY=value -a rupway-backend
+```
