@@ -1,5 +1,5 @@
 import {
-  All, Body, Controller, Delete, Get, Headers, HttpCode,
+  Body, Controller, Delete, Get, Headers, HttpCode,
   Post, Req, Res, UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -47,15 +47,31 @@ export class PaymentsController {
   }
 
   @Public()
-  @All('subscription-return')
-  subscriptionReturn(@Res() res: Response) {
+  @Get('subscription-return')
+  subscriptionReturnGet(@Res() res: Response) {
     const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
     return res.redirect(302, `${frontendUrl}/billing/success`);
   }
 
   @Public()
-  @All('subscription-cancel')
-  subscriptionCancel(@Res() res: Response) {
+  @Post('subscription-return')
+  @HttpCode(302)
+  subscriptionReturnPost(@Res() res: Response) {
+    const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+    return res.redirect(302, `${frontendUrl}/billing/success`);
+  }
+
+  @Public()
+  @Get('subscription-cancel')
+  subscriptionCancelGet(@Res() res: Response) {
+    const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+    return res.redirect(302, `${frontendUrl}/billing/cancelled`);
+  }
+
+  @Public()
+  @Post('subscription-cancel')
+  @HttpCode(302)
+  subscriptionCancelPost(@Res() res: Response) {
     const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
     return res.redirect(302, `${frontendUrl}/billing/cancelled`);
   }
