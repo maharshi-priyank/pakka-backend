@@ -1,9 +1,10 @@
 import {
   Body, Controller, Delete, Get, Headers, HttpCode,
-  Post, Req, UnauthorizedException, UseGuards,
+  Post, Req, Res, UnauthorizedException, UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { User } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PaymentsService } from './payments.service';
@@ -12,7 +13,10 @@ import type { CashfreeWebhookEvent } from './dto/webhook-event.dto';
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Post('create-subscription')
   @UseGuards(JwtAuthGuard)
@@ -39,6 +43,20 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   currentPricing() {
     return this.payments.currentPricing();
+  }
+
+  @Get('subscription-return')
+  @Post('subscription-return')
+  subscriptionReturn(@Res() res: Response) {
+    const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+    return res.redirect(302, `${frontendUrl}/billing/success`);
+  }
+
+  @Get('subscription-cancel')
+  @Post('subscription-cancel')
+  subscriptionCancel(@Res() res: Response) {
+    const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+    return res.redirect(302, `${frontendUrl}/billing/cancelled`);
   }
 
   @Post('webhook')

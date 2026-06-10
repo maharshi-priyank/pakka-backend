@@ -45,11 +45,12 @@ export class PaymentsService {
     const resolved     = await this.planResolution.resolve(tier);
     const frontendUrl  = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
 
+    const apiUrl = this.config.get<string>('apiUrl') ?? 'http://localhost:3000/api';
     const { checkoutUrl, subscriptionId } = await this.provider.createSubscription({
       userId,
       planId:        resolved.planId,
-      returnUrl:     `${frontendUrl}/billing/success`,
-      cancelUrl:     `${frontendUrl}/billing/cancelled`,
+      returnUrl:     `${apiUrl}/payments/subscription-return`,
+      cancelUrl:     `${apiUrl}/payments/subscription-cancel`,
       customerEmail: user.email,
       customerName:  user.name,
     });

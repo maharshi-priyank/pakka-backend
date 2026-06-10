@@ -103,4 +103,5 @@ export const configuration = () => ({
     webhookSecret: process.env.CASHFREE_WEBHOOK_SECRET,
   },
   frontendUrl: process.env.APP_FRONTEND_URL ?? 'http://localhost:5173',
+  apiUrl:      process.env.APP_API_URL ?? 'http://localhost:3000/api',
 });
