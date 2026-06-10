@@ -41,6 +41,8 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
 import { PublicProfilesModule } from './modules/public-profiles/public-profiles.module';
 import { GoogleFormsModule } from './modules/google-forms/google-forms.module';
+import { GoogleDocsModule } from './modules/google-docs/google-docs.module';
+import { GoogleSheetsModule } from './modules/google-sheets/google-sheets.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -107,6 +109,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     CalendarModule,
     PublicProfilesModule,
     GoogleFormsModule,
+    GoogleDocsModule,
+    GoogleSheetsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

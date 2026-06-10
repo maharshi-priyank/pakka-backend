@@ -10,27 +10,83 @@ export class GoogleAuthService {
     private readonly users:  UsersService,
   ) {}
 
+  private static readonly CALENDAR_SCOPES = [
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/userinfo.email',
+  ];
+
+  private static readonly DOCS_SCOPES = [
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/documents.readonly',
+  ];
+
+  private static readonly SHEETS_SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+  ];
+
   getAuthUrl(userId: string): string {
     const client = this.buildOAuthClient();
     return client.generateAuthUrl({
       access_type: 'offline',
       prompt:      'consent',
-      scope:       ['https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/userinfo.email'],
+      scope:       GoogleAuthService.CALENDAR_SCOPES,
       state:       userId,
     });
   }
 
-  async handleCallback(code: string, userId: string): Promise<void> {
+  getDocsAuthUrl(userId: string): string {
+    const client = this.buildOAuthClient();
+    return client.generateAuthUrl({
+      access_type: 'offline',
+      prompt:      'consent',
+      scope:       GoogleAuthService.DOCS_SCOPES,
+      state:       `docs:${userId}`,
+    });
+  }
+
+  getSheetsAuthUrl(userId: string): string {
+    const client = this.buildOAuthClient();
+    return client.generateAuthUrl({
+      access_type: 'offline',
+      prompt:      'consent',
+      scope:       GoogleAuthService.SHEETS_SCOPES,
+      state:       `sheets:${userId}`,
+    });
+  }
+
+  async handleCallback(code: string, rawState: string): Promise<{ type: 'calendar' | 'docs' | 'sheets' }> {
+    const isDocsFlow   = rawState.startsWith('docs:');
+    const isSheetsFlow = rawState.startsWith('sheets:');
+    const userId = isDocsFlow   ? rawState.slice(5)
+                 : isSheetsFlow ? rawState.slice(7)
+                 : rawState;
+
     const client = this.buildOAuthClient();
     const { tokens } = await client.getToken(code);
     if (!tokens.access_token || !tokens.refresh_token) {
       throw new UnauthorizedException('Google did not return required tokens');
     }
-    await this.users.saveGoogleTokens(userId, {
+
+    const tokenPayload = {
       accessToken:  tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresAt:    new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
-    });
+    };
+
+    if (isDocsFlow) {
+      await this.users.saveGoogleDocsConnected(userId, true);
+      await this.users.saveGoogleTokens(userId, tokenPayload);
+      return { type: 'docs' };
+    }
+
+    if (isSheetsFlow) {
+      // Sheets service will set googleSheetsConnected + googleSheetsId after creating the spreadsheet
+      await this.users.saveGoogleTokens(userId, tokenPayload);
+      return { type: 'sheets' };
+    }
+
+    await this.users.saveGoogleTokens(userId, tokenPayload);
+    return { type: 'calendar' };
   }
 
   async getAuthorizedClient(userId: string) {
@@ -72,6 +128,14 @@ export class GoogleAuthService {
       }
     }
     await this.users.clearGoogleTokens(userId);
+  }
+
+  async disconnectDocs(userId: string): Promise<void> {
+    await this.users.saveGoogleDocsConnected(userId, false);
+  }
+
+  async disconnectSheets(userId: string): Promise<void> {
+    await this.users.saveGoogleSheetsConnected(userId, false, null);
   }
 
   private buildOAuthClient() {

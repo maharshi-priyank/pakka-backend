@@ -43,6 +43,20 @@ export class UsersService {
     });
   }
 
+  async saveGoogleDocsConnected(userId: string, connected: boolean) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data:  { googleDocsConnected: connected },
+    });
+  }
+
+  async saveGoogleSheetsConnected(userId: string, connected: boolean, sheetId: string | null) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data:  { googleSheetsConnected: connected, googleSheetsId: sheetId },
+    });
+  }
+
   async getGoogleTokens(userId: string) {
     return this.prisma.user.findUnique({
       where:  { id: userId },

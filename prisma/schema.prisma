@@ -54,6 +54,9 @@ model User {
   canvaConnected          Boolean          @default(false)
   googleFormsWebhookToken String?          @unique
   googleFormsConnected    Boolean          @default(false)
+  googleDocsConnected     Boolean          @default(false)
+  googleSheetsConnected   Boolean          @default(false)
+  googleSheetsId          String?
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   // Public Profile

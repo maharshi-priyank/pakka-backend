@@ -30,7 +30,7 @@ export class MicrosoftAuthController {
   ) {
     await this.msAuth.handleCallback(code, state);
     const appUrl = this.config.get<string>('appUrl');
-    return res.redirect(`${appUrl}/app/settings?tab=integrations&outlookConnected=true`);
+    return res.redirect(`${appUrl}/settings?tab=integrations&outlookConnected=true`);
   }
 
   @Post('disconnect')

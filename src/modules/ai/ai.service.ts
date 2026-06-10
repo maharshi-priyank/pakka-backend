@@ -255,23 +255,27 @@ export class AiService {
     }
   }
 
-  async parseTemplate(file: Express.Multer.File, context?: string): Promise<ExtractedProposal> {
-    if (!file) throw new BadRequestException('A PDF or DOCX file is required')
-
+  async parseTemplate(file: Express.Multer.File | undefined, context?: string, rawText?: string): Promise<ExtractedProposal> {
     let extractedText = ''
-    const mime = file.mimetype
 
-    if (mime === 'application/pdf') {
-      const result = await pdfParse(file.buffer)
-      extractedText = result.text?.trim() ?? ''
-    } else if (
-      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      mime === 'application/msword'
-    ) {
-      const result = await mammoth.extractRawText({ buffer: file.buffer })
-      extractedText = result.value?.trim() ?? ''
+    if (rawText?.trim()) {
+      extractedText = rawText.trim()
+    } else if (file) {
+      const mime = file.mimetype
+      if (mime === 'application/pdf') {
+        const result = await pdfParse(file.buffer)
+        extractedText = result.text?.trim() ?? ''
+      } else if (
+        mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        mime === 'application/msword'
+      ) {
+        const result = await mammoth.extractRawText({ buffer: file.buffer })
+        extractedText = result.value?.trim() ?? ''
+      } else {
+        throw new BadRequestException('Only PDF and DOCX files are supported')
+      }
     } else {
-      throw new BadRequestException('Only PDF and DOCX files are supported')
+      throw new BadRequestException('Provide a file or text to parse')
     }
 
     if (!extractedText) throw new BadRequestException('Could not extract text from the file — ensure it is not a scanned image')

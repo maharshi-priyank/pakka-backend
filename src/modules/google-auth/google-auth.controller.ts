@@ -21,6 +21,12 @@ export class GoogleAuthController {
     return { authUrl };
   }
 
+  @Get('connect-docs')
+  connectDocs(@CurrentUser() user: User) {
+    const authUrl = this.googleAuth.getDocsAuthUrl(user.id);
+    return { authUrl };
+  }
+
   @Public()
   @Get('callback')
   async callback(
@@ -28,14 +34,35 @@ export class GoogleAuthController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
-    await this.googleAuth.handleCallback(code, state);
-    const appUrl = this.config.get<string>('appUrl');
-    return res.redirect(`${appUrl}/app/settings?tab=integrations&googleConnected=true`);
+    const { type } = await this.googleAuth.handleCallback(code, state);
+    const appUrl   = this.config.get<string>('appUrl');
+    const param    = type === 'docs'   ? 'googleDocsConnected=true'
+                   : type === 'sheets' ? 'googleSheetsConnected=true'
+                   : 'googleConnected=true';
+    return res.redirect(`${appUrl}/settings?tab=integrations&${param}`);
   }
 
   @Post('disconnect')
   async disconnect(@CurrentUser() user: User) {
     await this.googleAuth.disconnectCalendar(user.id);
+    return { success: true };
+  }
+
+  @Post('disconnect-docs')
+  async disconnectDocs(@CurrentUser() user: User) {
+    await this.googleAuth.disconnectDocs(user.id);
+    return { success: true };
+  }
+
+  @Get('connect-sheets')
+  connectSheets(@CurrentUser() user: User) {
+    const authUrl = this.googleAuth.getSheetsAuthUrl(user.id);
+    return { authUrl };
+  }
+
+  @Post('disconnect-sheets')
+  async disconnectSheets(@CurrentUser() user: User) {
+    await this.googleAuth.disconnectSheets(user.id);
     return { success: true };
   }
 }

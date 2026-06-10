@@ -30,7 +30,7 @@ export class CanvaAuthController {
   ) {
     await this.canvaAuth.handleCallback(code, state);
     const appUrl = this.config.get<string>('appUrl');
-    return res.redirect(`${appUrl}/app/settings?tab=integrations&canvaConnected=true`);
+    return res.redirect(`${appUrl}/settings?tab=integrations&canvaConnected=true`);
   }
 
   @Post('disconnect')

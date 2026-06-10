@@ -33,12 +33,13 @@ export class AiController {
   @Post('parse-template')
   @HttpCode(200)
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Parse an uploaded PDF or DOCX into a proposal template structure' })
+  @ApiOperation({ summary: 'Parse an uploaded PDF/DOCX or plain text into a proposal template structure' })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
   parseTemplate(
     @UploadedFile() file: Express.Multer.File,
     @Body('context') context?: string,
+    @Body('text')    text?: string,
   ) {
-    return this.ai.parseTemplate(file, context)
+    return this.ai.parseTemplate(file, context, text)
   }
 }
