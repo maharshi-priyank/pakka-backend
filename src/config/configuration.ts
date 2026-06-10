@@ -32,6 +32,7 @@ export const validationSchema = Joi.object({
   EMAIL_PASS: Joi.string().optional(),
   EMAIL_FROM: Joi.string().default('ClearWork <noreply@clearwork.in>'),
   APP_URL: Joi.string().default('http://localhost:5173'),
+  BACKEND_URL: Joi.string().default('http://localhost:3000/api'),
   VAPID_PUBLIC_KEY:  Joi.string().optional(),
   VAPID_PRIVATE_KEY: Joi.string().optional(),
   VAPID_SUBJECT:     Joi.string().default('mailto:noreply@clearwork.in'),
@@ -78,7 +79,8 @@ export const configuration = () => ({
     pass: process.env.EMAIL_PASS,
     from: process.env.EMAIL_FROM ?? 'ClearWork <noreply@clearwork.in>',
   },
-  appUrl: process.env.APP_URL ?? 'http://localhost:5173',
+  appUrl:     process.env.APP_URL     ?? 'http://localhost:5173',
+  backendUrl: process.env.BACKEND_URL ?? 'http://localhost:3000/api',
   geminiApiKey: process.env.GEMINI_API_KEY,
   newRelic: {
     licenseKey: process.env.NEW_RELIC_LICENSE_KEY,
