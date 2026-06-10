@@ -39,11 +39,8 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { EmailTemplatesModule } from './modules/email-templates/email-templates.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
-<<<<<<< Updated upstream
 import { PublicProfilesModule } from './modules/public-profiles/public-profiles.module';
-=======
 import { GoogleFormsModule } from './modules/google-forms/google-forms.module';
->>>>>>> Stashed changes
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -108,11 +105,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     EmailTemplatesModule,
     AttachmentsModule,
     CalendarModule,
-<<<<<<< Updated upstream
     PublicProfilesModule,
-=======
     GoogleFormsModule,
->>>>>>> Stashed changes
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
