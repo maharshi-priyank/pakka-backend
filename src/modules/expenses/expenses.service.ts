@@ -7,6 +7,24 @@ import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { QueryExpensesDto } from './dto/query-expenses.dto';
 import { BillExpensesDto } from './dto/bill-expenses.dto';
 
+export const DEFAULT_EXPENSE_CATEGORIES = [
+  'Travel',
+  'Accommodation',
+  'Food & Entertainment',
+  'Materials & Supplies',
+  'Equipment',
+  'Software & Subscriptions',
+  'Contractor / Freelancer Fee',
+  'Studio / Venue Hire',
+  'Marketing & Ads',
+  'Printing & Production',
+  'Courier & Shipping',
+  'Professional Services',
+  'Training & Learning',
+  'Office & Admin',
+  'Other',
+] as const;
+
 @Injectable()
 export class ExpensesService {
   constructor(
@@ -20,7 +38,7 @@ export class ExpensesService {
   } as const;
 
   async create(userId: string, dto: CreateExpenseDto) {
-    return this.prisma.expense.create({
+    const expense = await this.prisma.expense.create({
       data: {
         userId,
         clientId:    dto.clientId,
@@ -31,9 +49,24 @@ export class ExpensesService {
         date:        new Date(dto.date),
         receiptUrl:  dto.receiptUrl,
         isBillable:  dto.isBillable ?? true,
+        vendor:      dto.vendor,
+        gstRate:     dto.gstRate,
+        gstAmount:   dto.gstAmount,
+        tdsSection:  dto.tdsSection,
+        tdsRate:     dto.tdsRate,
       },
       include: this.projectInclude,
     });
+
+    if (!DEFAULT_EXPENSE_CATEGORIES.includes(dto.category as any)) {
+      await this.prisma.userExpenseCategory.upsert({
+        where:  { userId_name: { userId, name: dto.category } },
+        update: {},
+        create: { userId, name: dto.category },
+      });
+    }
+
+    return expense;
   }
 
   async findAll(userId: string, query: QueryExpensesDto) {
@@ -63,13 +96,63 @@ export class ExpensesService {
     });
   }
 
+  async getCategories(userId: string): Promise<string[]> {
+    const custom = await this.prisma.userExpenseCategory.findMany({
+      where:   { userId },
+      orderBy: { name: 'asc' },
+    });
+    const customNames = custom.map(c => c.name);
+    return [
+      ...DEFAULT_EXPENSE_CATEGORIES,
+      ...customNames.filter(n => !(DEFAULT_EXPENSE_CATEGORIES as readonly string[]).includes(n)),
+    ];
+  }
+
+  async exportCsv(userId: string, query: QueryExpensesDto): Promise<string> {
+    const expenses = await this.findAll(userId, query);
+
+    const header = [
+      'Date', 'Category', 'Vendor', 'Description', 'Amount',
+      'GST Rate%', 'GST Amount', 'Net (excl. GST)',
+      'TDS Section', 'TDS Rate%', 'Client', 'Project', 'Billable', 'Billed', 'Receipt URL',
+    ].join(',');
+
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
+    const rows = expenses.map(e => {
+      const d = new Date(e.date);
+      const date = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      const amount    = Number(e.amount).toFixed(2);
+      const gstRate   = e.gstRate   != null ? Number(e.gstRate).toFixed(2)   : '';
+      const gstAmount = e.gstAmount != null ? Number(e.gstAmount).toFixed(2) : '';
+      const net       = e.gstAmount != null
+        ? (Number(e.amount) - Number(e.gstAmount)).toFixed(2)
+        : Number(e.amount).toFixed(2);
+      const tdsSection = e.tdsSection ?? '';
+      const tdsRate    = e.tdsRate != null ? Number(e.tdsRate).toFixed(2) : '';
+      const client     = (e as any).client?.name ?? '';
+      const project    = (e as any).project?.name ?? '';
+
+      return [
+        date, e.category, e.vendor ?? '', e.description, amount,
+        gstRate, gstAmount, net,
+        tdsSection, tdsRate, client, project,
+        e.isBillable ? 'Yes' : 'No',
+        e.isBilled   ? 'Yes' : 'No',
+        e.receiptUrl ?? '',
+      ].map(v => escape(String(v))).join(',');
+    });
+
+    return [header, ...rows].join('\n');
+  }
+
   async update(userId: string, id: string, dto: UpdateExpenseDto) {
     await this.findOwned(userId, id);
     return this.prisma.expense.update({
       where: { id },
       data: {
-        ...(dto.clientId    != null && { clientId:  dto.clientId }),
-        ...(dto.projectId   != null && { projectId: dto.projectId }),
+        ...(dto.clientId    != null && { clientId:    dto.clientId }),
+        ...(dto.projectId   != null && { projectId:   dto.projectId }),
         ...(dto.category    != null && { category:    dto.category }),
         ...(dto.description != null && { description: dto.description }),
         ...(dto.amount      != null && { amount:      dto.amount }),
@@ -78,6 +161,11 @@ export class ExpensesService {
         ...(dto.isBillable  != null && { isBillable:  dto.isBillable }),
         ...(dto.isBilled    != null && { isBilled:    dto.isBilled }),
         ...(dto.invoiceId   != null && { invoiceId:   dto.invoiceId }),
+        ...(dto.vendor      != null && { vendor:      dto.vendor }),
+        ...(dto.gstRate     != null && { gstRate:     dto.gstRate }),
+        ...(dto.gstAmount   != null && { gstAmount:   dto.gstAmount }),
+        ...(dto.tdsSection  != null && { tdsSection:  dto.tdsSection }),
+        ...(dto.tdsRate     != null && { tdsRate:     dto.tdsRate }),
       },
       include: this.projectInclude,
     });

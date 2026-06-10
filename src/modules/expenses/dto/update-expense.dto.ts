@@ -12,4 +12,9 @@ export class UpdateExpenseDto {
   @ApiPropertyOptional() @IsBoolean()  @IsOptional() isBillable?:  boolean;
   @ApiPropertyOptional() @IsBoolean()  @IsOptional() isBilled?:    boolean;
   @ApiPropertyOptional() @IsString()  @IsOptional()  invoiceId?:   string;
+  @ApiPropertyOptional() @IsString()    @IsOptional() vendor?:      string;
+  @ApiPropertyOptional() @IsNumber()    @IsOptional() gstRate?:     number;
+  @ApiPropertyOptional() @IsNumber()    @IsOptional() gstAmount?:   number;
+  @ApiPropertyOptional() @IsString()    @IsOptional() tdsSection?:  string;
+  @ApiPropertyOptional() @IsNumber()    @IsOptional() tdsRate?:     number;
 }
