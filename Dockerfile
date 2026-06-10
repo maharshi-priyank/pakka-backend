@@ -9,7 +9,7 @@ RUN npm ci
 
 COPY . .
 
-RUN NODE_OPTIONS="--max-old-space-size=512" npm run build
+RUN npm run build
 
 # ── Production image ──────────────────────────────────────────────────────────
 FROM node:20-alpine
