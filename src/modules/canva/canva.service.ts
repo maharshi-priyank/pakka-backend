@@ -150,33 +150,43 @@ export class CanvaService {
 
   async exportDesignAsPdf(userId: string, designId: string, designTitle: string): Promise<string> {
     // Step 1: kick off export job
+    this.logger.log(`[export] starting export for design=${designId} user=${userId}`);
+
     const startRes = await this.fetchWithRetry(userId, 'https://api.canva.com/rest/v1/exports', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         design_id: designId,
-        format:    { type: 'pdf', export_quality: 'regular' },
+        format:    { type: 'pdf' },
       }),
     });
 
+    const startText = await startRes.text();
+    this.logger.log(`[export] start response [${startRes.status}]: ${startText}`);
+
     if (!startRes.ok) {
-      const err = await startRes.text();
-      this.logger.error(`Canva export start failed [${startRes.status}]: ${err}`);
-      throw new InternalServerErrorException(`Canva export failed: ${err}`);
+      throw new InternalServerErrorException(`Canva export start failed [${startRes.status}]: ${startText}`);
     }
 
-    const startJson = await startRes.json() as { job: { id: string; status: string } };
-    const jobId = startJson.job.id;
+    // Canva returns { job: { id, status } }
+    const startJson = JSON.parse(startText) as { job?: { id: string; status: string } };
+    const jobId = startJson.job?.id;
+    if (!jobId) throw new InternalServerErrorException(`Canva export: no job id in response: ${startText}`);
+
+    this.logger.log(`[export] job created: ${jobId}`);
 
     // Step 2: poll until success (max 30 attempts × 2 s = 60 s)
     let downloadUrl: string | undefined;
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 2000));
 
-      const pollRes = await this.fetchWithRetry(userId, `https://api.canva.com/rest/v1/exports/${jobId}`);
+      const pollRes  = await this.fetchWithRetry(userId, `https://api.canva.com/rest/v1/exports/${jobId}`);
+      const pollText = await pollRes.text();
+      this.logger.log(`[export] poll #${i + 1} [${pollRes.status}]: ${pollText}`);
+
       if (!pollRes.ok) continue;
 
-      const pollJson = await pollRes.json() as { job: { status: string; urls?: string[]; error?: { code: string } } };
+      const pollJson = JSON.parse(pollText) as { job: { status: string; urls?: string[]; error?: { code: string } } };
       const job = pollJson.job;
 
       if (job.status === 'success' && job.urls?.length) {
@@ -186,17 +196,22 @@ export class CanvaService {
       if (job.status === 'failed') {
         throw new InternalServerErrorException(`Canva export job failed: ${job.error?.code ?? 'unknown'}`);
       }
-      // status === 'in_progress' → keep polling
     }
 
-    if (!downloadUrl) throw new InternalServerErrorException('Canva export timed out');
+    if (!downloadUrl) throw new InternalServerErrorException('Canva export timed out after 60s');
+
+    this.logger.log(`[export] download URL obtained, downloading PDF…`);
 
     // Step 3: download PDF bytes
     const pdfRes = await fetch(downloadUrl);
-    if (!pdfRes.ok) throw new InternalServerErrorException('Failed to download exported PDF from Canva');
+    if (!pdfRes.ok) {
+      const err = await pdfRes.text();
+      throw new InternalServerErrorException(`Failed to download PDF from Canva [${pdfRes.status}]: ${err}`);
+    }
     const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+    this.logger.log(`[export] PDF downloaded, size=${pdfBuffer.byteLength} bytes`);
 
-    // Step 4: upload to Supabase Storage via REST API (no Supabase JS client needed)
+    // Step 4: upload to Supabase Storage via REST API
     const supabaseUrl    = this.config.getOrThrow<string>('supabase.url');
     const serviceRoleKey = this.config.getOrThrow<string>('supabase.serviceRoleKey');
 
@@ -205,25 +220,33 @@ export class CanvaService {
     const storagePath = `attachments/canva/${rand}-${safeName}.pdf`;
     const bucket      = 'deliverables';
 
+    this.logger.log(`[export] uploading to Supabase: ${bucket}/${storagePath}`);
+
     const uploadRes = await fetch(
       `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`,
       {
         method:  'POST',
         headers: {
-          'Authorization': `Bearer ${serviceRoleKey}`,
-          'Content-Type':  'application/pdf',
-          'x-upsert':      'false',
+          'Authorization':  `Bearer ${serviceRoleKey}`,
+          'Content-Type':   'application/pdf',
+          'Content-Length': String(pdfBuffer.byteLength),
+          'x-upsert':       'false',
         },
-        body: pdfBuffer,
+        body: new Uint8Array(pdfBuffer),
+        // @ts-ignore — duplex required by Node.js 18+ for streaming request bodies
+        duplex: 'half',
       },
     );
 
+    const uploadBody = await uploadRes.text();
+    this.logger.log(`[export] Supabase upload [${uploadRes.status}]: ${uploadBody}`);
+
     if (!uploadRes.ok) {
-      const err = await uploadRes.text();
-      this.logger.error(`Supabase upload failed [${uploadRes.status}]: ${err}`);
-      throw new InternalServerErrorException('Failed to save exported PDF');
+      throw new InternalServerErrorException(`Supabase upload failed [${uploadRes.status}]: ${uploadBody}`);
     }
 
-    return `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
+    this.logger.log(`[export] done → ${publicUrl}`);
+    return publicUrl;
   }
 }
