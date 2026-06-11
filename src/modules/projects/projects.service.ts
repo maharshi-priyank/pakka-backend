@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProjectStatus } from '@prisma/client';
+import { InvoiceStatus, ProjectStatus } from '@prisma/client';
 
 export interface CreateProjectDto {
   name:                string;
@@ -209,5 +209,55 @@ export class ProjectsService {
       this.prisma.expense.updateMany(    { where: { projectId: id }, data: { projectId: null } }),
       this.prisma.project.delete({ where: { id } }),
     ]);
+  }
+
+  async getProjectPl(
+    userId: string,
+    projectId: string,
+    basis: 'accrual' | 'cash' = 'accrual',
+  ) {
+    const project = await this.prisma.project.findFirst({
+      where:  { id: projectId, userId },
+      select: { budget: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        userId,
+        projectId,
+        ...(basis === 'accrual'
+          ? { status: { notIn: [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED] } }
+          : {}),
+      },
+      select: { subtotal: true, amountPaid: true },
+    });
+
+    const expenses = await this.prisma.expense.findMany({
+      where:  { userId, projectId },
+      select: { amount: true },
+    });
+
+    const revenue = invoices.reduce(
+      (sum, inv) => sum + (basis === 'accrual' ? this.n(inv.subtotal) : this.n(inv.amountPaid)),
+      0,
+    );
+    const budgetSpent = expenses.reduce((sum, exp) => sum + this.n(exp.amount), 0);
+    const grossProfit = revenue - budgetSpent;
+    const margin      = revenue > 0
+      ? parseFloat(((grossProfit / revenue) * 100).toFixed(1))
+      : null;
+    const budget          = project.budget ? this.n(project.budget) : null;
+    const budgetRemaining = budget !== null ? budget - budgetSpent : null;
+
+    return {
+      revenue,
+      expenses:        budgetSpent,
+      grossProfit,
+      margin,
+      budget,
+      budgetSpent,
+      budgetRemaining,
+    };
   }
 }

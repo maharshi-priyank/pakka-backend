@@ -77,6 +77,16 @@ export class ProjectsController {
     return this.projectsService.remove(effectiveUserId(user), id);
   }
 
+  @Get(':id/pl')
+  getProjectPl(
+    @CurrentUser() user: User,
+    @Param('id')    id: string,
+    @Query('basis') basis?: string,
+  ) {
+    const b = basis === 'cash' ? 'cash' : 'accrual';
+    return this.projectsService.getProjectPl(effectiveUserId(user), id, b);
+  }
+
   // ── Notes ──────────────────────────────────────────────────────────────────
 
   @Get(':id/notes')
