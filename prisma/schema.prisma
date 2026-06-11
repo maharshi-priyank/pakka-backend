@@ -135,6 +135,7 @@ model User {
   projectNotes            ProjectNote[]
   profileEnquiries        PublicProfileEnquiry[]
   tasks                   Task[]
+  taskBoards              TaskBoard[]
 
   @@map("users")
 }
@@ -681,6 +682,7 @@ model Project {
   attachments Attachment[]
   notes       ProjectNote[]
   tasks       Task[]
+  taskBoards  TaskBoard[]
 
   @@map("projects")
 }
@@ -698,22 +700,57 @@ enum TaskStatus {
 }
 
 model Task {
-  id          String     @id @default(cuid())
+  id          String      @id @default(cuid())
   userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   title       String
-  status      TaskStatus @default(TODO)
+  status      TaskStatus  @default(TODO)
   dueDate     DateTime?
-  includeTime Boolean    @default(false)
-  isPrivate   Boolean    @default(false)
+  includeTime Boolean     @default(false)
+  isPrivate   Boolean     @default(false)
   projectId   String?
-  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  columnId    String?
+  column      BoardColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  position    Int          @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([userId])
   @@index([projectId])
+  @@index([columnId])
   @@map("tasks")
+}
+
+model TaskBoard {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int           @default(0)
+  columns   BoardColumn[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("task_boards")
+}
+
+model BoardColumn {
+  id       String    @id @default(cuid())
+  boardId  String
+  board    TaskBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  name     String
+  position Int       @default(0)
+  isDone   Boolean   @default(false)
+  color    String?
+  tasks    Task[]
+
+  @@index([boardId])
+  @@map("board_columns")
 }
 
 model EmailTemplate {
