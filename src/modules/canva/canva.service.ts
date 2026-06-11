@@ -1,6 +1,5 @@
 import { Injectable, UnauthorizedException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient } from '@supabase/supabase-js';
 import { UsersService } from '../users/users.service.js';
 import { CanvaAuthService } from '../canva-auth/canva-auth.service.js';
 
@@ -197,25 +196,34 @@ export class CanvaService {
     if (!pdfRes.ok) throw new InternalServerErrorException('Failed to download exported PDF from Canva');
     const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
 
-    // Step 4: upload to Supabase Storage
+    // Step 4: upload to Supabase Storage via REST API (no Supabase JS client needed)
     const supabaseUrl    = this.config.getOrThrow<string>('supabase.url');
     const serviceRoleKey = this.config.getOrThrow<string>('supabase.serviceRoleKey');
-    const storage = createClient(supabaseUrl, serviceRoleKey).storage;
 
-    const safeName  = (designTitle || 'design').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
-    const rand      = Math.random().toString(36).slice(2, 10);
+    const safeName    = (designTitle || 'design').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+    const rand        = Math.random().toString(36).slice(2, 10);
     const storagePath = `attachments/canva/${rand}-${safeName}.pdf`;
+    const bucket      = 'deliverables';
 
-    const { error: uploadError } = await storage
-      .from('deliverables')
-      .upload(storagePath, pdfBuffer, { contentType: 'application/pdf', upsert: false });
+    const uploadRes = await fetch(
+      `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`,
+      {
+        method:  'POST',
+        headers: {
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'Content-Type':  'application/pdf',
+          'x-upsert':      'false',
+        },
+        body: pdfBuffer,
+      },
+    );
 
-    if (uploadError) {
-      this.logger.error(`Supabase upload failed: ${uploadError.message}`);
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text();
+      this.logger.error(`Supabase upload failed [${uploadRes.status}]: ${err}`);
       throw new InternalServerErrorException('Failed to save exported PDF');
     }
 
-    const { data: urlData } = storage.from('deliverables').getPublicUrl(storagePath);
-    return urlData.publicUrl;
+    return `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
   }
 }
