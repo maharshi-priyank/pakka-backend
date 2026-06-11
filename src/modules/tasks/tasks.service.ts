@@ -21,6 +21,11 @@ export class CreateTaskDto {
   @IsInt()
   @Min(0)
   position?: number;
+
+  @IsOptional()
+  @ValidateIf((o) => o.assigneeId !== null)
+  @IsString()
+  assigneeId?: string | null;
 }
 
 export class UpdateTaskDto {
@@ -40,6 +45,11 @@ export class UpdateTaskDto {
   @IsInt()
   @Min(0)
   position?: number;
+
+  @IsOptional()
+  @ValidateIf((o) => o.assigneeId !== null)
+  @IsString()
+  assigneeId?: string | null;
 }
 
 export class ListTasksQuery {
@@ -49,8 +59,9 @@ export class ListTasksQuery {
 }
 
 const TASK_INCLUDE = {
-  project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
-  column: { select: { id: true, name: true, isDone: true, color: true } },
+  project:  { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
+  column:   { select: { id: true, name: true, isDone: true, color: true } },
+  assignee: { select: { id: true, name: true, email: true } },
 } as const;
 
 @Injectable()
@@ -80,7 +91,8 @@ export class TasksService {
         includeTime: dto.includeTime ?? false,
         isPrivate:   dto.isPrivate  ?? false,
         projectId:   dto.projectId,
-        ...(dto.columnId !== undefined && { columnId: dto.columnId }),
+        ...(dto.columnId   !== undefined && { columnId:   dto.columnId }),
+        ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId }),
         position:    dto.position ?? 0,
       },
       include: TASK_INCLUDE,
@@ -130,9 +142,8 @@ export class TasksService {
       data.status = dto.status;
     }
 
-    if (dto.position !== undefined) {
-      data.position = dto.position;
-    }
+    if (dto.position   !== undefined) data.position   = dto.position;
+    if (dto.assigneeId !== undefined) data.assigneeId = dto.assigneeId;
 
     return this.prisma.task.update({
       where:  { id },

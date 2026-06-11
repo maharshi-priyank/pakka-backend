@@ -38,7 +38,9 @@ const BOARD_INCLUDE = {
       tasks: {
         orderBy: [{ position: 'asc' as const }, { createdAt: 'asc' as const }],
         include: {
-          project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
+          project:  { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
+          assignee: { select: { id: true, name: true, email: true } },
+          column:   { select: { id: true, name: true, isDone: true, color: true } },
         },
       },
     },

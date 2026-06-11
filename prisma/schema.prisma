@@ -136,6 +136,7 @@ model User {
   profileEnquiries        PublicProfileEnquiry[]
   tasks                   Task[]
   taskBoards              TaskBoard[]
+  assignedTasks           Task[]       @relation("TaskAssignee")
 
   @@map("users")
 }
@@ -713,12 +714,15 @@ model Task {
   columnId    String?
   column      BoardColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   position    Int          @default(0)
+  assigneeId  String?
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   @@index([userId])
   @@index([projectId])
   @@index([columnId])
+  @@index([assigneeId])
   @@map("tasks")
 }
 
