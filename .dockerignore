@@ -6,4 +6,10 @@ npm-debug.log
 *.log
 .git
 .gitignore
+.DS_Store
+.ghostable
+.github
 README.md
+test
+render.yaml
+vercel.json
