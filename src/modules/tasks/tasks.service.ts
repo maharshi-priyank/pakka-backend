@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TaskStatus } from '@prisma/client';
 import {
-  IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString,
+  IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min, ValidateIf,
 } from 'class-validator';
 
 export class CreateTaskDto {
@@ -11,6 +11,16 @@ export class CreateTaskDto {
   @IsOptional() @IsBoolean() includeTime?: boolean;
   @IsOptional() @IsBoolean() isPrivate?: boolean;
   @IsOptional() @IsString() projectId?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => o.columnId !== null)
+  @IsString()
+  columnId?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  position?: number;
 }
 
 export class UpdateTaskDto {
@@ -20,6 +30,16 @@ export class UpdateTaskDto {
   @IsOptional() @IsBoolean() includeTime?: boolean;
   @IsOptional() @IsBoolean() isPrivate?: boolean;
   @IsOptional() @IsString() projectId?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => o.columnId !== null)
+  @IsString()
+  columnId?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  position?: number;
 }
 
 export class ListTasksQuery {
@@ -30,6 +50,7 @@ export class ListTasksQuery {
 
 const TASK_INCLUDE = {
   project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
+  column: { select: { id: true, name: true, isDone: true, color: true } },
 } as const;
 
 @Injectable()
@@ -59,6 +80,8 @@ export class TasksService {
         includeTime: dto.includeTime ?? false,
         isPrivate:   dto.isPrivate  ?? false,
         projectId:   dto.projectId,
+        ...(dto.columnId !== undefined && { columnId: dto.columnId }),
+        position:    dto.position ?? 0,
       },
       include: TASK_INCLUDE,
     });
@@ -80,16 +103,40 @@ export class TasksService {
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
     await this.findOwned(userId, id);
+
+    const data: Record<string, unknown> = {
+      title:       dto.title,
+      dueDate:     dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+      includeTime: dto.includeTime,
+      isPrivate:   dto.isPrivate,
+      projectId:   dto.projectId !== undefined ? (dto.projectId || null) : undefined,
+    };
+
+    // columnId sync: takes priority over explicit status
+    if (dto.columnId !== undefined) {
+      if (dto.columnId === null) {
+        data.columnId = null;
+        data.status = 'TODO';
+      } else {
+        const col = await this.prisma.boardColumn.findUnique({
+          where: { id: dto.columnId },
+          select: { isDone: true, board: { select: { userId: true } } },
+        });
+        if (!col || col.board.userId !== userId) throw new NotFoundException('Column not found');
+        data.columnId = dto.columnId;
+        data.status = col.isDone ? 'COMPLETED' : 'TODO';
+      }
+    } else if (dto.status !== undefined) {
+      data.status = dto.status;
+    }
+
+    if (dto.position !== undefined) {
+      data.position = dto.position;
+    }
+
     return this.prisma.task.update({
       where:  { id },
-      data: {
-        title:       dto.title,
-        status:      dto.status,
-        dueDate:     dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
-        includeTime: dto.includeTime,
-        isPrivate:   dto.isPrivate,
-        projectId:   dto.projectId !== undefined ? (dto.projectId || null) : undefined,
-      },
+      data,
       include: TASK_INCLUDE,
     });
   }
