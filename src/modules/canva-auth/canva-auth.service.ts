@@ -11,7 +11,7 @@ interface CanvaTokenResponse {
 }
 
 const CANVA_TOKEN_URL = 'https://api.canva.com/rest/v1/oauth/token';
-const SCOPES          = 'design:content:read design:meta:read asset:read profile:read';
+const SCOPES          = 'design:content:read asset:read';
 const STATE_TTL_MS    = 10 * 60 * 1000; // 10 minutes
 
 // ─── Signed state ─────────────────────────────────────────────────────────────
