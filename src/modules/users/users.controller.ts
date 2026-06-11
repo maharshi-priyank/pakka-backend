@@ -43,7 +43,8 @@ export class UsersController {
       flodeskApiKey,
       ...safeUser
     } = user;
-    return safeUser;
+    // Null country → India (backward compat for all existing users)
+    return { ...safeUser, country: safeUser.country ?? 'IN' };
   }
 
   @Patch('me')

@@ -99,4 +99,34 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   onboardingComplete?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  country?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  currency?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  taxLabel?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ibanNumber?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  swiftCode?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  routingNumber?: string | null;
 }
