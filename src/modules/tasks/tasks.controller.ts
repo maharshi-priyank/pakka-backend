@@ -5,7 +5,7 @@ import {
 import { TasksService, CreateTaskDto, UpdateTaskDto, ListTasksQuery } from './tasks.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { effectiveUserId } from '../users/effective-user-id';
-import { TaskStatus, User } from '@prisma/client';
+import { User } from '@prisma/client';
 
 @Controller('tasks')
 export class TasksController {
@@ -14,11 +14,8 @@ export class TasksController {
   @Get()
   findAll(
     @CurrentUser() user: User,
-    @Query('status')    status?:    TaskStatus,
-    @Query('projectId') projectId?: string,
-    @Query('search')    search?:    string,
+    @Query() query: ListTasksQuery,
   ) {
-    const query: ListTasksQuery = { status, projectId, search };
     return this.tasksService.list(effectiveUserId(user), query);
   }
 

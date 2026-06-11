@@ -1,23 +1,31 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TaskStatus } from '@prisma/client';
+import {
+  IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString,
+} from 'class-validator';
 
-export interface CreateTaskDto {
-  title:       string;
-  dueDate?:    string;
-  includeTime?: boolean;
-  isPrivate?:  boolean;
-  projectId?:  string;
+export class CreateTaskDto {
+  @IsString() @IsNotEmpty() title: string;
+  @IsOptional() @IsDateString() dueDate?: string;
+  @IsOptional() @IsBoolean() includeTime?: boolean;
+  @IsOptional() @IsBoolean() isPrivate?: boolean;
+  @IsOptional() @IsString() projectId?: string;
 }
 
-export interface UpdateTaskDto extends Partial<CreateTaskDto> {
-  status?: TaskStatus;
+export class UpdateTaskDto {
+  @IsOptional() @IsString() @IsNotEmpty() title?: string;
+  @IsOptional() @IsEnum(TaskStatus) status?: TaskStatus;
+  @IsOptional() @IsDateString() dueDate?: string;
+  @IsOptional() @IsBoolean() includeTime?: boolean;
+  @IsOptional() @IsBoolean() isPrivate?: boolean;
+  @IsOptional() @IsString() projectId?: string;
 }
 
-export interface ListTasksQuery {
-  status?:    TaskStatus;
-  projectId?: string;
-  search?:    string;
+export class ListTasksQuery {
+  @IsOptional() @IsEnum(TaskStatus) status?: TaskStatus;
+  @IsOptional() @IsString() projectId?: string;
+  @IsOptional() @IsString() search?: string;
 }
 
 const TASK_INCLUDE = {
@@ -65,8 +73,13 @@ export class TasksService {
     return task;
   }
 
+  private async findOwned(userId: string, id: string): Promise<void> {
+    const task = await this.prisma.task.findFirst({ where: { id, userId }, select: { id: true } });
+    if (!task) throw new NotFoundException('Task not found');
+  }
+
   async update(userId: string, id: string, dto: UpdateTaskDto) {
-    await this.findOne(userId, id);
+    await this.findOwned(userId, id);
     return this.prisma.task.update({
       where:  { id },
       data: {
@@ -82,7 +95,7 @@ export class TasksService {
   }
 
   async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+    await this.findOwned(userId, id);
     await this.prisma.task.delete({ where: { id } });
   }
 }
