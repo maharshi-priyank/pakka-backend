@@ -97,7 +97,8 @@ export class CanvaService {
     if (!res.ok) {
       const err = await res.text();
       this.logger.error(`Canva designs fetch failed [${res.status}]: ${err}`);
-      throw new UnauthorizedException('Failed to fetch Canva designs');
+      if (res.status === 403) throw new UnauthorizedException('Canva scope insufficient — enable design:meta:read in your Canva developer portal, then reconnect');
+      throw new UnauthorizedException(`Canva API error ${res.status}: ${err}`);
     }
 
     const json = await res.json() as { items: CanvaApiDesign[]; continuation?: string };
