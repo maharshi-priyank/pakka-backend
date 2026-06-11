@@ -14,7 +14,7 @@ export interface CalendarEvent {
   projectName?: string;
   meetLink?:    string;
   agenda?:      string;
-  source:       'pakka' | 'google' | 'outlook';
+  source:       'clearwork' | 'google' | 'outlook';
 }
 
 @Injectable()
@@ -30,7 +30,7 @@ export class CalendarService {
   async getEvents(userId: string, from: Date, to: Date): Promise<CalendarEvent[]> {
     const events: CalendarEvent[] = [];
 
-    // 1. Pakka meetings
+    // 1. ClearWork meetings
     const meetings = await this.prisma.meeting.findMany({
       where: {
         userId,
@@ -57,7 +57,7 @@ export class CalendarService {
         clientName: m.client?.name ?? undefined,
         meetLink:   m.meetLink   ?? undefined,
         agenda:     m.agenda     ?? undefined,
-        source:     'pakka',
+        source:     'clearwork',
       });
     }
 
@@ -81,7 +81,7 @@ export class CalendarService {
         allDay:      true,
         clientName:  p.client?.name ?? undefined,
         projectName: p.name,
-        source:      'pakka',
+        source:      'clearwork',
       });
     }
 

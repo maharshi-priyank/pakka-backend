@@ -7,7 +7,7 @@ import { UpdateAutomationDto } from './dto/update-automation.dto'
 
 const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent'
 
-const AI_GENERATE_PROMPT = `You are an automation workflow builder for Pakka — a business management app for Indian freelancers and agencies.
+const AI_GENERATE_PROMPT = `You are an automation workflow builder for ClearWork — a business management app for Indian freelancers and agencies.
 
 The user will describe an automation they want in plain English. Convert it into one or more structured automation workflows.
 

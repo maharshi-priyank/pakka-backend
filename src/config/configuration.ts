@@ -3,7 +3,7 @@ import * as Joi from 'joi';
 export const validationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   NEW_RELIC_LICENSE_KEY: Joi.string().optional(),
-  NEW_RELIC_APP_NAME: Joi.string().default('pakka-backend'),
+  NEW_RELIC_APP_NAME: Joi.string().default('clearwork-backend'),
   PORT: Joi.number().default(3000),
   DATABASE_URL: Joi.string().required(),
   SUPABASE_URL: Joi.string().uri().required(),
@@ -89,7 +89,7 @@ export const configuration = () => ({
   geminiApiKey: process.env.GEMINI_API_KEY,
   newRelic: {
     licenseKey: process.env.NEW_RELIC_LICENSE_KEY,
-    appName: process.env.NEW_RELIC_APP_NAME ?? 'pakka-backend',
+    appName: process.env.NEW_RELIC_APP_NAME ?? 'clearwork-backend',
   },
   webPush: {
     publicKey:  process.env.VAPID_PUBLIC_KEY,
