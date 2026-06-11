@@ -36,6 +36,7 @@ import { TimeEntriesModule } from './modules/time-entries/time-entries.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 import { EmailTemplatesModule } from './modules/email-templates/email-templates.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
@@ -106,6 +107,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     ExpensesModule,
     ReportsModule,
     ProjectsModule,
+    TasksModule,
     EmailTemplatesModule,
     AttachmentsModule,
     CalendarModule,
