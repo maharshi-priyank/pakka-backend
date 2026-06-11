@@ -47,6 +47,12 @@ model User {
   bankIfsc                String?
   upiId                   String?
   upiQrUrl                String?
+  country                 String?
+  currency                String?
+  taxLabel                String?
+  ibanNumber              String?
+  swiftCode               String?
+  routingNumber           String?
   defaultHsnSac           String?
   defaultLutNumber        String?
   onboardingComplete      Boolean  @default(false)
