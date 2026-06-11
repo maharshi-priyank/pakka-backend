@@ -33,6 +33,8 @@ model User {
   planExpiresAt           DateTime?
   cashfreeSubscriptionId  String?
   cashfreePlanId          String?
+  stripeCustomerId        String?
+  stripeSubscriptionId    String?
   subscriptionStatus      SubscriptionStatus @default(NONE)
   billingAnchorDate       DateTime?
   businessName            String?

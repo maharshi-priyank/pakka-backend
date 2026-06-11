@@ -345,7 +345,7 @@ export class InvoicesService {
       where: { id },
       include: {
         client: true,
-        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, planExpiresAt: true, subscriptionStatus: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true } },
+        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, planExpiresAt: true, subscriptionStatus: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true, country: true, taxLabel: true, ibanNumber: true, swiftCode: true, routingNumber: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');

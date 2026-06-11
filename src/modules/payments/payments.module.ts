@@ -4,6 +4,7 @@ import { PAYMENT_PROVIDER } from './payment-provider.interface';
 import { CashfreeProvider } from './cashfree.provider';
 import { PlanResolutionService } from './plan-resolution.service';
 import { PaymentsService } from './payments.service';
+import { StripeService } from './stripe.service';
 import { PaymentsController } from './payments.controller';
 
 @Module({
@@ -12,9 +13,10 @@ import { PaymentsController } from './payments.controller';
   providers: [
     PlanResolutionService,
     PaymentsService,
+    StripeService,
     { provide: PAYMENT_PROVIDER, useClass: CashfreeProvider },
     CashfreeProvider,
   ],
-  exports: [PaymentsService],
+  exports: [PaymentsService, StripeService],
 })
 export class PaymentsModule {}

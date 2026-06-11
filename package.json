@@ -61,6 +61,7 @@
     "razorpay": "^2.9.6",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "stripe": "^22.2.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

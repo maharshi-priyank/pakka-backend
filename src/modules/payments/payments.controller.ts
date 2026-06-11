@@ -1,6 +1,6 @@
 import {
   Body, Controller, Delete, Get, Headers, HttpCode,
-  Post, Req, Res, UnauthorizedException, UseGuards,
+  Post, Query, Req, Res, UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { User } from '@prisma/client';
@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
+import { StripeService } from './stripe.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import type { CashfreeWebhookEvent } from './dto/webhook-event.dto';
 
@@ -16,6 +17,7 @@ import type { CashfreeWebhookEvent } from './dto/webhook-event.dto';
 export class PaymentsController {
   constructor(
     private readonly payments: PaymentsService,
+    private readonly stripe:   StripeService,
     private readonly config: ConfigService,
   ) {}
 
@@ -75,6 +77,41 @@ export class PaymentsController {
     const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
     return res.redirect(302, `${frontendUrl}/billing/cancelled`);
   }
+
+  // ── Stripe endpoints ───────────────────────────────────────────────────────
+
+  @Post('stripe/checkout')
+  @UseGuards(JwtAuthGuard)
+  createStripeCheckout(
+    @CurrentUser() user: User,
+    @Body() dto: CreateSubscriptionDto,
+  ) {
+    return this.stripe.createCheckoutSession(user.id, dto.tier);
+  }
+
+  @Public()
+  @Get('stripe/return')
+  stripeReturn(@Res() res: Response, @Query('session_id') _sessionId: string) {
+    const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+    return res.redirect(302, `${frontendUrl}/billing/success`);
+  }
+
+  @Public()
+  @Post('stripe/webhook')
+  @HttpCode(200)
+  async stripeWebhook(
+    @Req() req: Request & { rawBody?: Buffer },
+    @Headers('stripe-signature') signature: string,
+  ) {
+    const rawBody = req.rawBody;
+    if (!rawBody || !signature) throw new UnauthorizedException('Missing Stripe signature');
+
+    const event = this.stripe.verifyAndParseWebhook(rawBody, signature);
+    await this.stripe.handleWebhookEvent(event);
+    return { received: true };
+  }
+
+  // ── Cashfree webhook ───────────────────────────────────────────────────────
 
   @Public()
   @Post('webhook')

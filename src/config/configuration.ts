@@ -40,6 +40,8 @@ export const validationSchema = Joi.object({
   CASHFREE_SECRET_KEY:   Joi.string().required(),
   CASHFREE_ENVIRONMENT:  Joi.string().valid('sandbox', 'production').default('sandbox'),
   CASHFREE_WEBHOOK_SECRET: Joi.string().required(),
+  STRIPE_SECRET_KEY:     Joi.string().optional(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
   APP_FRONTEND_URL: Joi.string().default('http://localhost:5173'),
 });
 
@@ -104,4 +106,8 @@ export const configuration = () => ({
   },
   frontendUrl: process.env.APP_FRONTEND_URL ?? process.env.APP_URL ?? 'http://localhost:5173',
   apiUrl:      process.env.APP_API_URL ?? 'http://localhost:3000/api',
+  stripe: {
+    secretKey:     process.env.STRIPE_SECRET_KEY,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
 });
