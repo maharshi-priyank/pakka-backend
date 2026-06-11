@@ -1,4 +1,6 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createClient } from '@supabase/supabase-js';
 import { UsersService } from '../users/users.service.js';
 import { CanvaAuthService } from '../canva-auth/canva-auth.service.js';
 
@@ -28,6 +30,7 @@ export class CanvaService {
   constructor(
     private readonly users:     UsersService,
     private readonly canvaAuth: CanvaAuthService,
+    private readonly config:    ConfigService,
   ) {}
 
   // ─── Token helpers ────────────────────────────────────────────────────────
@@ -140,5 +143,79 @@ export class CanvaService {
       createdAt:    d.created_at,
       updatedAt:    d.updated_at,
     };
+  }
+
+  // ─── Export design as PDF → upload to Supabase → return public URL ──────────
+  // Requires design:content:read scope on the Canva integration.
+  // Returns a permanent Supabase public URL that any client can access.
+
+  async exportDesignAsPdf(userId: string, designId: string, designTitle: string): Promise<string> {
+    // Step 1: kick off export job
+    const startRes = await this.fetchWithRetry(userId, 'https://api.canva.com/rest/v1/exports', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        design_id: designId,
+        format:    { type: 'pdf', export_quality: 'regular' },
+      }),
+    });
+
+    if (!startRes.ok) {
+      const err = await startRes.text();
+      this.logger.error(`Canva export start failed [${startRes.status}]: ${err}`);
+      throw new InternalServerErrorException(`Canva export failed: ${err}`);
+    }
+
+    const startJson = await startRes.json() as { job: { id: string; status: string } };
+    const jobId = startJson.job.id;
+
+    // Step 2: poll until success (max 30 attempts × 2 s = 60 s)
+    let downloadUrl: string | undefined;
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const pollRes = await this.fetchWithRetry(userId, `https://api.canva.com/rest/v1/exports/${jobId}`);
+      if (!pollRes.ok) continue;
+
+      const pollJson = await pollRes.json() as { job: { status: string; urls?: string[]; error?: { code: string } } };
+      const job = pollJson.job;
+
+      if (job.status === 'success' && job.urls?.length) {
+        downloadUrl = job.urls[0];
+        break;
+      }
+      if (job.status === 'failed') {
+        throw new InternalServerErrorException(`Canva export job failed: ${job.error?.code ?? 'unknown'}`);
+      }
+      // status === 'in_progress' → keep polling
+    }
+
+    if (!downloadUrl) throw new InternalServerErrorException('Canva export timed out');
+
+    // Step 3: download PDF bytes
+    const pdfRes = await fetch(downloadUrl);
+    if (!pdfRes.ok) throw new InternalServerErrorException('Failed to download exported PDF from Canva');
+    const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer());
+
+    // Step 4: upload to Supabase Storage
+    const supabaseUrl    = this.config.getOrThrow<string>('supabase.url');
+    const serviceRoleKey = this.config.getOrThrow<string>('supabase.serviceRoleKey');
+    const storage = createClient(supabaseUrl, serviceRoleKey).storage;
+
+    const safeName  = (designTitle || 'design').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+    const rand      = Math.random().toString(36).slice(2, 10);
+    const storagePath = `attachments/canva/${rand}-${safeName}.pdf`;
+
+    const { error: uploadError } = await storage
+      .from('deliverables')
+      .upload(storagePath, pdfBuffer, { contentType: 'application/pdf', upsert: false });
+
+    if (uploadError) {
+      this.logger.error(`Supabase upload failed: ${uploadError.message}`);
+      throw new InternalServerErrorException('Failed to save exported PDF');
+    }
+
+    const { data: urlData } = storage.from('deliverables').getPublicUrl(storagePath);
+    return urlData.publicUrl;
   }
 }
