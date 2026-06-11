@@ -22,3 +22,9 @@ ALTER TABLE "tasks" ADD CONSTRAINT "tasks_userId_fkey" FOREIGN KEY ("userId") RE
 
 -- AddForeignKey
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- CreateIndex
+CREATE INDEX "tasks_userId_idx" ON "tasks"("userId");
+
+-- CreateIndex
+CREATE INDEX "tasks_projectId_idx" ON "tasks"("projectId");
