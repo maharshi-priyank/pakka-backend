@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -9,10 +9,10 @@ RUN npm ci
 
 COPY . .
 
-RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
+RUN npm run build
 
 # ── Production image ──────────────────────────────────────────────────────────
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
