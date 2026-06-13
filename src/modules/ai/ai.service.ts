@@ -1,12 +1,12 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse')
+const { PDFParse } = require('pdf-parse')
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mammoth  = require('mammoth')
 import type { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
-const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent'
+const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
 // ─── Response shapes ──────────────────────────────────────────────────────────
 
@@ -87,13 +87,13 @@ JSON schema:
 
 Rules:
 - title: concise project title (e.g. "Brand Identity Design — Ritu's Cafe")
-- scopeItems: 3–8 bullet points of what is included
-- deliverables: 3–6 concrete things client receives
-- exclusions: 2–5 things explicitly NOT included (content writing, photography, hosting, etc.)
-- lineItems: group work into 2–4 logical billing items. gstRate should be 18 unless clearly exempt
+- scopeItems: 4–12 bullet points of what is included — be thorough, not minimal
+- deliverables: 3–8 concrete things client receives
+- exclusions: 2–6 things explicitly NOT included (content writing, photography, hosting, etc.)
+- lineItems: group work into 2–6 logical billing items. gstRate should be 18 unless clearly exempt
 - paymentSchedule: percentages must sum to 100. Typical: 50% upfront + 50% on delivery, or 30/40/30 for longer projects
 - pricingNotes: one sentence about payment terms
-- terms: 2–3 sentences about IP ownership, revision policy, etc.
+- terms: 3–5 sentences covering IP ownership, revision policy, late payment, and cancellation
 - validUntil: ISO date string 30 days from today (${new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)}), or null
 - suggestedClient: extract client name/email if mentioned
 - confidence: 0.0–1.0`
@@ -129,6 +129,11 @@ JSON schema:
 
 Rules:
 - Extract content faithfully from the document — do not add or invent scope items or terms
+- scopeItems: clear, descriptive phrases (8–15 words each) that fully describe each scope area
+- deliverables: specific, tangible outputs the client receives (8–15 words each)
+- exclusions: clear phrases stating what is NOT included (6–12 words each)
+- terms: write a complete paragraph of 5–8 sentences covering IP ownership, revision rounds allowed, late payment policy, cancellation terms, and project timeline assumptions — extract faithfully from the document, do not invent
+- pricingNotes: 1–2 sentences on payment expectations or billing terms from the document
 - If rates are mentioned, use them; if amounts include GST, back-calculate the base rate
 - gstRate: use 18 as default if not explicitly mentioned, 0 if document says exempt
 - paymentSchedule percentages must sum to 100
@@ -149,7 +154,7 @@ export class AiService {
     return key
   }
 
-  private async callGemini(systemPrompt: string, dto: ExtractLeadDto | ExtractProposalDto): Promise<string> {
+  private async callGemini(systemPrompt: string, dto: ExtractLeadDto | ExtractProposalDto, maxOutputTokens = 2048): Promise<string> {
     const parts: unknown[] = []
 
     if (dto.imageBase64 && dto.mimeType) {
@@ -176,7 +181,7 @@ export class AiService {
       generationConfig: {
         responseMimeType: 'application/json',
         temperature:      0.2,
-        maxOutputTokens:  2048,
+        maxOutputTokens:  maxOutputTokens,
       },
     }
 
@@ -233,7 +238,7 @@ export class AiService {
 
   async extractProposal(dto: ExtractProposalDto): Promise<ExtractedProposal> {
     const systemPrompt = PROPOSAL_SYSTEM_PROMPT((dto as ExtractProposalDto).pricingContext)
-    const raw = await this.callGemini(systemPrompt, dto)
+    const raw = await this.callGemini(systemPrompt, dto, 4096)
     try {
       const parsed = JSON.parse(raw) as ExtractedProposal
       return {
@@ -263,7 +268,8 @@ export class AiService {
     } else if (file) {
       const mime = file.mimetype
       if (mime === 'application/pdf') {
-        const result = await pdfParse(file.buffer)
+        const parser = new PDFParse({ data: file.buffer })
+        const result = await parser.getText()
         extractedText = result.text?.trim() ?? ''
       } else if (
         mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -280,10 +286,17 @@ export class AiService {
 
     if (!extractedText) throw new BadRequestException('Could not extract text from the file — ensure it is not a scanned image')
 
+    // Cap input to ~15k chars — enough for any real proposal, avoids Gemini input overload
+    const inputText = extractedText.length > 15000 ? extractedText.slice(0, 15000) : extractedText
+
     const systemPrompt = PARSE_TEMPLATE_SYSTEM_PROMPT(context)
-    const raw = await this.callGemini(systemPrompt, { text: extractedText })
+    const raw = await this.callGemini(systemPrompt, { text: inputText }, 8192)
+
+    // Strip markdown code fences Gemini occasionally adds despite responseMimeType: json
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+
     try {
-      const parsed = JSON.parse(raw) as ExtractedProposal
+      const parsed = JSON.parse(cleaned) as ExtractedProposal
       return {
         title:           parsed.title           || 'Untitled Template',
         scopeItems:      Array.isArray(parsed.scopeItems)      ? parsed.scopeItems      : [],
@@ -298,22 +311,23 @@ export class AiService {
         confidence:      typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
       }
     } catch {
-      this.logger.error('Template parse JSON failed', raw)
+      this.logger.error(`Template parse JSON failed — raw (first 500): ${cleaned.slice(0, 500)}`)
       throw new BadRequestException('Could not parse AI response — try again')
     }
   }
 
   async chat(dto: ChatDto): Promise<{ reply: string }> {
-    const SYSTEM_PROMPT = `You are ClearWork Assistant, a knowledgeable and friendly advisor for Indian freelancers and agencies.
-You help with: GST registration, IGST vs CGST/SGST, TDS rates (194J, 194C, 194H), income tax (old vs new regime, Section 44ADA presumptive taxation), invoicing best practices, freelance contracts, payment terms, late fees, Razorpay/UPI payments, GST filing (GSTR-1, GSTR-3B), ITR filing, Form 26AS, advance tax, and general freelance business questions in India.
+    const SYSTEM_PROMPT = `You are ClearWork Assistant, a knowledgeable and friendly business advisor for freelancers, consultants, and agencies worldwide.
+You help with: proposals and contracts, invoicing and payment terms, client management, GST (India) and general tax obligations, late payment handling, project scoping, freelance pricing strategy, business operations, and general questions about running a service business.
 
 Rules:
 - Answer in clear, plain language — avoid jargon unless you explain it
-- Keep responses concise (2-5 sentences for simple questions, up to 10 for complex ones)
-- Use ₹ for currency amounts and Indian examples
-- If a question is outside your domain (not business/tax/freelance related), politely redirect
-- Never give definitive legal or financial advice — suggest consulting a CA for complex situations
-- Respond in the same language as the user (Hindi or English)
+- Keep responses concise but complete — 2-5 sentences for simple questions, more for complex multi-step topics
+- When discussing Indian users: use ₹, reference GST, TDS (194J, 194C), ITR, Section 44ADA, GSTR-1/3B
+- When discussing international users: use their local currency context, refer to general tax/invoicing best practices
+- If a question is outside your domain (not business/freelance/client management related), politely redirect
+- Never give definitive legal or financial advice — suggest consulting a local accountant or lawyer for complex situations
+- Respond in the same language as the user
 - Do not use markdown formatting — no **, ##, *, bullet hyphens, or backticks. Plain text only.`
 
     const contents = [
@@ -329,7 +343,7 @@ Rules:
       contents,
       generationConfig: {
         temperature:     0.6,
-        maxOutputTokens: 512,
+        maxOutputTokens: 1024,
       },
     }
 
