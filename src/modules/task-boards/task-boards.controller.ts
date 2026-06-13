@@ -20,9 +20,10 @@ export class TaskBoardsController {
   @Get()
   list(
     @CurrentUser() user: User,
-    @Query('projectId') projectId?: string,
+    @Query('projectId')       projectId?: string,
+    @Query('includeArchived') includeArchived?: string,
   ) {
-    return this.taskBoardsService.list(effectiveUserId(user), projectId);
+    return this.taskBoardsService.list(effectiveUserId(user), projectId, includeArchived === 'true');
   }
 
   @Post()
@@ -48,6 +49,16 @@ export class TaskBoardsController {
     @Body() body: UpdateBoardDto,
   ) {
     return this.taskBoardsService.update(effectiveUserId(user), id, body);
+  }
+
+  @Patch(':id/archive')
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.taskBoardsService.archive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/unarchive')
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.taskBoardsService.unarchive(effectiveUserId(user), id);
   }
 
   @Delete(':id')

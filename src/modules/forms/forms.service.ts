@@ -25,9 +25,9 @@ export class FormsService {
     });
   }
 
-  async findAll(userId: string) {
+  async findAll(userId: string, includeArchived = false) {
     return this.prisma.intakeForm.findMany({
-      where:   { userId },
+      where:   { userId, ...(includeArchived ? {} : { archivedAt: null }) },
       include: { _count: { select: { submissions: true } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -75,8 +75,24 @@ export class FormsService {
     });
   }
 
+  async archive(userId: string, id: string) {
+    const form = await this.findOne(userId, id);
+    if (form.archivedAt) throw new BadRequestException('Form is already archived');
+    return this.prisma.intakeForm.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const form = await this.findOne(userId, id);
+    if (!form.archivedAt) throw new BadRequestException('Form is not archived');
+    return this.prisma.intakeForm.update({ where: { id }, data: { archivedAt: null } });
+  }
+
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
+    const submissions = await this.prisma.intakeFormSubmission.count({ where: { formId: id } });
+    if (submissions > 0) {
+      throw new BadRequestException(`Cannot delete: this form has ${submissions} submission${submissions > 1 ? 's' : ''}. Archive instead.`);
+    }
     await this.prisma.intakeForm.delete({ where: { id } });
   }
 

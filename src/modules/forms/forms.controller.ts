@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, HttpCode, HttpStatus,
+  Param, Body, Query, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { User } from '@prisma/client';
@@ -45,8 +45,8 @@ export class FormsController {
   @ApiBearerAuth()
   @Get()
   @ApiOperation({ summary: 'List all intake forms' })
-  findAll(@CurrentUser() user: User) {
-    return this.formsService.findAll(user.id);
+  findAll(@CurrentUser() user: User, @Query('includeArchived') includeArchived?: string) {
+    return this.formsService.findAll(user.id, includeArchived === 'true');
   }
 
   @ApiBearerAuth()
@@ -64,9 +64,23 @@ export class FormsController {
   }
 
   @ApiBearerAuth()
+  @Patch(':id/archive')
+  @ApiOperation({ summary: 'Archive form' })
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.formsService.archive(user.id, id);
+  }
+
+  @ApiBearerAuth()
+  @Patch(':id/unarchive')
+  @ApiOperation({ summary: 'Unarchive form' })
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.formsService.unarchive(user.id, id);
+  }
+
+  @ApiBearerAuth()
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete form' })
+  @ApiOperation({ summary: 'Delete form (no submissions)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.formsService.remove(user.id, id);
   }

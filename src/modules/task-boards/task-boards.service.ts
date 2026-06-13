@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
 import { IsString, IsNotEmpty, IsOptional, IsInt, Min, IsBoolean } from 'class-validator'
 
@@ -51,11 +51,11 @@ const BOARD_INCLUDE = {
 export class TaskBoardsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(userId: string, projectId?: string) {
+  async list(userId: string, projectId?: string, includeArchived = false) {
     return this.prisma.taskBoard.findMany({
-      where: { userId, projectId: projectId ?? null },
+      where: { userId, projectId: projectId ?? null, ...(includeArchived ? {} : { archivedAt: null }) },
       orderBy: { position: 'asc' },
-      select: { id: true, name: true, position: true, projectId: true, createdAt: true },
+      select: { id: true, name: true, position: true, projectId: true, createdAt: true, archivedAt: true },
     })
   }
 
@@ -89,6 +89,18 @@ export class TaskBoardsService {
         ...(dto.position !== undefined && { position: dto.position }),
       },
     })
+  }
+
+  async archive(userId: string, boardId: string) {
+    const board = await this.findOne(userId, boardId)
+    if (board.archivedAt) throw new BadRequestException('Board is already archived')
+    return this.prisma.taskBoard.update({ where: { id: boardId }, data: { archivedAt: new Date() } })
+  }
+
+  async unarchive(userId: string, boardId: string) {
+    const board = await this.findOne(userId, boardId)
+    if (!board.archivedAt) throw new BadRequestException('Board is not archived')
+    return this.prisma.taskBoard.update({ where: { id: boardId }, data: { archivedAt: null } })
   }
 
   async remove(userId: string, boardId: string) {
