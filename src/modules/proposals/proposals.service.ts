@@ -86,10 +86,10 @@ export class ProposalsService {
   }
 
   async findAll(userId: string, query: QueryProposalsDto) {
-    const { page = 1, limit = 20, status } = query;
+    const { page = 1, limit = 20, status, clientId } = query;
     const skip = (page - 1) * limit;
 
-    const where = { userId, ...(status && { status }) };
+    const where = { userId, ...(status && { status }), ...(clientId && { clientId }) };
 
     const [proposals, total] = await Promise.all([
       this.prisma.proposal.findMany({

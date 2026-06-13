@@ -269,7 +269,8 @@ export class InvoicesService {
 
     const where = {
       userId,
-      ...(dto.status ? { status: dto.status } : {}),
+      ...(dto.status   ? { status:   dto.status   } : {}),
+      ...(dto.clientId ? { clientId: dto.clientId } : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([

@@ -117,9 +117,9 @@ export class ContractsService {
   }
 
   async findAll(userId: string, query: QueryContractsDto) {
-    const { page = 1, limit = 20, status } = query;
+    const { page = 1, limit = 20, status, clientId } = query;
     const skip  = (page - 1) * limit;
-    const where = { userId, ...(status && { status }) };
+    const where = { userId, ...(status && { status }), ...(clientId && { clientId }) };
 
     const [contracts, total] = await Promise.all([
       this.prisma.contract.findMany({

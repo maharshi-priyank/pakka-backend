@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsEnum, IsOptional, IsInt, IsString, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { InvoiceStatus } from '@prisma/client';
@@ -13,4 +13,7 @@ export class QueryInvoicesDto {
 
   @ApiPropertyOptional() @IsInt() @Min(1) @Type(() => Number) @IsOptional()
   page?: number = 1;
+
+  @ApiPropertyOptional() @IsString() @IsOptional()
+  clientId?: string;
 }
