@@ -27,18 +27,20 @@ export class ProjectsController {
   @Get()
   findAll(
     @CurrentUser() user: User,
-    @Query('search')   search?:   string,
-    @Query('status')   status?:   ProjectStatus,
-    @Query('clientId') clientId?: string,
-    @Query('page')     page?:     string,
-    @Query('limit')    limit?:    string,
+    @Query('search')          search?:          string,
+    @Query('status')          status?:          ProjectStatus,
+    @Query('clientId')        clientId?:        string,
+    @Query('page')            page?:            string,
+    @Query('limit')           limit?:           string,
+    @Query('includeArchived') includeArchived?: string,
   ) {
     const query: QueryProjectsDto = {
       search,
       status,
       clientId,
-      page:  page  ? Number(page)  : undefined,
-      limit: limit ? Number(limit) : undefined,
+      page:            page            ? Number(page)  : undefined,
+      limit:           limit           ? Number(limit) : undefined,
+      includeArchived: includeArchived === 'true',
     };
     return this.projectsService.findAll(effectiveUserId(user), query);
   }
@@ -66,6 +68,16 @@ export class ProjectsController {
     @Body()        body: UpdateProjectDto,
   ) {
     return this.projectsService.update(effectiveUserId(user), id, body);
+  }
+
+  @Patch(':id/archive')
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.projectsService.archive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/unarchive')
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.projectsService.unarchive(effectiveUserId(user), id);
   }
 
   @Delete(':id')

@@ -57,9 +57,27 @@ export class ContractsController {
     return this.svc.send(effectiveUserId(user), id);
   }
 
+  @Patch(':id/archive')
+  @ApiOperation({ summary: 'Archive a contract (unsigned only)' })
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.svc.archive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/unarchive')
+  @ApiOperation({ summary: 'Unarchive a contract' })
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.svc.unarchive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/void')
+  @ApiOperation({ summary: 'Void a signed contract' })
+  void(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.svc.void(effectiveUserId(user), id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a contract' })
+  @ApiOperation({ summary: 'Delete a contract (draft/sent only, no linked invoices)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.remove(effectiveUserId(user), id);
   }

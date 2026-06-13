@@ -86,10 +86,15 @@ export class ProposalsService {
   }
 
   async findAll(userId: string, query: QueryProposalsDto) {
-    const { page = 1, limit = 20, status, clientId } = query;
+    const { page = 1, limit = 20, status, clientId, includeArchived } = query;
     const skip = (page - 1) * limit;
 
-    const where = { userId, ...(status && { status }), ...(clientId && { clientId }) };
+    const where = {
+      userId,
+      ...(includeArchived ? {} : { archivedAt: null }),
+      ...(status   && { status }),
+      ...(clientId && { clientId }),
+    };
 
     const [proposals, total] = await Promise.all([
       this.prisma.proposal.findMany({
@@ -401,8 +406,24 @@ export class ProposalsService {
     return declined;
   }
 
+  async archive(userId: string, id: string) {
+    const proposal = await this.findOne(userId, id);
+    if (proposal.archivedAt) throw new BadRequestException('Proposal is already archived');
+    return this.prisma.proposal.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const proposal = await this.findOne(userId, id);
+    if (!proposal.archivedAt) throw new BadRequestException('Proposal is not archived');
+    return this.prisma.proposal.update({ where: { id }, data: { archivedAt: null } });
+  }
+
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
+    const contracts = await this.prisma.contract.count({ where: { proposalId: id } });
+    if (contracts > 0) {
+      throw new BadRequestException(`Cannot delete: this proposal has ${contracts} contract${contracts > 1 ? 's' : ''}. Archive instead.`);
+    }
     return this.prisma.proposal.delete({ where: { id } });
   }
 }

@@ -117,9 +117,14 @@ export class ContractsService {
   }
 
   async findAll(userId: string, query: QueryContractsDto) {
-    const { page = 1, limit = 20, status, clientId } = query;
+    const { page = 1, limit = 20, status, clientId, includeArchived } = query;
     const skip  = (page - 1) * limit;
-    const where = { userId, ...(status && { status }), ...(clientId && { clientId }) };
+    const where = {
+      userId,
+      ...(includeArchived ? {} : { archivedAt: null }),
+      ...(status   && { status }),
+      ...(clientId && { clientId }),
+    };
 
     const [contracts, total] = await Promise.all([
       this.prisma.contract.findMany({
@@ -229,8 +234,38 @@ export class ContractsService {
     return { ...signed, signerOtp: undefined };
   }
 
+  async archive(userId: string, id: string) {
+    const contract = await this.findOne(userId, id);
+    if (contract.status === ContractStatus.SIGNED) {
+      throw new BadRequestException('Cannot archive a signed contract — void it instead');
+    }
+    if (contract.archivedAt) throw new BadRequestException('Contract is already archived');
+    return this.prisma.contract.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const contract = await this.findOne(userId, id);
+    if (!contract.archivedAt) throw new BadRequestException('Contract is not archived');
+    return this.prisma.contract.update({ where: { id }, data: { archivedAt: null } });
+  }
+
+  async void(userId: string, id: string) {
+    const contract = await this.findOne(userId, id);
+    if (contract.status !== ContractStatus.SIGNED) {
+      throw new BadRequestException('Only signed contracts can be voided — archive unsigned contracts instead');
+    }
+    return this.prisma.contract.update({ where: { id }, data: { status: ContractStatus.VOID } });
+  }
+
   async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+    const contract = await this.findOne(userId, id);
+    if (contract.status === ContractStatus.SIGNED || contract.status === ContractStatus.VOID) {
+      throw new BadRequestException('Cannot delete a signed or voided contract');
+    }
+    const invoices = await this.prisma.invoice.count({ where: { contractId: id } });
+    if (invoices > 0) {
+      throw new BadRequestException(`Cannot delete: this contract has ${invoices} invoice${invoices > 1 ? 's' : ''}. Archive instead.`);
+    }
     return this.prisma.contract.delete({ where: { id } });
   }
 }

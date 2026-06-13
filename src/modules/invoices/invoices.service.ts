@@ -444,11 +444,23 @@ export class InvoicesService {
     return overdue;
   }
 
+  async void(userId: string, id: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === InvoiceStatus.DRAFT) {
+      throw new BadRequestException('Draft invoices cannot be voided — delete them instead');
+    }
+    if (invoice.status === InvoiceStatus.CANCELLED) {
+      throw new BadRequestException('Invoice is already voided');
+    }
+    return this.prisma.invoice.update({ where: { id }, data: { status: InvoiceStatus.CANCELLED } });
+  }
+
   async delete(userId: string, id: string) {
     const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new ForbiddenException('Cannot delete a paid invoice');
+    if (invoice.status !== InvoiceStatus.DRAFT) {
+      throw new BadRequestException('Only draft invoices can be deleted — void non-draft invoices instead');
     }
 
     await this.prisma.invoice.delete({ where: { id } });

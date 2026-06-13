@@ -84,6 +84,11 @@ export class InvoicesController {
     return this.invoicesService.markOverdue(effectiveUserId(user), id);
   }
 
+  @Patch(':id/void')
+  void(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.invoicesService.void(effectiveUserId(user), id);
+  }
+
   @Delete(':id')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.invoicesService.delete(effectiveUserId(user), id);

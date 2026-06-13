@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoiceStatus, ProjectStatus } from '@prisma/client';
 
@@ -16,11 +16,12 @@ export interface CreateProjectDto {
 export interface UpdateProjectDto extends Partial<CreateProjectDto> {}
 
 export interface QueryProjectsDto {
-  search?:   string;
-  status?:   ProjectStatus;
-  clientId?: string;
-  page?:     number;
-  limit?:    number;
+  search?:          string;
+  status?:          ProjectStatus;
+  clientId?:        string;
+  page?:            number;
+  limit?:           number;
+  includeArchived?: boolean;
 }
 
 @Injectable()
@@ -51,10 +52,11 @@ export class ProjectsService {
   }
 
   async findAll(userId: string, query: QueryProjectsDto) {
-    const { page = 1, limit = 20, search, status, clientId } = query;
+    const { page = 1, limit = 20, search, status, clientId, includeArchived } = query;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = { userId };
+    if (!includeArchived) where['archivedAt'] = null;
     if (status)   where['status']   = status;
     if (clientId) where['clientId'] = clientId;
     if (search) {
@@ -199,16 +201,37 @@ export class ProjectsService {
     await this.prisma.projectNote.deleteMany({ where: { id: noteId, userId, projectId } });
   }
 
+  async archive(userId: string, id: string) {
+    const project = await this.findOne(userId, id);
+    if (project.archivedAt) throw new BadRequestException('Project is already archived');
+    return this.prisma.project.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const project = await this.findOne(userId, id);
+    if (!project.archivedAt) throw new BadRequestException('Project is not archived');
+    return this.prisma.project.update({ where: { id }, data: { archivedAt: null } });
+  }
+
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    await this.prisma.$transaction([
-      this.prisma.proposal.updateMany(   { where: { projectId: id }, data: { projectId: null } }),
-      this.prisma.contract.updateMany(   { where: { projectId: id }, data: { projectId: null } }),
-      this.prisma.invoice.updateMany(    { where: { projectId: id }, data: { projectId: null } }),
-      this.prisma.timeEntry.updateMany(  { where: { projectId: id }, data: { projectId: null } }),
-      this.prisma.expense.updateMany(    { where: { projectId: id }, data: { projectId: null } }),
-      this.prisma.project.delete({ where: { id } }),
+    const [tasks, invoices, timeEntries, expenses] = await Promise.all([
+      this.prisma.task.count({ where: { projectId: id } }),
+      this.prisma.invoice.count({ where: { projectId: id } }),
+      this.prisma.timeEntry.count({ where: { projectId: id } }),
+      this.prisma.expense.count({ where: { projectId: id } }),
     ]);
+    const total = tasks + invoices + timeEntries + expenses;
+    if (total > 0) {
+      const parts = [
+        tasks       && `${tasks} task${tasks > 1 ? 's' : ''}`,
+        invoices    && `${invoices} invoice${invoices > 1 ? 's' : ''}`,
+        timeEntries && `${timeEntries} time entr${timeEntries > 1 ? 'ies' : 'y'}`,
+        expenses    && `${expenses} expense${expenses > 1 ? 's' : ''}`,
+      ].filter(Boolean).join(', ');
+      throw new BadRequestException(`Cannot delete: this project has ${parts}. Archive instead.`);
+    }
+    await this.prisma.project.delete({ where: { id } });
   }
 
   async getProjectPl(

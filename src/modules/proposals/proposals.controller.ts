@@ -51,9 +51,21 @@ export class ProposalsController {
     return this.svc.send(effectiveUserId(user), id);
   }
 
+  @Patch(':id/archive')
+  @ApiOperation({ summary: 'Archive a proposal' })
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.svc.archive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/unarchive')
+  @ApiOperation({ summary: 'Unarchive a proposal' })
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.svc.unarchive(effectiveUserId(user), id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a proposal' })
+  @ApiOperation({ summary: 'Delete a proposal (no linked contracts)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.remove(effectiveUserId(user), id);
   }
