@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, HttpException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, HttpException, BadRequestException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,7 +20,7 @@ export class LeadsService {
   async create(userId: string, dto: CreateLeadDto) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
     if (effectivePlan(user!) === 'FREE') {
-      const count = await this.prisma.lead.count({ where: { userId, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } } });
+      const count = await this.prisma.lead.count({ where: { userId, archivedAt: null, stage: { notIn: ['WON', 'LOST'] } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
     }
 
@@ -38,12 +38,12 @@ export class LeadsService {
   }
 
   async findAll(userId: string, query: QueryLeadsDto) {
-    const { page = 1, limit = 20, search, stage } = query;
+    const { page = 1, limit = 20, search, stage, includeArchived } = query;
     const skip = (page - 1) * limit;
 
     const where = {
       userId,
-      isDeleted: false,
+      ...(includeArchived ? {} : { archivedAt: null }),
       ...(stage && { stage }),
       ...(search && {
         OR: [
@@ -64,7 +64,7 @@ export class LeadsService {
       }),
       this.prisma.lead.count({ where }),
       this.prisma.lead.aggregate({
-        where: { userId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] }, budget: { not: null } },
+        where: { userId, archivedAt: null, stage: { notIn: [LeadStage.WON, LeadStage.LOST] }, budget: { not: null } },
         _sum: { budget: true },
       }),
     ]);
@@ -80,7 +80,7 @@ export class LeadsService {
 
   async findOne(userId: string, id: string) {
     const lead = await this.prisma.lead.findFirst({
-      where: { id, userId, isDeleted: false },
+      where: { id, userId },
       include: {
         client: true,
         proposals: { orderBy: { createdAt: 'desc' } },
@@ -119,9 +119,33 @@ export class LeadsService {
     return lead;
   }
 
+  async archive(userId: string, id: string) {
+    const lead = await this.findOne(userId, id);
+    if (lead.archivedAt) throw new BadRequestException('Lead is already archived');
+    return this.prisma.lead.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const lead = await this.findOne(userId, id);
+    if (!lead.archivedAt) throw new BadRequestException('Lead is not archived');
+    return this.prisma.lead.update({ where: { id }, data: { archivedAt: null } });
+  }
+
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    return this.prisma.lead.update({ where: { id }, data: { isDeleted: true } });
+    const [proposals, meetings] = await Promise.all([
+      this.prisma.proposal.count({ where: { leadId: id } }),
+      this.prisma.meeting.count({ where: { leadId: id } }),
+    ]);
+    const total = proposals + meetings;
+    if (total > 0) {
+      const parts = [
+        proposals && `${proposals} proposal${proposals > 1 ? 's' : ''}`,
+        meetings  && `${meetings} meeting${meetings > 1 ? 's' : ''}`,
+      ].filter(Boolean).join(', ');
+      throw new BadRequestException(`Cannot delete: this lead has ${parts}. Archive instead.`);
+    }
+    await this.prisma.lead.delete({ where: { id } });
   }
 
   async convertToClient(userId: string, leadId: string, dto?: ConvertLeadDto) {
@@ -210,7 +234,7 @@ export class LeadsService {
     const result = await this.prisma.lead.aggregate({
       where: {
         userId,
-        isDeleted: false,
+        archivedAt: null,
         stage: { notIn: [LeadStage.WON, LeadStage.LOST] },
         budget: { not: null },
       },

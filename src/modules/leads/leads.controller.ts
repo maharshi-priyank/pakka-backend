@@ -69,9 +69,21 @@ export class LeadsController {
     return this.leadsService.convertToClient(effectiveUserId(user), id, dto);
   }
 
+  @Patch(':id/archive')
+  @ApiOperation({ summary: 'Archive a lead' })
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.leadsService.archive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/unarchive')
+  @ApiOperation({ summary: 'Unarchive a lead' })
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.leadsService.unarchive(effectiveUserId(user), id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Soft-delete a lead' })
+  @ApiOperation({ summary: 'Permanently delete a lead (no linked records)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.leadsService.remove(effectiveUserId(user), id);
   }
