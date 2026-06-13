@@ -201,6 +201,7 @@ model IntakeForm {
   leadFieldMap   Json                   @default("{}")
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
+  archivedAt     DateTime?
   submissions    IntakeFormSubmission[]
 
   @@map("intake_forms")
@@ -262,6 +263,7 @@ model Client {
   clickupMemberId String?    @unique
   createdAt       DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  archivedAt  DateTime?
   leads       Lead[]
   proposals   Proposal[]
   contracts   Contract[]
@@ -295,6 +297,7 @@ model Lead {
   lastActivityAt DateTime   @default(now())
   followUpAt     DateTime?
   isDeleted      Boolean    @default(false)
+  archivedAt     DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   proposals      Proposal[]
@@ -336,6 +339,7 @@ model Proposal {
   depositPaidAt   DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  archivedAt      DateTime?
   opens           ProposalOpen[]
   contracts       Contract[]
   attachments     Attachment[]
@@ -383,6 +387,7 @@ model Contract {
   auditLog   Json?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
+  archivedAt DateTime?
   invoices   Invoice[]
 
   @@map("contracts")
@@ -393,6 +398,7 @@ enum ContractStatus {
   SENT
   SIGNED
   DECLINED
+  VOID
 }
 
 model Invoice {
@@ -678,6 +684,7 @@ model Project {
   clickupListId        String?       @unique
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  archivedAt  DateTime?
   proposals   Proposal[]
   contracts   Contract[]
   invoices    Invoice[]
@@ -740,6 +747,7 @@ model TaskBoard {
   columns   BoardColumn[]
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  archivedAt DateTime?
 
   @@index([userId])
   @@index([projectId])
