@@ -1,12 +1,18 @@
-import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsBoolean, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class QueryClientsDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  includeArchived?: boolean = false;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

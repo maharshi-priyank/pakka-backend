@@ -51,6 +51,16 @@ export class ClientsController {
     return this.clientsService.regeneratePortalToken(effectiveUserId(user), id);
   }
 
+  @Patch(':id/archive')
+  archive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.clientsService.archive(effectiveUserId(user), id);
+  }
+
+  @Patch(':id/unarchive')
+  unarchive(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.clientsService.unarchive(effectiveUserId(user), id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() user: User, @Param('id') id: string) {

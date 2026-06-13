@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, HttpException } from '@nestjs/common';
+import { Injectable, NotFoundException, HttpException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
@@ -58,6 +58,7 @@ export class ClientsService {
 
     const where = {
       userId,
+      ...(query.includeArchived ? {} : { archivedAt: null }),
       ...(search && {
         OR: [
           { name:    { contains: search, mode: 'insensitive' as const } },
@@ -170,15 +171,38 @@ export class ClientsService {
     await this.prisma.clientNote.deleteMany({ where: { id: noteId, userId, clientId } });
   }
 
+  async archive(userId: string, id: string) {
+    const client = await this.findOne(userId, id);
+    if (client.archivedAt) throw new BadRequestException('Client is already archived');
+    return this.prisma.client.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  async unarchive(userId: string, id: string) {
+    const client = await this.findOne(userId, id);
+    if (!client.archivedAt) throw new BadRequestException('Client is not archived');
+    return this.prisma.client.update({ where: { id }, data: { archivedAt: null } });
+  }
+
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    await this.prisma.$transaction([
-      this.prisma.proposal.updateMany({ where: { clientId: id }, data: { clientId: null } }),
-      this.prisma.contract.updateMany({ where: { clientId: id }, data: { clientId: null } }),
-      this.prisma.invoice.updateMany({ where: { clientId: id }, data: { clientId: null } }),
-      this.prisma.meeting.updateMany({ where: { clientId: id }, data: { clientId: null } }),
-      this.prisma.lead.updateMany({ where: { clientId: id }, data: { clientId: null } }),
-      this.prisma.client.delete({ where: { id } }),
+    const [proposals, contracts, invoices, projects, meetings] = await Promise.all([
+      this.prisma.proposal.count({ where: { clientId: id } }),
+      this.prisma.contract.count({ where: { clientId: id } }),
+      this.prisma.invoice.count({ where: { clientId: id } }),
+      this.prisma.project.count({ where: { clientId: id } }),
+      this.prisma.meeting.count({ where: { clientId: id } }),
     ]);
+    const total = proposals + contracts + invoices + projects + meetings;
+    if (total > 0) {
+      const parts = [
+        proposals && `${proposals} proposal${proposals > 1 ? 's' : ''}`,
+        contracts && `${contracts} contract${contracts > 1 ? 's' : ''}`,
+        invoices  && `${invoices} invoice${invoices > 1 ? 's' : ''}`,
+        projects  && `${projects} project${projects > 1 ? 's' : ''}`,
+        meetings  && `${meetings} meeting${meetings > 1 ? 's' : ''}`,
+      ].filter(Boolean).join(', ');
+      throw new BadRequestException(`Cannot delete: this client has ${parts}. Archive instead.`);
+    }
+    await this.prisma.client.delete({ where: { id } });
   }
 }
