@@ -263,6 +263,30 @@ export const TEMPLATE_REGISTRY: TemplateKeyMeta[] = [
       { name: 'dashboardUrl',  description: 'Dashboard link',              sample: 'https://app.clearwork.in/app/dashboard' },
     ],
   },
+  // ── Messages ──────────────────────────────────────────────────────────────
+  {
+    key:         'message_received',
+    label:       'New Message to Client',
+    category:    'lead' as const,
+    description: 'Sent to the client when you send them a message.',
+    vars: [
+      { name: 'clientName',   description: 'Client full name',      sample: 'Ritu Sharma'          },
+      { name: 'businessName', description: 'Your business name',    sample: 'Studio Rao'           },
+      { name: 'messageBody',  description: 'The message text',      sample: 'Hi, proposal ready...' },
+      { name: 'portalUrl',    description: 'Link to client portal', sample: 'https://...'          },
+    ],
+  },
+  {
+    key:         'client_message_received',
+    label:       'Client Replied to Message',
+    category:    'lead' as const,
+    description: 'Sent to you when a client replies to your message.',
+    vars: [
+      { name: 'clientName',  description: 'Client full name',   sample: 'Ritu Sharma'  },
+      { name: 'messageBody', description: 'The reply text',     sample: 'Sounds great!' },
+      { name: 'inboxUrl',    description: 'Link to your inbox', sample: 'https://...'  },
+    ],
+  },
 ]
 
 export const TEMPLATE_KEYS = TEMPLATE_REGISTRY.map(t => t.key)
