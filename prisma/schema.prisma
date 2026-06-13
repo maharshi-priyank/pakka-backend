@@ -137,6 +137,8 @@ model User {
   tasks                   Task[]
   taskBoards              TaskBoard[]
   assignedTasks           Task[]       @relation("TaskAssignee")
+  threads                 Thread[]
+  emailSignature          String?
 
   @@map("users")
 }
@@ -270,6 +272,7 @@ model Client {
   projects    Project[]
   attachments Attachment[]
   notes       ClientNote[]
+  threads     Thread[]
 
   @@map("clients")
 }
@@ -864,4 +867,49 @@ model PublicProfileEnquiry {
   createdAt     DateTime @default(now())
 
   @@map("public_profile_enquiries")
+}
+
+// ── Messaging ──────────────────────────────────────────────────────────────────
+
+enum SenderType {
+  FREELANCER
+  CLIENT
+}
+
+enum AttachmentType {
+  PROPOSAL
+  INVOICE
+  CONTRACT
+}
+
+model Thread {
+  id        String    @id @default(cuid())
+  userId    String
+  clientId  String
+  subject   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId],   references: [id], onDelete: Cascade)
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([userId, clientId])
+  @@map("threads")
+}
+
+model Message {
+  id             String          @id @default(cuid())
+  threadId       String
+  senderType     SenderType
+  body           String
+  attachmentType AttachmentType?
+  attachmentId   String?
+  readAt         DateTime?
+  createdAt      DateTime        @default(now())
+
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@map("messages")
 }
