@@ -276,6 +276,8 @@ model Client {
   notes       ClientNote[]
   threads     Thread[]
 
+  @@index([userId])
+  @@index([userId, archivedAt])
   @@map("clients")
 }
 
@@ -303,6 +305,10 @@ model Lead {
   proposals      Proposal[]
   meetings       Meeting[]
 
+  @@index([userId])
+  @@index([userId, archivedAt, stage])
+  @@index([userId, followUpAt])
+  @@index([clientId])
   @@map("leads")
 }
 
@@ -344,6 +350,11 @@ model Proposal {
   contracts       Contract[]
   attachments     Attachment[]
 
+  @@index([userId, status])
+  @@index([userId, archivedAt])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([leadId])
   @@map("proposals")
 }
 
@@ -365,6 +376,7 @@ model ProposalOpen {
   pagesViewed Json?
   openedAt    DateTime @default(now())
 
+  @@index([proposalId])
   @@map("proposal_opens")
 }
 
@@ -390,6 +402,11 @@ model Contract {
   archivedAt DateTime?
   invoices   Invoice[]
 
+  @@index([userId, status])
+  @@index([userId, archivedAt])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([proposalId])
   @@map("contracts")
 }
 
@@ -442,6 +459,12 @@ model Invoice {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([contractId])
+  @@index([parentInvoiceId])
   @@map("invoices")
 }
 
@@ -496,6 +519,7 @@ model AutomationExecution {
   metadata   Json?
   firedAt    DateTime        @default(now())
 
+  @@index([ruleId])
   @@map("automation_executions")
 }
 
@@ -542,6 +566,9 @@ model Meeting {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  @@index([userId, clientId])
+  @@index([userId, scheduledAt])
+  @@index([leadId])
   @@map("meetings")
 }
 
@@ -564,6 +591,7 @@ model ProposalTemplate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([userId])
   @@map("proposal_templates")
 }
 
@@ -628,6 +656,10 @@ model TimeEntry {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@index([userId])
+  @@index([userId, date])
+  @@index([projectId])
+  @@index([clientId])
   @@map("time_entries")
 }
 
@@ -655,6 +687,10 @@ model Expense {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([userId])
+  @@index([userId, date])
+  @@index([projectId])
+  @@index([clientId])
   @@map("expenses")
 }
 
@@ -695,6 +731,9 @@ model Project {
   tasks       Task[]
   taskBoards  TaskBoard[]
 
+  @@index([userId, status])
+  @@index([userId, archivedAt])
+  @@index([clientId])
   @@map("projects")
 }
 
@@ -793,6 +832,7 @@ model ClientNote {
   user   User   @relation(fields: [userId],   references: [id], onDelete: Cascade)
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([userId, clientId])
   @@map("client_notes")
 }
 
@@ -807,6 +847,7 @@ model ProjectNote {
   user    User    @relation(fields: [userId],    references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([userId, projectId])
   @@map("project_notes")
 }
 
@@ -836,6 +877,11 @@ model Attachment {
   client      Client?   @relation(fields: [clientId],   references: [id], onDelete: Cascade)
   gateInvoice Invoice?  @relation("InvoiceGate",        fields: [gateInvoiceId], references: [id])
 
+  @@index([userId])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([invoiceId])
+  @@index([proposalId])
   @@map("attachments")
 }
 

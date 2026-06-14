@@ -78,6 +78,7 @@ export class TasksService {
     return this.prisma.task.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      take: 100,
       include: TASK_INCLUDE,
     });
   }

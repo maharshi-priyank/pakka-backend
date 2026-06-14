@@ -124,11 +124,13 @@ export class ClientsService {
             startDate: true, endDate: true, createdAt: true, shareRateWithClient: true,
             timeEntries: {
               orderBy: { date: 'desc' },
+              take: 50,
               select: { id: true, description: true, date: true, durationMins: true, hourlyRate: true, isBilled: true },
             },
             expenses: {
               where:   { isBillable: true },
               orderBy: { date: 'desc' },
+              take: 50,
               select: { id: true, description: true, category: true, amount: true, date: true, isBilled: true },
             },
           },
