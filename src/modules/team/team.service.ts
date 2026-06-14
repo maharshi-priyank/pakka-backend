@@ -97,6 +97,25 @@ export class TeamService {
     return { message: 'Team member removed.' }
   }
 
+  async getInvitePreview(token: string) {
+    const invite = await this.prisma.teamInvite.findUnique({
+      where:  { token },
+      select: {
+        email:     true,
+        accepted:  true,
+        expiresAt: true,
+        owner:     { select: { name: true, businessName: true } },
+      },
+    })
+    if (!invite) throw new NotFoundException('Invite not found or already used.')
+    if (invite.accepted) throw new BadRequestException('This invite has already been accepted.')
+    if (invite.expiresAt < new Date()) throw new BadRequestException('This invite has expired.')
+    return {
+      inviteeEmail: invite.email,
+      senderName:   invite.owner.businessName ?? invite.owner.name,
+    }
+  }
+
   async acceptInvite(token: string, userId: string) {
     const invite = await this.prisma.teamInvite.findUnique({ where: { token } })
     if (!invite) throw new NotFoundException('Invite not found or already used.')

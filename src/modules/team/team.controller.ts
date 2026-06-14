@@ -3,10 +3,17 @@ import { User } from '@prisma/client'
 import { TeamService } from './team.service'
 import { InviteMemberDto } from './dto/invite-member.dto'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { Public } from '../../common/decorators/public.decorator'
 
 @Controller('team')
 export class TeamController {
   constructor(private readonly team: TeamService) {}
+
+  @Public()
+  @Get('invite-preview/:token')
+  getInvitePreview(@Param('token') token: string) {
+    return this.team.getInvitePreview(token)
+  }
 
   @Get()
   getTeam(@CurrentUser() user: User) {
