@@ -48,6 +48,7 @@ import { GoogleSheetsModule } from './modules/google-sheets/google-sheets.module
 import { PaymentsModule } from './modules/payments/payments.module';
 import { TeamModule } from './modules/team/team.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -121,6 +122,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     PaymentsModule,
     TeamModule,
     MessagesModule,
+    WorkspacesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

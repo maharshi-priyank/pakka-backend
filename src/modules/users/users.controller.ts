@@ -6,12 +6,16 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayloadOnly } from '../../common/decorators/jwt-payload-only.decorator';
 import type { SupabaseJwtPayload } from '../auth/jwt-payload.strategy';
 import { User } from '@prisma/client';
+import { WorkspacesService } from '../workspaces/workspaces.service';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService:      UsersService,
+    private readonly workspacesService: WorkspacesService,
+  ) {}
 
   /**
    * Called by the frontend immediately after Supabase login.
@@ -58,6 +62,12 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user profile' })
   updateMe(@CurrentUser() user: User, @Body() dto: UpdateUserDto) {
     return this.usersService.update(user.id, dto);
+  }
+
+  @Patch('me/active-workspace')
+  @ApiOperation({ summary: 'Switch the active workspace (must be a member)' })
+  switchWorkspace(@CurrentUser() user: User, @Body('workspaceId') workspaceId: string) {
+    return this.workspacesService.switchActive(user.id, workspaceId)
   }
 
   @Post('redeem-promo')
