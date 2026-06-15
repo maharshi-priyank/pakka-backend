@@ -29,8 +29,10 @@ export class UsersController {
   }
 
   @Get('me')
-  @ApiOperation({ summary: 'Get current authenticated user profile' })
-  getMe(@CurrentUser() user: User) {
+  @ApiOperation({ summary: 'Get current authenticated user profile + active workspace' })
+  async getMe(@CurrentUser() user: User) {
+    const data = await this.usersService.getMe(user.id);
+    if (!data) return null;
     const {
       razorpayKeySecret,
       googleAccessToken,
@@ -41,10 +43,15 @@ export class UsersController {
       canvaAccessToken,
       canvaRefreshToken,
       flodeskApiKey,
+      activeWorkspace,
       ...safeUser
-    } = user;
+    } = data;
     // Null country → India (backward compat for all existing users)
-    return { ...safeUser, country: safeUser.country ?? 'IN' };
+    const workspace = activeWorkspace ? {
+      ...activeWorkspace,
+      razorpayKeySecret: undefined, // never expose secret to frontend
+    } : null;
+    return { ...safeUser, country: safeUser.country ?? 'IN', activeWorkspace: workspace };
   }
 
   @Patch('me')

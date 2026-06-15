@@ -17,6 +17,28 @@ export class UsersService {
       create: { id: dto.id, email: dto.email, name: dto.name },
     });
 
+    // Ensure a workspace exists for this owner (idempotent)
+    await this.prisma.workspace.upsert({
+      where:  { id: dto.id },
+      update: {},
+      create: { id: dto.id, name: dto.name },
+    });
+
+    // Ensure owner WorkspaceMember row exists (idempotent)
+    await this.prisma.workspaceMember.upsert({
+      where:  { userId_workspaceId: { userId: dto.id, workspaceId: dto.id } },
+      update: {},
+      create: { userId: dto.id, workspaceId: dto.id, role: 'OWNER' },
+    });
+
+    // Set activeWorkspaceId if not yet set
+    if (!user.activeWorkspaceId) {
+      await this.prisma.user.update({
+        where: { id: dto.id },
+        data:  { activeWorkspaceId: dto.id },
+      });
+    }
+
     // Idempotent — safe to call on every login
     await this.automations.seedDefaultRules(user.id);
 
@@ -25,6 +47,14 @@ export class UsersService {
 
   async findById(id: string) {
     return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  async getMe(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where:   { id },
+      include: { activeWorkspace: true },
+    });
+    return user;
   }
 
   async update(id: string, data: UpdateUserDto) {
