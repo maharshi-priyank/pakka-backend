@@ -10,7 +10,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { effectiveUserId } from '../users/effective-user-id';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '@prisma/client';
 
@@ -23,63 +23,63 @@ export class ContractsController {
   @Post()
   @ApiOperation({ summary: 'Create a contract manually' })
   create(@CurrentUser() user: User, @Body() dto: CreateContractDto) {
-    return this.svc.create(effectiveUserId(user), dto);
+    return this.svc.create(resolveWorkspaceId(user), dto);
   }
 
   @Post('from-proposal/:proposalId')
   @ApiOperation({ summary: 'Auto-generate contract from an accepted proposal' })
   createFromProposal(@CurrentUser() user: User, @Param('proposalId') proposalId: string) {
-    return this.svc.createFromProposal(effectiveUserId(user), proposalId);
+    return this.svc.createFromProposal(resolveWorkspaceId(user), proposalId);
   }
 
   @Get()
   @ApiOperation({ summary: 'List contracts' })
   findAll(@CurrentUser() user: User, @Query() query: QueryContractsDto) {
-    return this.svc.findAll(effectiveUserId(user), query);
+    return this.svc.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a contract by ID (authenticated)' })
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.findOne(effectiveUserId(user), id);
+    return this.svc.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update contract content or status' })
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateContractDto) {
-    return this.svc.update(effectiveUserId(user), id, dto);
+    return this.svc.update(resolveWorkspaceId(user), id, dto);
   }
 
   @Post(':id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark contract as sent — generates OTP and returns sign URL' })
   send(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.send(effectiveUserId(user), id);
+    return this.svc.send(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive a contract (unsigned only)' })
   archive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.archive(effectiveUserId(user), id);
+    return this.svc.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
   @ApiOperation({ summary: 'Unarchive a contract' })
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.unarchive(effectiveUserId(user), id);
+    return this.svc.unarchive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/void')
   @ApiOperation({ summary: 'Void a signed contract' })
   void(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.void(effectiveUserId(user), id);
+    return this.svc.void(resolveWorkspaceId(user), id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a contract (draft/sent only, no linked invoices)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.remove(effectiveUserId(user), id);
+    return this.svc.remove(resolveWorkspaceId(user), id);
   }
 
   // ── Public routes (no auth) ─────────────────────────────────────────────

@@ -5,7 +5,7 @@ import {
 import { IsString, MinLength } from 'class-validator';
 import { ProjectsService, CreateProjectDto, UpdateProjectDto, QueryProjectsDto } from './projects.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { effectiveUserId } from '../users/effective-user-id';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { ProjectStatus, User } from '@prisma/client';
 
 class CreateNoteDto {
@@ -21,7 +21,7 @@ export class ProjectsController {
     @CurrentUser() user: User,
     @Body() body: CreateProjectDto,
   ) {
-    return this.projectsService.create(effectiveUserId(user), body);
+    return this.projectsService.create(resolveWorkspaceId(user), body);
   }
 
   @Get()
@@ -42,7 +42,7 @@ export class ProjectsController {
       limit:           limit           ? Number(limit) : undefined,
       includeArchived: includeArchived === 'true',
     };
-    return this.projectsService.findAll(effectiveUserId(user), query);
+    return this.projectsService.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get(':id')
@@ -50,7 +50,7 @@ export class ProjectsController {
     @CurrentUser() user: User,
     @Param('id')   id: string,
   ) {
-    return this.projectsService.findOne(effectiveUserId(user), id);
+    return this.projectsService.findOne(resolveWorkspaceId(user), id);
   }
 
   @Get(':id/stats')
@@ -58,7 +58,7 @@ export class ProjectsController {
     @CurrentUser() user: User,
     @Param('id')   id: string,
   ) {
-    return this.projectsService.getStats(effectiveUserId(user), id);
+    return this.projectsService.getStats(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
@@ -67,17 +67,17 @@ export class ProjectsController {
     @Param('id')   id: string,
     @Body()        body: UpdateProjectDto,
   ) {
-    return this.projectsService.update(effectiveUserId(user), id, body);
+    return this.projectsService.update(resolveWorkspaceId(user), id, body);
   }
 
   @Patch(':id/archive')
   archive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.projectsService.archive(effectiveUserId(user), id);
+    return this.projectsService.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.projectsService.unarchive(effectiveUserId(user), id);
+    return this.projectsService.unarchive(resolveWorkspaceId(user), id);
   }
 
   @Delete(':id')
@@ -86,7 +86,7 @@ export class ProjectsController {
     @CurrentUser() user: User,
     @Param('id')   id: string,
   ) {
-    return this.projectsService.remove(effectiveUserId(user), id);
+    return this.projectsService.remove(resolveWorkspaceId(user), id);
   }
 
   @Get(':id/pl')
@@ -96,24 +96,24 @@ export class ProjectsController {
     @Query('basis') basis?: string,
   ) {
     const b = basis === 'cash' ? 'cash' : 'accrual';
-    return this.projectsService.getProjectPl(effectiveUserId(user), id, b);
+    return this.projectsService.getProjectPl(resolveWorkspaceId(user), id, b);
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
 
   @Get(':id/notes')
   listNotes(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.projectsService.listNotes(effectiveUserId(user), id);
+    return this.projectsService.listNotes(resolveWorkspaceId(user), id);
   }
 
   @Post(':id/notes')
   createNote(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: CreateNoteDto) {
-    return this.projectsService.createNote(effectiveUserId(user), id, dto.content);
+    return this.projectsService.createNote(resolveWorkspaceId(user), id, dto.content);
   }
 
   @Delete(':id/notes/:noteId')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteNote(@CurrentUser() user: User, @Param('id') id: string, @Param('noteId') noteId: string) {
-    return this.projectsService.deleteNote(effectiveUserId(user), id, noteId);
+    return this.projectsService.deleteNote(resolveWorkspaceId(user), id, noteId);
   }
 }

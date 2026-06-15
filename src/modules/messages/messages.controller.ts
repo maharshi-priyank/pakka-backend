@@ -2,7 +2,7 @@ import { Controller, Get, Post, Patch, Param, Body, HttpCode, HttpStatus } from 
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger'
 import { User } from '@prisma/client'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
-import { effectiveUserId } from '../users/effective-user-id'
+import { resolveWorkspaceId } from '../users/resolve-workspace-id'
 import { MessagesService } from './messages.service'
 import { SendMessageDto } from './dto/send-message.dto'
 
@@ -14,18 +14,18 @@ export class MessagesController {
 
   @Get()
   listThreads(@CurrentUser() user: User) {
-    return this.messagesService.listThreads(effectiveUserId(user))
+    return this.messagesService.listThreads(resolveWorkspaceId(user))
   }
 
   @Get('unread-count')
   async getUnreadCount(@CurrentUser() user: User) {
-    const count = await this.messagesService.getUnreadCount(effectiveUserId(user))
+    const count = await this.messagesService.getUnreadCount(resolveWorkspaceId(user))
     return { count }
   }
 
   @Get(':clientId')
   getThread(@CurrentUser() user: User, @Param('clientId') clientId: string) {
-    return this.messagesService.getThread(effectiveUserId(user), clientId)
+    return this.messagesService.getThread(resolveWorkspaceId(user), clientId)
   }
 
   @Post(':clientId')
@@ -34,12 +34,12 @@ export class MessagesController {
     @Param('clientId') clientId: string,
     @Body() dto: SendMessageDto,
   ) {
-    return this.messagesService.sendMessage(effectiveUserId(user), clientId, dto)
+    return this.messagesService.sendMessage(resolveWorkspaceId(user), clientId, dto)
   }
 
   @Patch(':clientId/read')
   @HttpCode(HttpStatus.NO_CONTENT)
   markRead(@CurrentUser() user: User, @Param('clientId') clientId: string) {
-    return this.messagesService.markRead(effectiveUserId(user), clientId)
+    return this.messagesService.markRead(resolveWorkspaceId(user), clientId)
   }
 }

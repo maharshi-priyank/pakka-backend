@@ -9,7 +9,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { effectiveUserId } from '../users/effective-user-id';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User, LeadStage } from '@prisma/client';
 import { IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -29,13 +29,13 @@ export class LeadsController {
   @Post()
   @ApiOperation({ summary: 'Create a new lead' })
   create(@CurrentUser() user: User, @Body() dto: CreateLeadDto) {
-    return this.leadsService.create(effectiveUserId(user), dto);
+    return this.leadsService.create(resolveWorkspaceId(user), dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List leads with optional filters and search' })
   findAll(@CurrentUser() user: User, @Query() query: QueryLeadsDto) {
-    return this.leadsService.findAll(effectiveUserId(user), query);
+    return this.leadsService.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get('pipeline-value')
@@ -47,44 +47,44 @@ export class LeadsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a single lead by ID' })
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.leadsService.findOne(effectiveUserId(user), id);
+    return this.leadsService.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update lead details' })
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateLeadDto) {
-    return this.leadsService.update(effectiveUserId(user), id, dto);
+    return this.leadsService.update(resolveWorkspaceId(user), id, dto);
   }
 
   @Patch(':id/stage')
   @ApiOperation({ summary: 'Move lead to a different Kanban stage' })
   updateStage(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateStageDto) {
-    return this.leadsService.updateStage(effectiveUserId(user), id, dto.stage);
+    return this.leadsService.updateStage(resolveWorkspaceId(user), id, dto.stage);
   }
 
   @Post(':id/convert-to-client')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Convert a lead to a client and optionally create a project' })
   convertToClient(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ConvertLeadDto) {
-    return this.leadsService.convertToClient(effectiveUserId(user), id, dto);
+    return this.leadsService.convertToClient(resolveWorkspaceId(user), id, dto);
   }
 
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive a lead' })
   archive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.leadsService.archive(effectiveUserId(user), id);
+    return this.leadsService.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
   @ApiOperation({ summary: 'Unarchive a lead' })
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.leadsService.unarchive(effectiveUserId(user), id);
+    return this.leadsService.unarchive(resolveWorkspaceId(user), id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Permanently delete a lead (no linked records)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.leadsService.remove(effectiveUserId(user), id);
+    return this.leadsService.remove(resolveWorkspaceId(user), id);
   }
 }

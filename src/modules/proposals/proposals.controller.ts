@@ -10,7 +10,7 @@ import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { QueryProposalsDto } from './dto/query-proposals.dto';
 import { VerifyDepositDto } from './dto/verify-deposit.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { effectiveUserId } from '../users/effective-user-id';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '@prisma/client';
 
@@ -23,51 +23,51 @@ export class ProposalsController {
   @Post()
   @ApiOperation({ summary: 'Create a new proposal' })
   create(@CurrentUser() user: User, @Body() dto: CreateProposalDto) {
-    return this.svc.create(effectiveUserId(user), dto);
+    return this.svc.create(resolveWorkspaceId(user), dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List proposals' })
   findAll(@CurrentUser() user: User, @Query() query: QueryProposalsDto) {
-    return this.svc.findAll(effectiveUserId(user), query);
+    return this.svc.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a proposal by ID (authenticated)' })
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.findOne(effectiveUserId(user), id);
+    return this.svc.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update proposal content or status' })
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateProposalDto) {
-    return this.svc.update(effectiveUserId(user), id, dto);
+    return this.svc.update(resolveWorkspaceId(user), id, dto);
   }
 
   @Post(':id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark proposal as sent and return shareable link' })
   send(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.send(effectiveUserId(user), id);
+    return this.svc.send(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive a proposal' })
   archive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.archive(effectiveUserId(user), id);
+    return this.svc.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
   @ApiOperation({ summary: 'Unarchive a proposal' })
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.unarchive(effectiveUserId(user), id);
+    return this.svc.unarchive(resolveWorkspaceId(user), id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a proposal (no linked contracts)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.remove(effectiveUserId(user), id);
+    return this.svc.remove(resolveWorkspaceId(user), id);
   }
 
   // ── Public routes (no auth) ──────────────────────────────────────────────

@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { TasksService, CreateTaskDto, UpdateTaskDto, ListTasksQuery } from './tasks.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { effectiveUserId } from '../users/effective-user-id';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User } from '@prisma/client';
 
 @Controller('tasks')
@@ -16,7 +16,7 @@ export class TasksController {
     @CurrentUser() user: User,
     @Query() query: ListTasksQuery,
   ) {
-    return this.tasksService.list(effectiveUserId(user), query);
+    return this.tasksService.list(resolveWorkspaceId(user), query);
   }
 
   @Post()
@@ -24,7 +24,7 @@ export class TasksController {
     @CurrentUser() user: User,
     @Body() body: CreateTaskDto,
   ) {
-    return this.tasksService.create(effectiveUserId(user), body);
+    return this.tasksService.create(resolveWorkspaceId(user), body);
   }
 
   @Get(':id')
@@ -32,7 +32,7 @@ export class TasksController {
     @CurrentUser() user: User,
     @Param('id') id: string,
   ) {
-    return this.tasksService.findOne(effectiveUserId(user), id);
+    return this.tasksService.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
@@ -41,7 +41,7 @@ export class TasksController {
     @Param('id') id: string,
     @Body() body: UpdateTaskDto,
   ) {
-    return this.tasksService.update(effectiveUserId(user), id, body);
+    return this.tasksService.update(resolveWorkspaceId(user), id, body);
   }
 
   @Delete(':id')
@@ -50,6 +50,6 @@ export class TasksController {
     @CurrentUser() user: User,
     @Param('id') id: string,
   ) {
-    return this.tasksService.remove(effectiveUserId(user), id);
+    return this.tasksService.remove(resolveWorkspaceId(user), id);
   }
 }
