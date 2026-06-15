@@ -29,7 +29,7 @@ export class EmailService {
   }
 
   async send(opts: {
-    userId:      string
+    workspaceId: string
     to:          string
     subject:     string
     html:        string
@@ -59,7 +59,7 @@ export class EmailService {
   }
 
   private async log(opts: {
-    userId:      string
+    workspaceId: string
     to:          string
     subject:     string
     templateKey: string
@@ -70,7 +70,7 @@ export class EmailService {
   }) {
     await this.prisma.emailLog.create({
       data: {
-        workspaceId: opts.userId,
+        workspaceId: opts.workspaceId,
         to:          opts.to,
         subject:     opts.subject,
         templateKey: opts.templateKey,

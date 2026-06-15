@@ -66,7 +66,7 @@ export class TeamService {
     const senderName = owner.businessName ?? owner.name
 
     await this.email.send({
-      userId:      owner.id,
+      workspaceId: owner.id,
       templateKey: 'team_invite',
       to:      email,
       subject: `${senderName} invited you to join their ClearWork workspace`,
@@ -93,7 +93,13 @@ export class TeamService {
   async removeMember(ownerId: string, memberId: string) {
     const member = await this.prisma.user.findFirst({ where: { id: memberId, ownerId } })
     if (!member) throw new NotFoundException('Team member not found.')
-    await this.prisma.user.update({ where: { id: memberId }, data: { ownerId: null } })
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: memberId },
+        data:  { ownerId: null, activeWorkspaceId: memberId }, // reset to their own workspace
+      }),
+      this.prisma.workspaceMember.deleteMany({ where: { userId: memberId, workspaceId: ownerId } }),
+    ])
     return { message: 'Team member removed.' }
   }
 
@@ -130,8 +136,16 @@ export class TeamService {
     if (user.ownerId) throw new BadRequestException('You are already a member of another workspace.')
 
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { ownerId: invite.ownerId } }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data:  { ownerId: invite.ownerId, activeWorkspaceId: invite.ownerId },
+      }),
       this.prisma.teamInvite.update({ where: { token }, data: { accepted: true } }),
+      this.prisma.workspaceMember.upsert({
+        where:  { userId_workspaceId: { userId, workspaceId: invite.ownerId } },
+        create: { userId, workspaceId: invite.ownerId, role: 'MEMBER' },
+        update: {},
+      }),
     ])
 
     return { message: 'You have joined the workspace.' }
@@ -140,7 +154,14 @@ export class TeamService {
   async leaveTeam(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user?.ownerId) throw new BadRequestException('You are not a team member.')
-    await this.prisma.user.update({ where: { id: userId }, data: { ownerId: null } })
+    const ownerId = user.ownerId
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data:  { ownerId: null, activeWorkspaceId: userId }, // reset to their own workspace
+      }),
+      this.prisma.workspaceMember.deleteMany({ where: { userId, workspaceId: ownerId } }),
+    ])
     return { message: 'You have left the workspace.' }
   }
 }

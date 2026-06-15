@@ -130,7 +130,7 @@ export class EmailTemplatesService {
     }
 
     await this.emailService.send({
-      userId: workspaceId,
+      workspaceId,
       to,
       subject: `[TEST] ${subject}`,
       html,

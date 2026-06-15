@@ -99,7 +99,7 @@ export class MessagesService {
          </table>`
       const html = layout(content, user.businessName ?? user.name, `New message from ${user.businessName ?? user.name}`)
       void this.emailService.send({
-        userId:      workspaceId,
+        workspaceId,
         to:          client.email,
         subject,
         html,
@@ -187,7 +187,7 @@ export class MessagesService {
          </table>`
       const html = layout(content, user.businessName ?? user.name, replySubject)
       void this.emailService.send({
-        userId:      client.workspaceId,
+        workspaceId: client.workspaceId,
         to:          user.email,
         subject:     replySubject,
         html,

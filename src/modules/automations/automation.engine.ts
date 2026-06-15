@@ -242,7 +242,7 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ userId: workspaceId, to, subject, html, templateKey, entityId, entityType })
+    await this.email.send({ workspaceId, to, subject, html, templateKey, entityId, entityType })
   }
 
   // ─── Action: send email to user (owner) ───────────────────────────────────
@@ -289,7 +289,7 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ userId: workspaceId, to: user.email, subject, html, templateKey, entityId, entityType })
+    await this.email.send({ workspaceId, to: user.email, subject, html, templateKey, entityId, entityType })
   }
 
   // ─── Meeting: confirmation email to client/lead + guests ─────────────────
@@ -362,10 +362,10 @@ export class AutomationEngine {
       if (outlookCal) {
         const sent = await outlookCal.sendEmail(workspaceId, { to: recipient.email, subject, html })
         if (!sent) {
-          await this.email.send({ userId: workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+          await this.email.send({ workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
         }
       } else {
-        await this.email.send({ userId: workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+        await this.email.send({ workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
       }
     }
   }
@@ -407,7 +407,7 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ userId: workspaceId, to: user.email, subject, html, templateKey, entityId: workspaceId, entityType: 'user' })
+    await this.email.send({ workspaceId, to: user.email, subject, html, templateKey, entityId: workspaceId, entityType: 'user' })
   }
 
   // ─── Action: auto-create contract ─────────────────────────────────────────

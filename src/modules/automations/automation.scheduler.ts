@@ -47,7 +47,7 @@ export class AutomationScheduler {
       }
 
       await this.email.send({
-        userId:      m.workspaceId,
+        workspaceId: m.workspaceId,
         to:          user.email,
         subject:     `Reminder: "${m.title}" starts in 1 hour`,
         html:        renderTemplate('meeting_reminder', vars).html,
@@ -60,7 +60,7 @@ export class AutomationScheduler {
       if (clientEmail) {
         const clientName = m.client?.name ?? (m.lead as { name?: string } | null)?.name ?? 'there'
         await this.email.send({
-          userId:      m.workspaceId,
+          workspaceId: m.workspaceId,
           to:          clientEmail,
           subject:     `Reminder: "${m.title}" starts in 1 hour`,
           html:        renderTemplate('meeting_reminder', { ...vars, recipientName: clientName }).html,
@@ -357,7 +357,7 @@ export class AutomationScheduler {
         }
         const { subject, html } = renderTemplate('lead_cold_alert', vars)
         await this.email.send({
-          userId:     rule.workspaceId,
+          workspaceId: rule.workspaceId,
           to:         ruleUser.email,
           subject,
           html,

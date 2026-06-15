@@ -285,7 +285,7 @@ export class WorkflowEngine {
     }
     if (!to) return
 
-    await this.email.send({ userId: workspaceId, to, subject, html, templateKey: 'workflow_custom', entityId, entityType })
+    await this.email.send({ workspaceId, to, subject, html, templateKey: 'workflow_custom', entityId, entityType })
   }
 
   private async resolveClientEmail(entityId: string, entityType: string): Promise<string> {
@@ -329,7 +329,7 @@ export class WorkflowEngine {
 
     const subject = `${user.businessName ?? user.name} sent you a form`
     const html    = `<p>Hi there,</p><p>Please fill out this form: <a href="${formLink}">${form.title}</a></p>`
-    await this.email.send({ userId: workspaceId, to, subject, html, templateKey: 'workflow_send_form', entityId, entityType })
+    await this.email.send({ workspaceId, to, subject, html, templateKey: 'workflow_send_form', entityId, entityType })
   }
 
   private async changeLeadStage(config: Record<string, unknown>, entityId: string) {
