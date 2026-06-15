@@ -261,6 +261,8 @@ model User {
 
   assignedTasks           Task[]       @relation("TaskAssignee")
   emailSignature          String?
+  leadProviderKeys        LeadProviderKey[]
+  leadCampaigns           LeadCampaign[]
 
   @@map("users")
 }
@@ -1029,6 +1031,73 @@ model WaitlistSignup {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("waitlist_signups")
+}
+
+// ── Lead Finder (BYOK) ────────────────────────────────────────────────────────
+
+model LeadProviderKey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String
+  encryptedKey String
+  status       String    @default("active")
+  lastTestedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@map("lead_provider_keys")
+}
+
+enum CampaignStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+model LeadCampaign {
+  id            String         @id @default(cuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  filters       Json           @default("{}")
+  providers     String[]       @default([])
+  status        CampaignStatus @default(PENDING)
+  totalFound    Int            @default(0)
+  totalImported Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  leads         DiscoveredLead[]
+
+  @@map("lead_campaigns")
+}
+
+model DiscoveredLead {
+  id                String       @id @default(cuid())
+  campaignId        String
+  campaign          LeadCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId            String
+  source            String
+  businessName      String?
+  website           String?
+  email             String?
+  phone             String?
+  contactName       String?
+  contactTitle      String?
+  companySize       String?
+  location          String?
+  linkedinUrl       String?
+  techStack         String[]     @default([])
+  intentSignals     Json         @default("[]")
+  intentScore       Int          @default(0)
+  description       String?
+  industry          String?
+  importedAsLeadId  String?
+  createdAt         DateTime     @default(now())
+
+  @@map("discovered_leads")
 }
 
 model PublicProfileEnquiry {

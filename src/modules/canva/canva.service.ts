@@ -212,8 +212,8 @@ export class CanvaService {
     this.logger.log(`[export] PDF downloaded, size=${pdfBuffer.byteLength} bytes`);
 
     // Step 4: upload to Supabase Storage via REST API
-    const supabaseUrl    = this.config.getOrThrow<string>('supabase.url');
-    const serviceRoleKey = this.config.getOrThrow<string>('supabase.serviceRoleKey');
+    const supabaseUrl    = this.config.getOrThrow<string>('supabase.url').trim();
+    const serviceRoleKey = this.config.getOrThrow<string>('supabase.serviceRoleKey').trim();
 
     const safeName    = (designTitle || 'design').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
     const rand        = Math.random().toString(36).slice(2, 10);
