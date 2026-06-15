@@ -25,9 +25,43 @@ enum DiscountType {
   PERCENTAGE
 }
 
-enum WorkspaceRole {
+enum LegacyMemberRole {
   OWNER
   MEMBER
+}
+
+enum Permission {
+  VIEW_LEADS
+  MANAGE_LEADS
+  VIEW_CLIENTS
+  MANAGE_CLIENTS
+  VIEW_PROJECTS
+  MANAGE_PROJECTS
+  VIEW_TASKS
+  MANAGE_TASKS
+  VIEW_INBOX
+  SEND_MESSAGES
+  VIEW_PROPOSALS
+  MANAGE_PROPOSALS
+  SEND_PROPOSALS
+  VIEW_CONTRACTS
+  MANAGE_CONTRACTS
+  SEND_CONTRACTS
+  VIEW_INVOICES
+  MANAGE_INVOICES
+  SEND_INVOICES
+  RECORD_PAYMENTS
+  VIEW_REPORTS
+  VIEW_CALENDAR
+  MANAGE_CALENDAR
+  VIEW_FORMS
+  MANAGE_FORMS
+  VIEW_AUTOMATIONS
+  MANAGE_AUTOMATIONS
+  MANAGE_WORKSPACE_SETTINGS
+  MANAGE_BILLING
+  MANAGE_MEMBERS
+  MANAGE_INTEGRATIONS
 }
 
 model Workspace {
@@ -91,12 +125,39 @@ model Workspace {
   @@map("workspaces")
 }
 
+model WorkspaceRole {
+  id          String                    @id @default(cuid())
+  key         String                    @unique
+  name        String
+  description String?
+  isSystem    Boolean                   @default(true)
+  sortOrder   Int                       @default(0)
+  permissions WorkspaceRolePermission[]
+  members     WorkspaceMember[]
+  createdAt   DateTime                  @default(now())
+
+  @@map("workspace_roles")
+}
+
+model WorkspaceRolePermission {
+  id         String        @id @default(cuid())
+  roleId     String
+  role       WorkspaceRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission
+
+  @@unique([roleId, permission])
+  @@index([roleId])
+  @@map("workspace_role_permissions")
+}
+
 model WorkspaceMember {
-  id          String        @id @default(cuid())
-  userId      String
-  workspaceId String
-  role        WorkspaceRole @default(MEMBER)
-  joinedAt    DateTime      @default(now())
+  id              String           @id @default(cuid())
+  userId          String
+  workspaceId     String
+  role            LegacyMemberRole @default(MEMBER)
+  workspaceRoleId String
+  workspaceRole   WorkspaceRole    @relation(fields: [workspaceRoleId], references: [id])
+  joinedAt        DateTime         @default(now())
 
   user      User      @relation(fields: [userId],      references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -947,14 +1008,15 @@ model Attachment {
 }
 
 model TeamInvite {
-  id        String   @id @default(cuid())
-  ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  email     String
-  token     String   @unique
-  accepted  Boolean  @default(false)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  email           String
+  token           String   @unique
+  accepted        Boolean  @default(false)
+  expiresAt       DateTime
+  workspaceRoleId String?
+  createdAt       DateTime @default(now())
 
   @@unique([ownerId, email])
   @@map("team_invites")
