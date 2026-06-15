@@ -10,9 +10,9 @@ import { FromProposalDto } from './dto/from-proposal.dto';
 export class ProposalTemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(userId: string) {
+  async list(workspaceId: string) {
     const userTemplates = await this.prisma.proposalTemplate.findMany({
-      where:   { userId },
+      where:   { workspaceId },
       orderBy: { createdAt: 'desc' },
     });
     return [
@@ -21,16 +21,16 @@ export class ProposalTemplatesService {
     ];
   }
 
-  async findOne(userId: string, id: string) {
-    const template = await this.prisma.proposalTemplate.findFirst({ where: { id, userId } });
+  async findOne(workspaceId: string, id: string) {
+    const template = await this.prisma.proposalTemplate.findFirst({ where: { id, workspaceId } });
     if (!template) throw new NotFoundException('Template not found');
     return { ...template, isSystem: false, totalAmount: Number(template.totalAmount) };
   }
 
-  async create(userId: string, dto: CreateTemplateDto) {
+  async create(workspaceId: string, dto: CreateTemplateDto) {
     const template = await this.prisma.proposalTemplate.create({
       data: {
-        userId,
+        workspaceId,
         name:        dto.name,
         description: dto.description,
         category:    dto.category,
@@ -41,10 +41,10 @@ export class ProposalTemplatesService {
     return { ...template, isSystem: false, totalAmount: Number(template.totalAmount) };
   }
 
-  async update(userId: string, id: string, dto: UpdateTemplateDto) {
+  async update(workspaceId: string, id: string, dto: UpdateTemplateDto) {
     const template = await this.prisma.proposalTemplate.findUnique({ where: { id } });
     if (!template) throw new NotFoundException('Template not found');
-    if (template.userId !== userId) throw new ForbiddenException();
+    if (template.workspaceId !== workspaceId) throw new ForbiddenException();
 
     const updated = await this.prisma.proposalTemplate.update({
       where: { id },
@@ -59,21 +59,21 @@ export class ProposalTemplatesService {
     return { ...updated, isSystem: false, totalAmount: Number(updated.totalAmount) };
   }
 
-  async remove(userId: string, id: string) {
+  async remove(workspaceId: string, id: string) {
     const template = await this.prisma.proposalTemplate.findUnique({ where: { id } });
     if (!template) throw new NotFoundException('Template not found');
-    if (template.userId !== userId) throw new ForbiddenException();
+    if (template.workspaceId !== workspaceId) throw new ForbiddenException();
     await this.prisma.proposalTemplate.delete({ where: { id } });
     return { success: true };
   }
 
-  async fromProposal(userId: string, proposalId: string, dto: FromProposalDto) {
-    const proposal = await this.prisma.proposal.findFirst({ where: { id: proposalId, userId } });
+  async fromProposal(workspaceId: string, proposalId: string, dto: FromProposalDto) {
+    const proposal = await this.prisma.proposal.findFirst({ where: { id: proposalId, workspaceId } });
     if (!proposal) throw new NotFoundException('Proposal not found');
 
     const template = await this.prisma.proposalTemplate.create({
       data: {
-        userId,
+        workspaceId,
         name:        dto.name,
         description: dto.description,
         category:    dto.category,
@@ -84,9 +84,9 @@ export class ProposalTemplatesService {
     return { ...template, isSystem: false, totalAmount: Number(template.totalAmount) };
   }
 
-  async incrementUsage(userId: string, id: string) {
+  async incrementUsage(workspaceId: string, id: string) {
     if (id.startsWith('system:')) return;
-    const template = await this.prisma.proposalTemplate.findFirst({ where: { id, userId } });
+    const template = await this.prisma.proposalTemplate.findFirst({ where: { id, workspaceId } });
     if (!template) return;
     await this.prisma.proposalTemplate.update({ where: { id }, data: { usageCount: { increment: 1 } } });
   }

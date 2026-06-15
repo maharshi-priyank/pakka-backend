@@ -9,10 +9,10 @@ type AttachmentWithGate = Attachment & { gateInvoice?: { status: string } | null
 export class AttachmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, dto: CreateAttachmentDto) {
+  async create(workspaceId: string, dto: CreateAttachmentDto) {
     return this.prisma.attachment.create({
       data: {
-        userId,
+        workspaceId,
         projectId:    dto.projectId,
         proposalId:   dto.proposalId,
         invoiceId:    dto.invoiceId,
@@ -26,17 +26,17 @@ export class AttachmentsService {
     })
   }
 
-  async list(userId: string, query: { projectId?: string; proposalId?: string; invoiceId?: string; clientId?: string }) {
+  async list(workspaceId: string, query: { projectId?: string; proposalId?: string; invoiceId?: string; clientId?: string }) {
     return this.prisma.attachment.findMany({
-      where: { userId, ...query },
+      where: { workspaceId, ...query },
       orderBy: { createdAt: 'asc' },
     })
   }
 
-  async remove(userId: string, id: string) {
+  async remove(workspaceId: string, id: string) {
     const attachment = await this.prisma.attachment.findUnique({ where: { id } })
     if (!attachment) throw new NotFoundException('Attachment not found')
-    if (attachment.userId !== userId) throw new ForbiddenException()
+    if (attachment.workspaceId !== workspaceId) throw new ForbiddenException()
     await this.prisma.attachment.delete({ where: { id } })
   }
 

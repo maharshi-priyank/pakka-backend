@@ -71,13 +71,13 @@ export class AutomationsService {
     private readonly config:  ConfigService,
   ) {}
 
-  async seedDefaultRules(userId: string): Promise<void> {
+  async seedDefaultRules(workspaceId: string): Promise<void> {
     await Promise.all(
       DEFAULT_AUTOMATION_RULES.map((rule) =>
         this.prisma.automationRule.upsert({
-          where:  { userId_key: { userId, key: rule.key } },
+          where:  { workspaceId_key: { workspaceId, key: rule.key } },
           create: {
-            userId,
+            workspaceId,
             ...rule,
             triggerConfig: rule.triggerConfig as Prisma.InputJsonValue,
             actionConfig:  rule.actionConfig  as Prisma.InputJsonValue,
@@ -88,9 +88,9 @@ export class AutomationsService {
     )
   }
 
-  async findAll(userId: string, category?: string) {
+  async findAll(workspaceId: string, category?: string) {
     const rules = await this.prisma.automationRule.findMany({
-      where:   { userId, ...(category ? { category } : {}) },
+      where:   { workspaceId, ...(category ? { category } : {}) },
       orderBy: [{ category: 'asc' }, { key: 'asc' }],
       include: { _count: { select: { executions: true } } },
     })
@@ -104,15 +104,15 @@ export class AutomationsService {
     return grouped
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const rule = await this.prisma.automationRule.findUnique({ where: { id } })
     if (!rule) throw new NotFoundException('Automation rule not found')
-    if (rule.userId !== userId) throw new ForbiddenException()
+    if (rule.workspaceId !== workspaceId) throw new ForbiddenException()
     return rule
   }
 
-  async update(userId: string, id: string, dto: UpdateAutomationDto) {
-    await this.findOne(userId, id)
+  async update(workspaceId: string, id: string, dto: UpdateAutomationDto) {
+    await this.findOne(workspaceId, id)
     return this.prisma.automationRule.update({
       where: { id },
       data: {
@@ -124,8 +124,8 @@ export class AutomationsService {
     })
   }
 
-  async getExecutions(userId: string, ruleId: string, limit = 20) {
-    await this.findOne(userId, ruleId)
+  async getExecutions(workspaceId: string, ruleId: string, limit = 20) {
+    await this.findOne(workspaceId, ruleId)
     return this.prisma.automationExecution.findMany({
       where:   { ruleId },
       orderBy: { firedAt: 'desc' },
@@ -174,12 +174,12 @@ export class AutomationsService {
     return rules.slice(0, 3)
   }
 
-  async createFromAI(userId: string, rules: GeneratedRule[]) {
+  async createFromAI(workspaceId: string, rules: GeneratedRule[]) {
     const created = await Promise.all(
       rules.map((rule) =>
         this.prisma.automationWorkflow.create({
           data: {
-            userId,
+            workspaceId,
             name:        rule.name,
             description: rule.description,
             isActive:    false,

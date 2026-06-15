@@ -104,7 +104,7 @@ export class GoogleDocsService {
 
   async exportProposal(userId: string, proposalId: string): Promise<{ docUrl: string; docId: string }> {
     const proposal = await this.prisma.proposal.findFirst({
-      where:   { id: proposalId, userId },
+      where:   { id: proposalId, workspaceId: userId },
       include: { client: true },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
@@ -128,7 +128,7 @@ export class GoogleDocsService {
 
   async exportContract(userId: string, contractId: string): Promise<{ docUrl: string; docId: string }> {
     const contract = await this.prisma.contract.findFirst({
-      where:   { id: contractId, userId },
+      where:   { id: contractId, workspaceId: userId },
       include: { client: true },
     });
     if (!contract) throw new NotFoundException('Contract not found');

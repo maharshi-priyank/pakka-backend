@@ -62,13 +62,13 @@ export class NotificationsController {
     await this.prisma.pushSubscription.upsert({
       where:  { endpoint: body.endpoint },
       update: {
-        userId:    user.id,
+        workspaceId: user.id,
         p256dh:    body.keys.p256dh,
         auth:      body.keys.auth,
         userAgent: body.userAgent ?? null,
       },
       create: {
-        userId:    user.id,
+        workspaceId: user.id,
         endpoint:  body.endpoint,
         p256dh:    body.keys.p256dh,
         auth:      body.keys.auth,
@@ -82,7 +82,7 @@ export class NotificationsController {
   async unsubscribe(@CurrentUser() user: User, @Body() body: { endpoint: string }) {
     if (!body?.endpoint) return;
     await this.prisma.pushSubscription.deleteMany({
-      where: { userId: user.id, endpoint: body.endpoint },
+      where: { workspaceId: user.id, endpoint: body.endpoint },
     });
   }
 

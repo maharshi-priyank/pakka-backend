@@ -62,6 +62,32 @@ model Workspace {
   members     WorkspaceMember[]
   activeUsers User[]           @relation("ActiveWorkspace")
 
+  leads               Lead[]
+  clients             Client[]
+  proposals           Proposal[]
+  contracts           Contract[]
+  invoices            Invoice[]
+  automationRules     AutomationRule[]
+  automationWorkflows AutomationWorkflow[]
+  notifications       Notification[]
+  pushSubscriptions   PushSubscription[]
+  meetings            Meeting[]
+  proposalTemplates   ProposalTemplate[]
+  promoRedemptions    PromoRedemption[]
+  intakeForms         IntakeForm[]
+  timeEntries         TimeEntry[]
+  expenses            Expense[]
+  expenseCategories   UserExpenseCategory[]
+  projects            Project[]
+  emailTemplates      EmailTemplate[]
+  attachments         Attachment[]
+  clientNotes         ClientNote[]
+  projectNotes        ProjectNote[]
+  profileEnquiries    PublicProfileEnquiry[]
+  tasks               Task[]
+  taskBoards          TaskBoard[]
+  threads             Thread[]
+
   @@map("workspaces")
 }
 
@@ -172,32 +198,7 @@ model User {
   activeWorkspace          Workspace?        @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
   workspaceMemberships     WorkspaceMember[]
 
-  leads                   Lead[]
-  clients                 Client[]
-  proposals               Proposal[]
-  contracts               Contract[]
-  invoices                Invoice[]
-  automationRules         AutomationRule[]
-  automationWorkflows     AutomationWorkflow[]
-  notifications           Notification[]
-  pushSubscriptions       PushSubscription[]
-  meetings                Meeting[]
-  proposalTemplates       ProposalTemplate[]
-  promoRedemptions        PromoRedemption[]
-  intakeForms             IntakeForm[]
-  timeEntries             TimeEntry[]
-  expenses                Expense[]
-  expenseCategories       UserExpenseCategory[]
-  projects                Project[]
-  emailTemplates          EmailTemplate[]
-  attachments             Attachment[]
-  clientNotes             ClientNote[]
-  projectNotes            ProjectNote[]
-  profileEnquiries        PublicProfileEnquiry[]
-  tasks                   Task[]
-  taskBoards              TaskBoard[]
   assignedTasks           Task[]       @relation("TaskAssignee")
-  threads                 Thread[]
   emailSignature          String?
 
   @@map("users")
@@ -229,7 +230,7 @@ model BillingEvent {
   id          String   @id @default(cuid())
   eventType   String
   cashfreeRef String   @unique
-  userId      String?
+  workspaceId String?
   payload     Json
   processedAt DateTime @default(now())
 
@@ -237,21 +238,21 @@ model BillingEvent {
 }
 
 model PromoRedemption {
-  id         String    @id @default(cuid())
-  codeId     String
-  code       PromoCode @relation(fields: [codeId], references: [id])
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  redeemedAt DateTime  @default(now())
+  id          String    @id @default(cuid())
+  codeId      String
+  code        PromoCode @relation(fields: [codeId], references: [id])
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  redeemedAt  DateTime  @default(now())
 
-  @@unique([codeId, userId])
+  @@unique([codeId, workspaceId])
   @@map("promo_redemptions")
 }
 
 model IntakeForm {
   id          String                 @id @default(cuid())
-  userId      String
-  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   title       String
   description String?
   token       String                 @unique
@@ -280,9 +281,9 @@ model IntakeFormSubmission {
 }
 
 model Notification {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   type       String
   title      String
   body       String
@@ -295,9 +296,9 @@ model Notification {
 }
 
 model PushSubscription {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   endpoint  String   @unique
   p256dh    String
   auth      String
@@ -305,14 +306,14 @@ model PushSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@index([workspaceId])
   @@map("push_subscriptions")
 }
 
 model Client {
   id          String     @id @default(cuid())
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   email       String?
   phone       String?
@@ -336,15 +337,15 @@ model Client {
   notes       ClientNote[]
   threads     Thread[]
 
-  @@index([userId])
-  @@index([userId, archivedAt])
+  @@index([workspaceId])
+  @@index([workspaceId, archivedAt])
   @@map("clients")
 }
 
 model Lead {
   id             String     @id @default(cuid())
-  userId         String
-  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId    String
+  workspace      Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   clientId       String?
   client         Client?    @relation(fields: [clientId], references: [id])
   name           String
@@ -365,9 +366,9 @@ model Lead {
   proposals      Proposal[]
   meetings       Meeting[]
 
-  @@index([userId])
-  @@index([userId, archivedAt, stage])
-  @@index([userId, followUpAt])
+  @@index([workspaceId])
+  @@index([workspaceId, archivedAt, stage])
+  @@index([workspaceId, followUpAt])
   @@index([clientId])
   @@map("leads")
 }
@@ -382,8 +383,8 @@ enum LeadStage {
 
 model Proposal {
   id          String         @id @default(cuid())
-  userId      String
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   leadId      String?
   lead        Lead?          @relation(fields: [leadId], references: [id])
   clientId    String?
@@ -410,8 +411,8 @@ model Proposal {
   contracts       Contract[]
   attachments     Attachment[]
 
-  @@index([userId, status])
-  @@index([userId, archivedAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, archivedAt])
   @@index([clientId])
   @@index([projectId])
   @@index([leadId])
@@ -442,8 +443,8 @@ model ProposalOpen {
 
 model Contract {
   id         String         @id @default(cuid())
-  userId     String
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   proposalId String?
   proposal   Proposal?      @relation(fields: [proposalId], references: [id])
   clientId   String?
@@ -462,8 +463,8 @@ model Contract {
   archivedAt DateTime?
   invoices   Invoice[]
 
-  @@index([userId, status])
-  @@index([userId, archivedAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, archivedAt])
   @@index([clientId])
   @@index([projectId])
   @@index([proposalId])
@@ -480,8 +481,8 @@ enum ContractStatus {
 
 model Invoice {
   id                String        @id @default(cuid())
-  userId            String
-  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId       String
+  workspace         Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contractId        String?
   contract          Contract?     @relation(fields: [contractId], references: [id])
   clientId          String?
@@ -519,8 +520,8 @@ model Invoice {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  @@index([userId, status])
-  @@index([userId, dueDate])
+  @@index([workspaceId, status])
+  @@index([workspaceId, dueDate])
   @@index([clientId])
   @@index([projectId])
   @@index([contractId])
@@ -545,9 +546,9 @@ enum GstType {
 }
 
 model AutomationRule {
-  id            String                @id @default(cuid())
-  userId        String
-  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String                @id @default(cuid())
+  workspaceId String
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   key           String
   name          String
   description   String?
@@ -564,7 +565,7 @@ model AutomationRule {
   updatedAt     DateTime              @updatedAt
   executions    AutomationExecution[]
 
-  @@unique([userId, key])
+  @@unique([workspaceId, key])
   @@map("automation_rules")
 }
 
@@ -591,7 +592,7 @@ enum ExecutionStatus {
 
 model EmailLog {
   id          String   @id @default(cuid())
-  userId      String
+  workspaceId String
   to          String
   subject     String
   templateKey String
@@ -606,8 +607,8 @@ model EmailLog {
 
 model Meeting {
   id            String        @id @default(cuid())
-  userId        String
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   leadId        String?
   lead          Lead?         @relation(fields: [leadId], references: [id])
   clientId      String?
@@ -626,8 +627,8 @@ model Meeting {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  @@index([userId, clientId])
-  @@index([userId, scheduledAt])
+  @@index([workspaceId, clientId])
+  @@index([workspaceId, scheduledAt])
   @@index([leadId])
   @@map("meetings")
 }
@@ -639,35 +640,35 @@ enum MeetingStatus {
 }
 
 model ProposalTemplate {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   description String?
   category    String?
   content     Json
-  totalAmount Decimal  @default(0) @db.Decimal(12, 2)
-  usageCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  totalAmount Decimal   @default(0) @db.Decimal(12, 2)
+  usageCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@index([userId])
+  @@index([workspaceId])
   @@map("proposal_templates")
 }
 
 model AutomationWorkflow {
-  id          String       @id @default(cuid())
-  userId      String
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  isActive    Boolean      @default(false)
-  trigger     Json         @default("{}")
-  steps       Json         @default("[]")
-  runCount    Int          @default(0)
+  isActive    Boolean       @default(false)
+  trigger     Json          @default("{}")
+  steps       Json          @default("[]")
+  runCount    Int           @default(0)
   lastRunAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   runs        WorkflowRun[]
 
   @@map("automation_workflows")
@@ -677,7 +678,7 @@ model WorkflowRun {
   id           String            @id @default(cuid())
   workflowId   String
   workflow     AutomationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  userId       String
+  workspaceId  String
   entityId     String
   entityType   String
   status       WorkflowRunStatus @default(RUNNING)
@@ -699,75 +700,75 @@ enum WorkflowRunStatus {
 }
 
 model TimeEntry {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   clientId     String?
-  client       Client?  @relation(fields: [clientId], references: [id])
+  client       Client?   @relation(fields: [clientId], references: [id])
   projectId    String?
-  project      Project? @relation(fields: [projectId], references: [id])
+  project      Project?  @relation(fields: [projectId], references: [id])
   description  String
   date         DateTime
   durationMins Int
-  hourlyRate   Decimal? @db.Decimal(10, 2)
+  hourlyRate   Decimal?  @db.Decimal(10, 2)
   isBilled      Boolean  @default(false)
   invoiceId     String?
   clickupTaskId String?  @unique
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@index([userId])
-  @@index([userId, date])
+  @@index([workspaceId])
+  @@index([workspaceId, date])
   @@index([projectId])
   @@index([clientId])
   @@map("time_entries")
 }
 
 model Expense {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   clientId    String?
-  client      Client?  @relation(fields: [clientId], references: [id])
+  client      Client?   @relation(fields: [clientId], references: [id])
   projectId   String?
-  project     Project? @relation(fields: [projectId], references: [id])
+  project     Project?  @relation(fields: [projectId], references: [id])
   category    String
   description String
-  amount      Decimal  @db.Decimal(12, 2)
+  amount      Decimal   @db.Decimal(12, 2)
   date        DateTime
   receiptUrl  String?
-  isBillable  Boolean  @default(true)
-  isBilled    Boolean  @default(false)
+  isBillable  Boolean   @default(true)
+  isBilled    Boolean   @default(false)
   invoiceId   String?
   vendor      String?
-  gstRate     Decimal? @db.Decimal(5, 2)
-  gstAmount   Decimal? @db.Decimal(12, 2)
+  gstRate     Decimal?  @db.Decimal(5, 2)
+  gstAmount   Decimal?  @db.Decimal(12, 2)
   tdsSection  String?
-  tdsRate     Decimal? @db.Decimal(5, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  tdsRate     Decimal?  @db.Decimal(5, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@index([userId])
-  @@index([userId, date])
+  @@index([workspaceId])
+  @@index([workspaceId, date])
   @@index([projectId])
   @@index([clientId])
   @@map("expenses")
 }
 
 model UserExpenseCategory {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
 
-  @@unique([userId, name])
+  @@unique([workspaceId, name])
   @@map("user_expense_categories")
 }
 
 model Project {
   id          String        @id @default(cuid())
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   clientId    String?
   client      Client?       @relation(fields: [clientId], references: [id])
   name        String
@@ -791,8 +792,8 @@ model Project {
   tasks       Task[]
   taskBoards  TaskBoard[]
 
-  @@index([userId, status])
-  @@index([userId, archivedAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, archivedAt])
   @@index([clientId])
   @@map("projects")
 }
@@ -810,25 +811,25 @@ enum TaskStatus {
 }
 
 model Task {
-  id          String      @id @default(cuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   title       String
-  status      TaskStatus  @default(TODO)
+  status      TaskStatus   @default(TODO)
   dueDate     DateTime?
-  includeTime Boolean     @default(false)
-  isPrivate   Boolean     @default(false)
+  includeTime Boolean      @default(false)
+  isPrivate   Boolean      @default(false)
   projectId   String?
-  project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   columnId    String?
   column      BoardColumn? @relation(fields: [columnId], references: [id], onDelete: SetNull)
   position    Int          @default(0)
   assigneeId  String?
   assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  @@index([userId])
+  @@index([workspaceId])
   @@index([projectId])
   @@index([columnId])
   @@index([assigneeId])
@@ -836,19 +837,19 @@ model Task {
 }
 
 model TaskBoard {
-  id        String        @id @default(cuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId String?
-  project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  position  Int           @default(0)
-  columns   BoardColumn[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  archivedAt DateTime?
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  position    Int           @default(0)
+  columns     BoardColumn[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  archivedAt  DateTime?
 
-  @@index([userId])
+  @@index([workspaceId])
   @@index([projectId])
   @@map("task_boards")
 }
@@ -868,52 +869,52 @@ model BoardColumn {
 }
 
 model EmailTemplate {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   templateKey String
   subject     String
-  bodyHtml    String   @db.Text
-  updatedAt   DateTime @updatedAt
-  createdAt   DateTime @default(now())
+  bodyHtml    String    @db.Text
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
 
-  @@unique([userId, templateKey])
+  @@unique([workspaceId, templateKey])
   @@map("email_templates")
 }
 
 model ClientNote {
-  id        String   @id @default(cuid())
-  userId    String
-  clientId  String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(cuid())
+  workspaceId String
+  clientId    String
+  content     String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  user   User   @relation(fields: [userId],   references: [id], onDelete: Cascade)
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client    @relation(fields: [clientId],    references: [id], onDelete: Cascade)
 
-  @@index([userId, clientId])
+  @@index([workspaceId, clientId])
   @@map("client_notes")
 }
 
 model ProjectNote {
-  id        String   @id @default(cuid())
-  userId    String
-  projectId String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String    @id @default(cuid())
+  workspaceId String
+  projectId   String
+  content     String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  user    User    @relation(fields: [userId],    references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId],   references: [id], onDelete: Cascade)
 
-  @@index([userId, projectId])
+  @@index([workspaceId, projectId])
   @@map("project_notes")
 }
 
 model Attachment {
-  id         String   @id @default(cuid())
-  userId     String
+  id          String   @id @default(cuid())
+  workspaceId String
 
   // Polymorphic parent — exactly one of these should be set
   projectId  String?
@@ -930,14 +931,14 @@ model Attachment {
   mimeType  String
   createdAt DateTime @default(now())
 
-  user        User      @relation(fields: [userId],     references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project?  @relation(fields: [projectId],  references: [id], onDelete: Cascade)
   proposal    Proposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   invoice     Invoice?  @relation("InvoiceAttachments", fields: [invoiceId],     references: [id], onDelete: Cascade)
   client      Client?   @relation(fields: [clientId],   references: [id], onDelete: Cascade)
   gateInvoice Invoice?  @relation("InvoiceGate",        fields: [gateInvoiceId], references: [id])
 
-  @@index([userId])
+  @@index([workspaceId])
   @@index([clientId])
   @@index([projectId])
   @@index([invoiceId])
@@ -969,9 +970,9 @@ model WaitlistSignup {
 }
 
 model PublicProfileEnquiry {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   senderName    String
   senderPhone   String?
   senderEmail   String?
@@ -997,18 +998,18 @@ enum AttachmentType {
 }
 
 model Thread {
-  id        String    @id @default(cuid())
-  userId    String
-  clientId  String
-  subject   String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  workspaceId String
+  clientId    String
+  subject     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  user      User      @relation(fields: [userId],   references: [id], onDelete: Cascade)
-  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client    @relation(fields: [clientId],    references: [id], onDelete: Cascade)
   messages  Message[]
 
-  @@unique([userId, clientId])
+  @@unique([workspaceId, clientId])
   @@map("threads")
 }
 

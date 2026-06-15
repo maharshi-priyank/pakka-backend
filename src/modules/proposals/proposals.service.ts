@@ -48,11 +48,11 @@ export class ProposalsService {
     return new Razorpay({ key_id: keyId, key_secret: keySecret })
   }
 
-  async create(userId: string, dto: CreateProposalDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
+  async create(workspaceId: string, dto: CreateProposalDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: workspaceId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
     if (effectivePlan(user!) === 'FREE') {
       const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
-      const count = await this.prisma.proposal.count({ where: { userId, createdAt: { gte: start } } });
+      const count = await this.prisma.proposal.count({ where: { workspaceId, createdAt: { gte: start } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 proposals/month limit reached.', code: 'PLAN_LIMIT' }, 402);
     }
 
@@ -67,7 +67,7 @@ export class ProposalsService {
 
     return this.prisma.proposal.create({
       data: {
-        userId,
+        workspaceId,
         leadId:      dto.leadId,
         clientId:    dto.clientId,
         title:       dto.title,
@@ -85,12 +85,12 @@ export class ProposalsService {
     });
   }
 
-  async findAll(userId: string, query: QueryProposalsDto) {
+  async findAll(workspaceId: string, query: QueryProposalsDto) {
     const { page = 1, limit = 20, status, clientId, includeArchived } = query;
     const skip = (page - 1) * limit;
 
     const where = {
-      userId,
+      workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(status   && { status }),
       ...(clientId && { clientId }),
@@ -116,9 +116,9 @@ export class ProposalsService {
     return { items: proposals, total, page, limit };
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const proposal = await this.prisma.proposal.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: {
         lead:      { select: { id: true, name: true, email: true } },
         client:    true,
@@ -135,18 +135,22 @@ export class ProposalsService {
     const proposal = await this.prisma.proposal.findUnique({
       where: { slug },
       include: {
-        user:        { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true, planExpiresAt: true, subscriptionStatus: true } },
+        workspace:   { select: { name: true, businessName: true, logoUrl: true } },
         attachments: { orderBy: { createdAt: 'asc' }, select: { id: true, fileName: true, fileSize: true, mimeType: true, fileUrl: true, createdAt: true } },
       },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
-    const hideBranding = effectivePlan(proposal.user) === 'STUDIO';
-    const { planExpiresAt: _pe, subscriptionStatus: _ss, ...userPublic } = proposal.user;
+    const owner = await this.prisma.user.findUnique({
+      where: { id: proposal.workspaceId },
+      select: { email: true, plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
+    const hideBranding = effectivePlan(owner!) === 'STUDIO';
+    const userPublic = { ...proposal.workspace, email: owner?.email ?? null };
     return { ...proposal, user: userPublic, hideBranding };
   }
 
-  async update(userId: string, id: string, dto: UpdateProposalDto) {
-    const existing = await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateProposalDto) {
+    const existing = await this.findOne(workspaceId, id);
 
     const lineItems = dto.content?.lineItems ?? (existing.content as Record<string, unknown>)?.lineItems as LineItemDto[] ?? [];
     const gstType   = dto.content?.gstType ?? (existing.content as Record<string, unknown>)?.gstType as string ?? 'IGST';
@@ -172,8 +176,8 @@ export class ProposalsService {
     });
   }
 
-  async send(userId: string, id: string) {
-    const proposal = await this.findOne(userId, id);
+  async send(workspaceId: string, id: string) {
+    const proposal = await this.findOne(workspaceId, id);
     if (proposal.status === ProposalStatus.ACCEPTED) {
       throw new ForbiddenException('Cannot resend an accepted proposal');
     }
@@ -190,7 +194,7 @@ export class ProposalsService {
       });
     }
 
-    this.eventEmitter.emit('proposal.sent', { entityId: id, userId });
+    this.eventEmitter.emit('proposal.sent', { entityId: id, workspaceId });
     const appUrl = process.env.APP_URL ?? 'http://localhost:5175';
     return {
       proposal: updated,
@@ -198,8 +202,8 @@ export class ProposalsService {
     };
   }
 
-  async accept(userId: string, id: string) {
-    const proposal = await this.findOne(userId, id);
+  async accept(workspaceId: string, id: string) {
+    const proposal = await this.findOne(workspaceId, id);
     const updated = await this.prisma.proposal.update({
       where: { id },
       data:  { status: ProposalStatus.ACCEPTED, acceptedAt: new Date() },
@@ -212,12 +216,12 @@ export class ProposalsService {
       });
     }
 
-    this.eventEmitter.emit('proposal.accepted', { entityId: id, userId });
+    this.eventEmitter.emit('proposal.accepted', { entityId: id, workspaceId });
     return updated;
   }
 
-  async decline(userId: string, id: string) {
-    const proposal = await this.findOne(userId, id);
+  async decline(workspaceId: string, id: string) {
+    const proposal = await this.findOne(workspaceId, id);
     if (proposal.status === ProposalStatus.ACCEPTED) {
       throw new ForbiddenException('Cannot decline an already accepted proposal');
     }
@@ -248,7 +252,7 @@ export class ProposalsService {
 
     // Fire on every view so the owner is notified each time the client opens it
     if (proposal.status !== ProposalStatus.ACCEPTED && proposal.status !== ProposalStatus.DECLINED) {
-      this.eventEmitter.emit('proposal.opened', { entityId: proposal.id, userId: proposal.userId });
+      this.eventEmitter.emit('proposal.opened', { entityId: proposal.id, workspaceId: proposal.workspaceId });
     }
 
     return this.prisma.proposalOpen.create({
@@ -264,7 +268,7 @@ export class ProposalsService {
     if (proposal.status === ProposalStatus.ACCEPTED) {
       if (proposal.depositOrderId && !proposal.depositPaid && proposal.depositAmount) {
         const proposalUser = await this.prisma.user.findUnique({
-          where: { id: proposal.userId },
+          where: { id: proposal.workspaceId },
           select: { razorpayKeyId: true },
         });
         return {
@@ -293,7 +297,7 @@ export class ProposalsService {
       });
     }
 
-    this.eventEmitter.emit('proposal.accepted', { entityId: proposal.id, userId: proposal.userId });
+    this.eventEmitter.emit('proposal.accepted', { entityId: proposal.id, workspaceId: proposal.workspaceId });
 
     // If proposal has a payment schedule, create a Razorpay order for the first milestone
     const paymentSchedule = (proposal.content as Record<string, unknown>)
@@ -303,7 +307,7 @@ export class ProposalsService {
       const deposit = paymentSchedule[0];
       try {
         const proposalUser = await this.prisma.user.findUnique({
-          where: { id: proposal.userId },
+          where: { id: proposal.workspaceId },
           select: { razorpayKeyId: true, razorpayKeySecret: true },
         });
         const razorpay = this.makeRazorpay(
@@ -346,7 +350,7 @@ export class ProposalsService {
     if (proposal.depositOrderId !== dto.orderId) throw new BadRequestException('Order ID mismatch');
 
     const proposalUser = await this.prisma.user.findUnique({
-      where: { id: proposal.userId },
+      where: { id: proposal.workspaceId },
       select: { razorpayKeySecret: true },
     });
     if (!proposalUser?.razorpayKeySecret) {
@@ -368,7 +372,7 @@ export class ProposalsService {
 
     // Auto-create a DRAFT invoice for the deposit amount
     if (proposal.depositAmount && proposal.clientId) {
-      await this.invoices.create(proposal.userId, {
+      await this.invoices.create(proposal.workspaceId, {
         clientId:  proposal.clientId,
         lineItems: [{
           description: `Deposit — ${proposal.title}`,
@@ -380,7 +384,7 @@ export class ProposalsService {
       } as any);
     }
 
-    this.eventEmitter.emit('proposal.deposit_paid', { entityId: proposal.id, userId: proposal.userId });
+    this.eventEmitter.emit('proposal.deposit_paid', { entityId: proposal.id, workspaceId: proposal.workspaceId });
     return { success: true };
   }
 
@@ -402,24 +406,24 @@ export class ProposalsService {
       where: { id: proposal.id },
       data:  { status: ProposalStatus.DECLINED },
     });
-    this.eventEmitter.emit('proposal.declined', { entityId: proposal.id, userId: proposal.userId });
+    this.eventEmitter.emit('proposal.declined', { entityId: proposal.id, workspaceId: proposal.workspaceId });
     return declined;
   }
 
-  async archive(userId: string, id: string) {
-    const proposal = await this.findOne(userId, id);
+  async archive(workspaceId: string, id: string) {
+    const proposal = await this.findOne(workspaceId, id);
     if (proposal.archivedAt) throw new BadRequestException('Proposal is already archived');
     return this.prisma.proposal.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
-  async unarchive(userId: string, id: string) {
-    const proposal = await this.findOne(userId, id);
+  async unarchive(workspaceId: string, id: string) {
+    const proposal = await this.findOne(workspaceId, id);
     if (!proposal.archivedAt) throw new BadRequestException('Proposal is not archived');
     return this.prisma.proposal.update({ where: { id }, data: { archivedAt: null } });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     const contracts = await this.prisma.contract.count({ where: { proposalId: id } });
     if (contracts > 0) {
       throw new BadRequestException(`Cannot delete: this proposal has ${contracts} contract${contracts > 1 ? 's' : ''}. Archive instead.`);

@@ -29,9 +29,9 @@ export interface ConditionNode {
 export type StepNode = ActionNode | ConditionNode
 
 export interface WorkflowTriggerEvent {
-  entityId:   string
-  userId:     string
-  extra?:     Record<string, unknown>
+  entityId:    string
+  workspaceId: string
+  extra?:      Record<string, unknown>
 }
 
 // ─── Merge field resolver ─────────────────────────────────────────────────────
@@ -56,70 +56,70 @@ export class WorkflowEngine {
 
   @OnEvent('lead.created')
   async onLeadCreated(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('lead.created', ev.entityId, 'lead', ev.userId)
+    await this.handleTrigger('lead.created', ev.entityId, 'lead', ev.workspaceId)
   }
 
   @OnEvent('lead.stage_changed')
   async onLeadStageChanged(ev: WorkflowTriggerEvent & { toStage: string }) {
-    await this.handleTrigger('lead.stage_changed', ev.entityId, 'lead', ev.userId, { toStage: ev.toStage })
+    await this.handleTrigger('lead.stage_changed', ev.entityId, 'lead', ev.workspaceId, { toStage: ev.toStage })
   }
 
   @OnEvent('proposal.accepted')
   async onProposalAccepted(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('proposal.accepted', ev.entityId, 'proposal', ev.userId)
+    await this.handleTrigger('proposal.accepted', ev.entityId, 'proposal', ev.workspaceId)
   }
 
   @OnEvent('proposal.sent')
   async onProposalSent(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('proposal.sent', ev.entityId, 'proposal', ev.userId)
+    await this.handleTrigger('proposal.sent', ev.entityId, 'proposal', ev.workspaceId)
   }
 
   @OnEvent('contract.signed')
   async onContractSigned(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('contract.signed', ev.entityId, 'contract', ev.userId)
+    await this.handleTrigger('contract.signed', ev.entityId, 'contract', ev.workspaceId)
   }
 
   @OnEvent('contract.sent')
   async onContractSent(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('contract.sent', ev.entityId, 'contract', ev.userId)
+    await this.handleTrigger('contract.sent', ev.entityId, 'contract', ev.workspaceId)
   }
 
   @OnEvent('invoice.paid')
   async onInvoicePaid(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('invoice.paid', ev.entityId, 'invoice', ev.userId)
+    await this.handleTrigger('invoice.paid', ev.entityId, 'invoice', ev.workspaceId)
   }
 
   @OnEvent('invoice.sent')
   async onInvoiceSent(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('invoice.sent', ev.entityId, 'invoice', ev.userId)
+    await this.handleTrigger('invoice.sent', ev.entityId, 'invoice', ev.workspaceId)
   }
 
   @OnEvent('invoice.overdue')
   async onInvoiceOverdue(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('invoice.overdue', ev.entityId, 'invoice', ev.userId)
+    await this.handleTrigger('invoice.overdue', ev.entityId, 'invoice', ev.workspaceId)
   }
 
   @OnEvent('meeting.scheduled')
   async onMeetingScheduled(ev: WorkflowTriggerEvent) {
-    await this.handleTrigger('meeting.scheduled', ev.entityId, 'meeting', ev.userId)
+    await this.handleTrigger('meeting.scheduled', ev.entityId, 'meeting', ev.workspaceId)
   }
 
   @OnEvent('form.submitted')
   async onFormSubmitted(ev: WorkflowTriggerEvent & { formId?: string }) {
-    await this.handleTrigger('form.submitted', ev.entityId, 'form', ev.userId, { formId: ev.formId })
+    await this.handleTrigger('form.submitted', ev.entityId, 'form', ev.workspaceId, { formId: ev.formId })
   }
 
   // ─── Core: match active workflows and start runs ───────────────────────────
 
   async handleTrigger(
-    type:       string,
-    entityId:   string,
-    entityType: string,
-    userId:     string,
-    extra:      Record<string, unknown> = {},
+    type:        string,
+    entityId:    string,
+    entityType:  string,
+    workspaceId: string,
+    extra:       Record<string, unknown> = {},
   ) {
     const workflowList = await this.prisma.automationWorkflow.findMany({
-      where: { userId, isActive: true },
+      where: { workspaceId, isActive: true },
     })
 
     for (const wf of workflowList) {
@@ -135,7 +135,7 @@ export class WorkflowEngine {
         if (trigger.config.formId !== extra.formId) continue
       }
 
-      await this.workflows.startRun(wf.id, entityId, entityType, userId)
+      await this.workflows.startRun(wf.id, entityId, entityType, workspaceId)
     }
   }
 
@@ -179,22 +179,22 @@ export class WorkflowEngine {
   // ─── Action executor ──────────────────────────────────────────────────────
 
   async executeAction(
-    action:     { type: string; config: Record<string, unknown> },
-    entityId:   string,
-    entityType: string,
-    userId:     string,
+    action:      { type: string; config: Record<string, unknown> },
+    entityId:    string,
+    entityType:  string,
+    workspaceId: string,
   ) {
     const { type, config } = action
 
     switch (type) {
-      case 'send_email.client': return this.sendCustomEmail(config, entityId, entityType, userId, 'client')
-      case 'send_email.me':     return this.sendCustomEmail(config, entityId, entityType, userId, 'user')
-      case 'send_form':         return this.sendFormLink(config, entityId, entityType, userId)
+      case 'send_email.client': return this.sendCustomEmail(config, entityId, entityType, workspaceId, 'client')
+      case 'send_email.me':     return this.sendCustomEmail(config, entityId, entityType, workspaceId, 'user')
+      case 'send_form':         return this.sendFormLink(config, entityId, entityType, workspaceId)
       case 'change_lead_stage': return this.changeLeadStage(config, entityId)
-      case 'create_task':       return this.createTask(config, entityId, entityType, userId)
-      case 'add_note':          return this.addNote(config, entityId, entityType, userId)
-      case 'create.contract':   return this.autoCreateContract(entityId, userId)
-      case 'create.invoice':    return this.autoCreateInvoice(entityId, userId)
+      case 'create_task':       return this.createTask(config, entityId, entityType, workspaceId)
+      case 'add_note':          return this.addNote(config, entityId, entityType, workspaceId)
+      case 'create.contract':   return this.autoCreateContract(entityId, workspaceId)
+      case 'create.invoice':    return this.autoCreateInvoice(entityId, workspaceId)
       default:
         throw new Error(`Unknown action type: ${type}`)
     }
@@ -202,9 +202,9 @@ export class WorkflowEngine {
 
   // ─── Merge fields ────────────────────────────────────────────────────────
 
-  async resolveMergeFields(text: string, entityId: string, entityType: string, userId: string): Promise<string> {
+  async resolveMergeFields(text: string, entityId: string, entityType: string, workspaceId: string): Promise<string> {
     const appUrl      = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
-    const user        = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user        = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     const businessName = user?.businessName ?? user?.name ?? ''
 
     const vars: MergeVars = { businessName }
@@ -261,20 +261,20 @@ export class WorkflowEngine {
   // ─── Action implementations ───────────────────────────────────────────────
 
   private async sendCustomEmail(
-    config:     Record<string, unknown>,
-    entityId:   string,
-    entityType: string,
-    userId:     string,
-    recipient:  'client' | 'user',
+    config:      Record<string, unknown>,
+    entityId:    string,
+    entityType:  string,
+    workspaceId: string,
+    recipient:   'client' | 'user',
   ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     if (!user) return
 
     const rawSubject = (config.subject as string) ?? '(no subject)'
     const rawBody    = (config.body    as string) ?? ''
 
-    const subject = await this.resolveMergeFields(rawSubject, entityId, entityType, userId)
-    const body    = await this.resolveMergeFields(rawBody,    entityId, entityType, userId)
+    const subject = await this.resolveMergeFields(rawSubject, entityId, entityType, workspaceId)
+    const body    = await this.resolveMergeFields(rawBody,    entityId, entityType, workspaceId)
     const html    = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#344054;">${body.replace(/\n/g, '<br/>')}</div>`
 
     let to = ''
@@ -285,7 +285,7 @@ export class WorkflowEngine {
     }
     if (!to) return
 
-    await this.email.send({ userId, to, subject, html, templateKey: 'workflow_custom', entityId, entityType })
+    await this.email.send({ userId: workspaceId, to, subject, html, templateKey: 'workflow_custom', entityId, entityType })
   }
 
   private async resolveClientEmail(entityId: string, entityType: string): Promise<string> {
@@ -313,13 +313,13 @@ export class WorkflowEngine {
     return ''
   }
 
-  private async sendFormLink(config: Record<string, unknown>, entityId: string, entityType: string, userId: string) {
+  private async sendFormLink(config: Record<string, unknown>, entityId: string, entityType: string, workspaceId: string) {
     const formId = config.formId as string
     if (!formId) return
     const form = await this.prisma.intakeForm.findUnique({ where: { id: formId } })
     if (!form || !form.isActive) return
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     if (!user) return
 
     const appUrl  = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
@@ -329,7 +329,7 @@ export class WorkflowEngine {
 
     const subject = `${user.businessName ?? user.name} sent you a form`
     const html    = `<p>Hi there,</p><p>Please fill out this form: <a href="${formLink}">${form.title}</a></p>`
-    await this.email.send({ userId, to, subject, html, templateKey: 'workflow_send_form', entityId, entityType })
+    await this.email.send({ userId: workspaceId, to, subject, html, templateKey: 'workflow_send_form', entityId, entityType })
   }
 
   private async changeLeadStage(config: Record<string, unknown>, entityId: string) {
@@ -338,7 +338,7 @@ export class WorkflowEngine {
     await this.prisma.lead.update({ where: { id: entityId }, data: { stage, lastActivityAt: new Date() } })
   }
 
-  private async createTask(config: Record<string, unknown>, entityId: string, entityType: string, userId: string) {
+  private async createTask(config: Record<string, unknown>, entityId: string, entityType: string, workspaceId: string) {
     const title        = (config.title as string) ?? 'Follow up'
     const dueOffset    = Number(config.dueOffsetDays ?? 1)
     const dueDate      = new Date()
@@ -346,7 +346,7 @@ export class WorkflowEngine {
 
     await this.prisma.notification.create({
       data: {
-        userId,
+        workspaceId,
         type:       'workflow_task',
         title:      `Task: ${title}`,
         body:       `Due ${dueDate.toLocaleDateString('en-IN')}`,
@@ -356,13 +356,13 @@ export class WorkflowEngine {
     })
   }
 
-  private async addNote(config: Record<string, unknown>, entityId: string, entityType: string, userId: string) {
+  private async addNote(config: Record<string, unknown>, entityId: string, entityType: string, workspaceId: string) {
     const note = (config.note as string) ?? ''
     if (!note) return
 
     await this.prisma.notification.create({
       data: {
-        userId,
+        workspaceId,
         type:       'workflow_note',
         title:      'Auto-note added',
         body:       note,
@@ -372,19 +372,19 @@ export class WorkflowEngine {
     })
   }
 
-  private async autoCreateContract(proposalId: string, userId: string) {
+  private async autoCreateContract(proposalId: string, workspaceId: string) {
     try {
       const contractsService = this.moduleRef.get(ContractsService, { strict: false })
-      await contractsService.createFromProposal(userId, proposalId)
+      await contractsService.createFromProposal(workspaceId, proposalId)
     } catch (err) {
       this.logger.error(`[workflow] auto-create contract failed: ${err}`)
     }
   }
 
-  private async autoCreateInvoice(contractId: string, userId: string) {
+  private async autoCreateInvoice(contractId: string, workspaceId: string) {
     try {
       const invoicesService = this.moduleRef.get(InvoicesService, { strict: false })
-      await invoicesService.createFromContract(userId, contractId)
+      await invoicesService.createFromContract(workspaceId, contractId)
     } catch (err) {
       this.logger.error(`[workflow] auto-create invoice failed: ${err}`)
     }

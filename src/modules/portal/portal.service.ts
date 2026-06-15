@@ -19,9 +19,13 @@ export class PortalService {
   async getPortalData(token: string) {
     const client = await this.prisma.client.findUnique({
       where: { portalToken: token },
-      include: { user: { select: { businessName: true, logoUrl: true, email: true, plan: true, planExpiresAt: true, subscriptionStatus: true } } },
+      include: { workspace: { select: { businessName: true, logoUrl: true, razorpayKeyId: true, razorpayKeySecret: true } } },
     });
     if (!client) throw new NotFoundException('Portal link is invalid or has expired');
+    const owner = await this.prisma.user.findUnique({
+      where: { id: client.workspaceId },
+      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
 
     const [proposals, contracts, invoices, meetings, projects] = await Promise.all([
       this.prisma.proposal.findMany({
@@ -81,9 +85,9 @@ export class PortalService {
         company: client.company,
       },
       freelancer: {
-        businessName: client.user.businessName,
-        logoUrl:      client.user.logoUrl,
-        hideBranding: effectivePlan(client.user) === 'STUDIO',
+        businessName: client.workspace.businessName,
+        logoUrl:      client.workspace.logoUrl,
+        hideBranding: effectivePlan(owner!) === 'STUDIO',
       },
       proposals,
       contracts,
@@ -97,7 +101,7 @@ export class PortalService {
     const client = await this.prisma.client.findUnique({
       where: { portalToken: token },
       include: {
-        user: { select: { razorpayKeyId: true, razorpayKeySecret: true } },
+        workspace: { select: { razorpayKeyId: true, razorpayKeySecret: true } },
       },
     });
     if (!client) throw new NotFoundException('Portal link is invalid or has expired');
@@ -111,8 +115,8 @@ export class PortalService {
     }
 
     const razorpay = this.makeRazorpay(
-      client.user.razorpayKeyId,
-      client.user.razorpayKeySecret,
+      client.workspace.razorpayKeyId,
+      client.workspace.razorpayKeySecret,
     );
 
     const amountPaise = Math.round(Number(invoice.total) * 100);
@@ -131,7 +135,7 @@ export class PortalService {
       orderId:  order.id,
       amount:   amountPaise,
       currency: 'INR',
-      keyId:    client.user.razorpayKeyId,
+      keyId:    client.workspace.razorpayKeyId,
     };
   }
 }

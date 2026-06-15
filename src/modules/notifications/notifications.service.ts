@@ -20,12 +20,12 @@ export class NotificationsService {
     url?:        string
   }) {
     const notification = await this.prisma.notification.create({ data: {
-      userId:     opts.userId,
-      type:       opts.type,
-      title:      opts.title,
-      body:       opts.body,
-      entityId:   opts.entityId,
-      entityType: opts.entityType,
+      workspaceId: opts.userId,
+      type:        opts.type,
+      title:       opts.title,
+      body:        opts.body,
+      entityId:    opts.entityId,
+      entityType:  opts.entityType,
     } });
 
     // Fire-and-forget push delivery — don't block the in-app notification path
@@ -42,26 +42,26 @@ export class NotificationsService {
 
   async findAll(userId: string) {
     return this.prisma.notification.findMany({
-      where:   { userId },
+      where:   { workspaceId: userId },
       orderBy: { createdAt: 'desc' },
       take:    30,
     });
   }
 
   async getUnreadCount(userId: string) {
-    return this.prisma.notification.count({ where: { userId, read: false } });
+    return this.prisma.notification.count({ where: { workspaceId: userId, read: false } });
   }
 
   async markRead(userId: string, id: string) {
     return this.prisma.notification.updateMany({
-      where: { id, userId },
+      where: { id, workspaceId: userId },
       data:  { read: true },
     });
   }
 
   async markAllRead(userId: string) {
     return this.prisma.notification.updateMany({
-      where: { userId, read: false },
+      where: { workspaceId: userId, read: false },
       data:  { read: true },
     });
   }

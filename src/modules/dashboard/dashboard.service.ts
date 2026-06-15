@@ -6,7 +6,7 @@ import { InvoiceStatus, LeadStage } from '@prisma/client';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStats(userId: string) {
+  async getStats(workspaceId: string) {
     const now = new Date();
     const startOfMonth     = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -22,31 +22,31 @@ export class DashboardService {
     ] = await Promise.all([
       // Revenue this month (paid invoices)
       this.prisma.invoice.aggregate({
-        where: { userId, status: InvoiceStatus.PAID, paidAt: { gte: startOfMonth } },
+        where: { workspaceId, status: InvoiceStatus.PAID, paidAt: { gte: startOfMonth } },
         _sum: { total: true },
       }),
       // Revenue last month
       this.prisma.invoice.aggregate({
-        where: { userId, status: InvoiceStatus.PAID, paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+        where: { workspaceId, status: InvoiceStatus.PAID, paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
         _sum: { total: true },
       }),
       // Overdue invoices
       this.prisma.invoice.aggregate({
-        where: { userId, status: InvoiceStatus.OVERDUE },
+        where: { workspaceId, status: InvoiceStatus.OVERDUE },
         _sum: { total: true },
         _count: true,
       }),
       // Active leads (not WON or LOST)
       this.prisma.lead.count({
-        where: { userId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] } },
+        where: { workspaceId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] } },
       }),
       // Open proposals (SENT or OPENED)
       this.prisma.proposal.count({
-        where: { userId, status: { in: ['SENT', 'OPENED'] } },
+        where: { workspaceId, status: { in: ['SENT', 'OPENED'] } },
       }),
       // Pipeline value from active leads
       this.prisma.lead.aggregate({
-        where: { userId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] } },
+        where: { workspaceId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] } },
         _sum: { budget: true },
       }),
     ]);
@@ -69,28 +69,28 @@ export class DashboardService {
     };
   }
 
-  async getRecentActivity(userId: string) {
+  async getRecentActivity(workspaceId: string) {
     const [invoices, contracts, proposals, leads] = await Promise.all([
       this.prisma.invoice.findMany({
-        where:   { userId, status: { in: [InvoiceStatus.PAID, InvoiceStatus.SENT] } },
+        where:   { workspaceId, status: { in: [InvoiceStatus.PAID, InvoiceStatus.SENT] } },
         orderBy: { updatedAt: 'desc' },
         take:    5,
         include: { client: { select: { name: true } } },
       }),
       this.prisma.contract.findMany({
-        where:   { userId, status: { in: ['SIGNED', 'SENT'] } },
+        where:   { workspaceId, status: { in: ['SIGNED', 'SENT'] } },
         orderBy: { updatedAt: 'desc' },
         take:    5,
         include: { client: { select: { name: true } } },
       }),
       this.prisma.proposal.findMany({
-        where:   { userId, status: { in: ['ACCEPTED', 'OPENED', 'SENT'] } },
+        where:   { workspaceId, status: { in: ['ACCEPTED', 'OPENED', 'SENT'] } },
         orderBy: { updatedAt: 'desc' },
         take:    5,
         include: { client: { select: { name: true } }, lead: { select: { name: true } } },
       }),
       this.prisma.lead.findMany({
-        where:   { userId, isDeleted: false },
+        where:   { workspaceId, isDeleted: false },
         orderBy: { createdAt: 'desc' },
         take:    5,
       }),
@@ -138,13 +138,13 @@ export class DashboardService {
       .slice(0, 10);
   }
 
-  async getUpcomingFollowUps(userId: string) {
+  async getUpcomingFollowUps(workspaceId: string) {
     const now      = new Date();
     const in7Days  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     return this.prisma.lead.findMany({
       where: {
-        userId,
+        workspaceId,
         isDeleted:  false,
         followUpAt: { gte: now, lte: in7Days },
         stage:      { notIn: [LeadStage.WON, LeadStage.LOST] },
@@ -154,7 +154,7 @@ export class DashboardService {
     });
   }
 
-  async getRevenueChart(userId: string) {
+  async getRevenueChart(workspaceId: string) {
     const months: { month: string; revenue: number }[] = [];
     const now = new Date();
 
@@ -163,7 +163,7 @@ export class DashboardService {
       const end   = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
 
       const result = await this.prisma.invoice.aggregate({
-        where: { userId, status: InvoiceStatus.PAID, paidAt: { gte: start, lte: end } },
+        where: { workspaceId, status: InvoiceStatus.PAID, paidAt: { gte: start, lte: end } },
         _sum: { total: true },
       });
 

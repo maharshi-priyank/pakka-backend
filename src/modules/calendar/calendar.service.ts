@@ -27,13 +27,13 @@ export class CalendarService {
     private readonly outlook:  OutlookCalendarService,
   ) {}
 
-  async getEvents(userId: string, from: Date, to: Date): Promise<CalendarEvent[]> {
+  async getEvents(workspaceId: string, from: Date, to: Date): Promise<CalendarEvent[]> {
     const events: CalendarEvent[] = [];
 
     // 1. ClearWork meetings
     const meetings = await this.prisma.meeting.findMany({
       where: {
-        userId,
+        workspaceId,
         scheduledAt: { gte: from, lte: to },
       },
       include: { client: { select: { name: true } } },
@@ -64,7 +64,7 @@ export class CalendarService {
     // 2. Project deadlines (endDate in range)
     const projects = await this.prisma.project.findMany({
       where: {
-        userId,
+        workspaceId,
         endDate: { gte: from, lte: to },
       },
       include: { client: { select: { name: true } } },
@@ -87,13 +87,13 @@ export class CalendarService {
 
     // 3. Google external events (if connected)
     const user = await this.prisma.user.findUnique({
-      where:  { id: userId },
+      where:  { id: workspaceId },
       select: { googleCalendarConnected: true, outlookConnected: true },
     });
 
     if (user?.googleCalendarConnected) {
       try {
-        const googleEvents = await this.google.listEvents(userId, from, to);
+        const googleEvents = await this.google.listEvents(workspaceId, from, to);
         for (const e of googleEvents) {
           if (googleEventIds.has(e.id)) continue;
           events.push({
@@ -108,14 +108,14 @@ export class CalendarService {
           });
         }
       } catch (err) {
-        this.logger.warn(`Google calendar fetch failed for user ${userId}: ${(err as Error).message}`);
+        this.logger.warn(`Google calendar fetch failed for user ${workspaceId}: ${(err as Error).message}`);
       }
     }
 
     // 4. Outlook external events (if connected)
     if (user?.outlookConnected) {
       try {
-        const outlookEvents = await this.outlook.listEvents(userId, from, to);
+        const outlookEvents = await this.outlook.listEvents(workspaceId, from, to);
         for (const e of outlookEvents) {
           if (outlookEventIds.has(e.id)) continue;
           events.push({
@@ -130,7 +130,7 @@ export class CalendarService {
           });
         }
       } catch (err) {
-        this.logger.warn(`Outlook calendar fetch failed for user ${userId}: ${(err as Error).message}`);
+        this.logger.warn(`Outlook calendar fetch failed for user ${workspaceId}: ${(err as Error).message}`);
       }
     }
 

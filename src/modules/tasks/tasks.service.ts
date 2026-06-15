@@ -68,8 +68,8 @@ const TASK_INCLUDE = {
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(userId: string, query: ListTasksQuery) {
-    const where: Record<string, unknown> = { userId };
+  async list(workspaceId: string, query: ListTasksQuery) {
+    const where: Record<string, unknown> = { workspaceId };
     if (query.status)    where['status']    = query.status;
     if (query.projectId) where['projectId'] = query.projectId;
     if (query.search) {
@@ -83,10 +83,10 @@ export class TasksService {
     });
   }
 
-  async create(userId: string, dto: CreateTaskDto) {
+  async create(workspaceId: string, dto: CreateTaskDto) {
     return this.prisma.task.create({
       data: {
-        userId,
+        workspaceId,
         title:       dto.title,
         dueDate:     dto.dueDate ? new Date(dto.dueDate) : undefined,
         includeTime: dto.includeTime ?? false,
@@ -100,22 +100,22 @@ export class TasksService {
     });
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const task = await this.prisma.task.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: TASK_INCLUDE,
     });
     if (!task) throw new NotFoundException('Task not found');
     return task;
   }
 
-  private async findOwned(userId: string, id: string): Promise<void> {
-    const task = await this.prisma.task.findFirst({ where: { id, userId }, select: { id: true } });
+  private async findOwned(workspaceId: string, id: string): Promise<void> {
+    const task = await this.prisma.task.findFirst({ where: { id, workspaceId }, select: { id: true } });
     if (!task) throw new NotFoundException('Task not found');
   }
 
-  async update(userId: string, id: string, dto: UpdateTaskDto) {
-    await this.findOwned(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateTaskDto) {
+    await this.findOwned(workspaceId, id);
 
     const data: Record<string, unknown> = {
       title:       dto.title,
@@ -133,9 +133,9 @@ export class TasksService {
       } else {
         const col = await this.prisma.boardColumn.findUnique({
           where: { id: dto.columnId },
-          select: { isDone: true, board: { select: { userId: true } } },
+          select: { isDone: true, board: { select: { workspaceId: true } } },
         });
-        if (!col || col.board.userId !== userId) throw new NotFoundException('Column not found');
+        if (!col || col.board.workspaceId !== workspaceId) throw new NotFoundException('Column not found');
         data.columnId = dto.columnId;
         data.status = col.isDone ? 'COMPLETED' : 'TODO';
       }
@@ -153,8 +153,8 @@ export class TasksService {
     });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOwned(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOwned(workspaceId, id);
     await this.prisma.task.delete({ where: { id } });
   }
 }

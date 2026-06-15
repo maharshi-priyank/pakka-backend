@@ -28,14 +28,16 @@ export class AutomationScheduler {
 
     const meetings = await this.prisma.meeting.findMany({
       where:   { scheduledAt: { gte: now, lte: inOne }, status: 'SCHEDULED', reminderSent: false },
-      include: { user: true, client: true, lead: true },
+      include: { client: true, lead: true },
     })
 
     for (const m of meetings) {
-      const businessName = m.user.businessName ?? m.user.name
+      const user = await this.prisma.user.findUnique({ where: { id: m.workspaceId } })
+      if (!user) continue
+      const businessName = user.businessName ?? user.name
       const scheduledStr = m.scheduledAt.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
       const vars = {
-        recipientName: m.user.name,
+        recipientName: user.name,
         businessName,
         meetingTitle:  m.title,
         scheduledAt:   scheduledStr,
@@ -45,8 +47,8 @@ export class AutomationScheduler {
       }
 
       await this.email.send({
-        userId:      m.userId,
-        to:          m.user.email,
+        userId:      m.workspaceId,
+        to:          user.email,
         subject:     `Reminder: "${m.title}" starts in 1 hour`,
         html:        renderTemplate('meeting_reminder', vars).html,
         templateKey: 'meeting_reminder',
@@ -58,7 +60,7 @@ export class AutomationScheduler {
       if (clientEmail) {
         const clientName = m.client?.name ?? (m.lead as { name?: string } | null)?.name ?? 'there'
         await this.email.send({
-          userId:      m.userId,
+          userId:      m.workspaceId,
           to:          clientEmail,
           subject:     `Reminder: "${m.title}" starts in 1 hour`,
           html:        renderTemplate('meeting_reminder', { ...vars, recipientName: clientName }).html,
@@ -99,8 +101,8 @@ export class AutomationScheduler {
       where: { key: 'business.gst_reminder', isActive: true },
     })
     for (const rule of rules) {
-      await this.engine.sendDigestEmail(rule.userId, 'gst_reminder')
-      await this.automations.recordExecution({ ruleId: rule.id, entityId: rule.userId, entityType: 'user', status: 'SUCCESS' })
+      await this.engine.sendDigestEmail(rule.workspaceId, 'gst_reminder')
+      await this.automations.recordExecution({ ruleId: rule.id, entityId: rule.workspaceId, entityType: 'user', status: 'SUCCESS' })
     }
   }
 
@@ -112,8 +114,8 @@ export class AutomationScheduler {
       where: { key: 'business.weekly_digest', isActive: true },
     })
     for (const rule of rules) {
-      await this.engine.sendDigestEmail(rule.userId, 'weekly_digest')
-      await this.automations.recordExecution({ ruleId: rule.id, entityId: rule.userId, entityType: 'user', status: 'SUCCESS' })
+      await this.engine.sendDigestEmail(rule.workspaceId, 'weekly_digest')
+      await this.automations.recordExecution({ ruleId: rule.id, entityId: rule.workspaceId, entityType: 'user', status: 'SUCCESS' })
     }
   }
 
@@ -125,8 +127,8 @@ export class AutomationScheduler {
       where: { key: 'business.monthly_summary', isActive: true },
     })
     for (const rule of rules) {
-      await this.engine.sendDigestEmail(rule.userId, 'monthly_summary')
-      await this.automations.recordExecution({ ruleId: rule.id, entityId: rule.userId, entityType: 'user', status: 'SUCCESS' })
+      await this.engine.sendDigestEmail(rule.workspaceId, 'monthly_summary')
+      await this.automations.recordExecution({ ruleId: rule.id, entityId: rule.workspaceId, entityType: 'user', status: 'SUCCESS' })
     }
   }
 
@@ -158,7 +160,7 @@ export class AutomationScheduler {
 
       const invoices = await this.prisma.invoice.findMany({
         where: {
-          userId:       rule.userId,
+          workspaceId:  rule.workspaceId,
           status:       'OVERDUE',
           dueDate:      { lte: overdueBy },
           remindersSent: threshold.reminderIndex,
@@ -168,7 +170,7 @@ export class AutomationScheduler {
 
       for (const inv of invoices) {
         if (!inv.client?.email) continue
-        await this.engine.executeRule(rule, inv.id, 'invoice', rule.userId)
+        await this.engine.executeRule(rule, inv.id, 'invoice', rule.workspaceId)
         await this.prisma.invoice.update({
           where: { id: inv.id },
           data:  { remindersSent: { increment: 1 } },
@@ -192,7 +194,7 @@ export class AutomationScheduler {
     for (const rule of rules) {
       const invoices = await this.prisma.invoice.findMany({
         where: {
-          userId:  rule.userId,
+          workspaceId: rule.workspaceId,
           status:  { in: ['SENT', 'VIEWED'] },
           dueDate: { gte: in3d, lte: in4d },
         },
@@ -200,7 +202,7 @@ export class AutomationScheduler {
       })
       for (const inv of invoices) {
         if (!inv.client?.email) continue
-        await this.engine.executeRule(rule, inv.id, 'invoice', rule.userId)
+        await this.engine.executeRule(rule, inv.id, 'invoice', rule.workspaceId)
       }
     }
   }
@@ -226,7 +228,7 @@ export class AutomationScheduler {
 
       const contracts = await this.prisma.contract.findMany({
         where: {
-          userId:  rule.userId,
+          workspaceId: rule.workspaceId,
           status:  'SENT',
           sentAt:  { gte: from, lte: to },
         },
@@ -234,7 +236,7 @@ export class AutomationScheduler {
       })
       for (const c of contracts) {
         if (!c.client?.email) continue
-        await this.engine.executeRule(rule, c.id, 'contract', rule.userId)
+        await this.engine.executeRule(rule, c.id, 'contract', rule.workspaceId)
       }
     }
   }
@@ -254,13 +256,13 @@ export class AutomationScheduler {
     for (const rule of rules) {
       const proposals = await this.prisma.proposal.findMany({
         where: {
-          userId:    rule.userId,
+          workspaceId: rule.workspaceId,
           status:    'SENT',          // still SENT = never opened (would be OPENED)
           updatedAt: { gte: from, lte: to },
         },
       })
       for (const p of proposals) {
-        await this.engine.executeRule(rule, p.id, 'proposal', rule.userId)
+        await this.engine.executeRule(rule, p.id, 'proposal', rule.workspaceId)
       }
     }
   }
@@ -280,13 +282,13 @@ export class AutomationScheduler {
     for (const rule of rules) {
       const proposals = await this.prisma.proposal.findMany({
         where: {
-          userId:    rule.userId,
+          workspaceId: rule.workspaceId,
           status:    'OPENED',
           updatedAt: { gte: from, lte: to },
         },
       })
       for (const p of proposals) {
-        await this.engine.executeRule(rule, p.id, 'proposal', rule.userId)
+        await this.engine.executeRule(rule, p.id, 'proposal', rule.workspaceId)
       }
     }
   }
@@ -307,7 +309,7 @@ export class AutomationScheduler {
     for (const rule of rules) {
       const proposals = await this.prisma.proposal.findMany({
         where: {
-          userId:     rule.userId,
+          workspaceId: rule.workspaceId,
           status:     { in: ['SENT', 'OPENED'] },
           validUntil: { gte: startOfTomorrow, lte: endOfTomorrow },
         },
@@ -316,7 +318,7 @@ export class AutomationScheduler {
       for (const p of proposals) {
         const clientEmail = p.client?.email ?? (p.lead as { email?: string } | null)?.email
         if (!clientEmail) continue
-        await this.engine.executeRule(rule, p.id, 'proposal', rule.userId)
+        await this.engine.executeRule(rule, p.id, 'proposal', rule.workspaceId)
       }
     }
   }
@@ -336,17 +338,17 @@ export class AutomationScheduler {
     for (const rule of rules) {
       const leads = await this.prisma.lead.findMany({
         where: {
-          userId:        rule.userId,
+          workspaceId:   rule.workspaceId,
           isDeleted:     false,
           stage:         { notIn: ['WON', 'LOST'] },
           lastActivityAt: { gte: from, lte: to },
         },
       })
       for (const l of leads) {
-        const user = await this.prisma.user.findUnique({ where: { id: rule.userId } })
-        if (!user?.email) continue
+        const ruleUser = await this.prisma.user.findUnique({ where: { id: rule.workspaceId } })
+        if (!ruleUser?.email) continue
 
-        const businessName = user.businessName ?? user.name
+        const businessName = ruleUser.businessName ?? ruleUser.name
         const vars = {
           leadName:         l.name,
           businessName,
@@ -355,8 +357,8 @@ export class AutomationScheduler {
         }
         const { subject, html } = renderTemplate('lead_cold_alert', vars)
         await this.email.send({
-          userId:     rule.userId,
-          to:         user.email,
+          userId:     rule.workspaceId,
+          to:         ruleUser.email,
           subject,
           html,
           templateKey: 'lead_cold_alert',

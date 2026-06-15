@@ -39,10 +39,10 @@ function calcTotals(lineItems: LineItemDto[], gstType: GstType) {
   };
 }
 
-async function generateInvoiceNumber(prisma: PrismaService, userId: string): Promise<string> {
+async function generateInvoiceNumber(prisma: PrismaService, workspaceId: string): Promise<string> {
   const year = new Date().getFullYear();
   const latest = await prisma.invoice.findFirst({
-    where: { userId, invoiceNumber: { startsWith: `INV-${year}-` } },
+    where: { workspaceId, invoiceNumber: { startsWith: `INV-${year}-` } },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -60,13 +60,13 @@ type InvoiceCreateData = Omit<Parameters<PrismaService['invoice']['create']>[0][
 
 async function createInvoiceWithRetry(
   prisma: PrismaService,
-  userId: string,
+  workspaceId: string,
   data: InvoiceCreateData,
   include: Parameters<PrismaService['invoice']['create']>[0]['include'],
   maxRetries = 5,
 ) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const invoiceNumber = await generateInvoiceNumber(prisma, userId);
+    const invoiceNumber = await generateInvoiceNumber(prisma, workspaceId);
     try {
       return await prisma.invoice.create({ data: { ...data, invoiceNumber } as Parameters<PrismaService['invoice']['create']>[0]['data'], include });
     } catch (err: unknown) {
@@ -96,7 +96,7 @@ export class InvoicesService {
     return next
   }
 
-  async create(userId: string, dto: CreateInvoiceDto) {
+  async create(workspaceId: string, dto: CreateInvoiceDto) {
     const currency = dto.currency ?? 'INR';
     const isExport = currency !== 'INR';
 
@@ -108,7 +108,7 @@ export class InvoicesService {
     let lutNumber = dto.lutNumber ?? null;
     if (isExport && !lutNumber) {
       const user = await this.prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: workspaceId },
         select: { defaultLutNumber: true },
       });
       lutNumber = user?.defaultLutNumber ?? null;
@@ -120,8 +120,8 @@ export class InvoicesService {
         ? this.computeNextRecurrenceDate(now, dto.recurrenceCycle, dto.recurrenceDay)
         : null;
 
-    return createInvoiceWithRetry(this.prisma, userId, {
-      userId,
+    return createInvoiceWithRetry(this.prisma, workspaceId, {
+      workspaceId,
       contractId:        dto.contractId,
       clientId:          dto.clientId,
       lineItems:         dto.lineItems as object[],
@@ -157,8 +157,8 @@ export class InvoicesService {
       if (!inv.recurrenceCycle || !inv.recurrenceDay) continue
       const nextDate = this.computeNextRecurrenceDate(now, inv.recurrenceCycle, inv.recurrenceDay)
 
-      await createInvoiceWithRetry(this.prisma, inv.userId, {
-        userId:            inv.userId,
+      await createInvoiceWithRetry(this.prisma, inv.workspaceId, {
+        workspaceId:       inv.workspaceId,
         contractId:        inv.contractId    ?? undefined,
         clientId:          inv.clientId      ?? undefined,
         lineItems:         inv.lineItems     as object[],
@@ -193,9 +193,9 @@ export class InvoicesService {
     })
   }
 
-  async createFromContract(userId: string, contractId: string) {
+  async createFromContract(workspaceId: string, contractId: string) {
     const contract = await this.prisma.contract.findFirst({
-      where: { id: contractId, userId },
+      where: { id: contractId, workspaceId },
       include: { client: true },
     });
     if (!contract) throw new NotFoundException('Contract not found');
@@ -225,8 +225,8 @@ export class InvoicesService {
         const lineItems: LineItemDto[] = [{ description: ps.milestone, qty: 1, rate: ps.amount, gstRate: effectiveGstRate }];
         const totals = calcTotals(lineItems, gstType);
 
-        const inv = await createInvoiceWithRetry(this.prisma, userId, {
-          userId,
+        const inv = await createInvoiceWithRetry(this.prisma, workspaceId, {
+          workspaceId,
           contractId,
           clientId:  contract.clientId,
           lineItems: lineItems as object[],
@@ -248,8 +248,8 @@ export class InvoicesService {
     const lineItems: LineItemDto[] = [{ description: contract.title, qty: 1, rate: totalAmount - contractGst, gstRate: gstRateSingle }];
     const totals = calcTotals(lineItems, gstType);
 
-    const inv = await createInvoiceWithRetry(this.prisma, userId, {
-      userId,
+    const inv = await createInvoiceWithRetry(this.prisma, workspaceId, {
+      workspaceId,
       contractId,
       clientId:  contract.clientId,
       lineItems: lineItems as object[],
@@ -262,13 +262,13 @@ export class InvoicesService {
     return [inv];
   }
 
-  async findAll(userId: string, dto: QueryInvoicesDto) {
+  async findAll(workspaceId: string, dto: QueryInvoicesDto) {
     const limit = dto.limit ?? 50;
     const page  = dto.page  ?? 1;
     const skip  = (page - 1) * limit;
 
     const where = {
-      userId,
+      workspaceId,
       ...(dto.status   ? { status:   dto.status   } : {}),
       ...(dto.clientId ? { clientId: dto.clientId } : {}),
     };
@@ -285,17 +285,17 @@ export class InvoicesService {
     return { items, total, page, limit };
   }
 
-  async findById(userId: string, id: string) {
+  async findById(workspaceId: string, id: string) {
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: INCLUDE_FULL,
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     return invoice;
   }
 
-  async update(userId: string, id: string, dto: UpdateInvoiceDto) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async update(workspaceId: string, id: string, dto: UpdateInvoiceDto) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status === InvoiceStatus.PAID) {
       throw new ForbiddenException('Cannot edit a paid invoice');
@@ -323,8 +323,8 @@ export class InvoicesService {
     });
   }
 
-  async send(userId: string, id: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async send(workspaceId: string, id: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status !== InvoiceStatus.DRAFT) {
       throw new BadRequestException('Only draft invoices can be sent');
@@ -336,7 +336,7 @@ export class InvoicesService {
       include: INCLUDE_FULL,
     });
 
-    this.eventEmitter.emit('invoice.sent', { entityId: id, userId });
+    this.eventEmitter.emit('invoice.sent', { entityId: id, workspaceId });
     const appUrl = process.env.APP_URL ?? 'http://localhost:5175';
     return { invoice: updated, viewUrl: `${appUrl}/invoice/${updated.id}` };
   }
@@ -345,18 +345,22 @@ export class InvoicesService {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
       include: {
-        client: true,
-        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, gstNumber: true, plan: true, planExpiresAt: true, subscriptionStatus: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true, country: true, taxLabel: true, ibanNumber: true, swiftCode: true, routingNumber: true } },
+        client:    true,
+        workspace: { select: { name: true, businessName: true, logoUrl: true, gstNumber: true, bankName: true, bankAccountName: true, bankAccountNumber: true, bankIfsc: true, upiId: true, upiQrUrl: true, country: true, taxLabel: true, ibanNumber: true, swiftCode: true, routingNumber: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
-    const hideBranding = effectivePlan(invoice.user) === 'STUDIO';
-    const { planExpiresAt: _pe, subscriptionStatus: _ss, ...userPublic } = invoice.user;
+    const owner = await this.prisma.user.findUnique({
+      where: { id: invoice.workspaceId },
+      select: { email: true, plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
+    const hideBranding = effectivePlan(owner!) === 'STUDIO';
+    const userPublic = { ...invoice.workspace, email: owner?.email ?? null };
     return { ...invoice, user: userPublic, hideBranding };
   }
 
-  async markPaid(userId: string, id: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async markPaid(workspaceId: string, id: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestException('Invoice is already marked as paid');
@@ -367,12 +371,12 @@ export class InvoicesService {
       data: { status: InvoiceStatus.PAID, amountPaid: invoice.total, paidAt: new Date() },
       include: INCLUDE_FULL,
     });
-    this.eventEmitter.emit('invoice.paid', { entityId: id, userId });
+    this.eventEmitter.emit('invoice.paid', { entityId: id, workspaceId });
     return paid;
   }
 
-  async recordPartialPayment(userId: string, id: string, amountReceived: number) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async recordPartialPayment(workspaceId: string, id: string, amountReceived: number) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestException('Invoice is already fully paid');
@@ -387,7 +391,7 @@ export class InvoicesService {
         data:  { status: InvoiceStatus.PAID, amountPaid: total, paidAt: new Date() },
         include: INCLUDE_FULL,
       });
-      this.eventEmitter.emit('invoice.paid', { entityId: id, userId });
+      this.eventEmitter.emit('invoice.paid', { entityId: id, workspaceId });
       return paid;
     }
 
@@ -396,12 +400,12 @@ export class InvoicesService {
       data:  { status: InvoiceStatus.PARTIAL, amountPaid: newAmountPaid },
       include: INCLUDE_FULL,
     });
-    this.eventEmitter.emit('invoice.partial', { entityId: id, userId, amountPaid: newAmountPaid });
+    this.eventEmitter.emit('invoice.partial', { entityId: id, workspaceId, amountPaid: newAmountPaid });
     return partial;
   }
 
-  async recordPayment(userId: string, id: string, dto: { amountReceived: number; tdsDeducted: number; note?: string }) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async recordPayment(workspaceId: string, id: string, dto: { amountReceived: number; tdsDeducted: number; note?: string }) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status === InvoiceStatus.PAID) {
       throw new BadRequestException('Invoice is already fully paid');
@@ -418,7 +422,7 @@ export class InvoicesService {
         data:  { status: InvoiceStatus.PAID, amountPaid: total, tdsDeducted: newTds, paidAt: new Date() },
         include: INCLUDE_FULL,
       });
-      this.eventEmitter.emit('invoice.paid', { entityId: id, userId });
+      this.eventEmitter.emit('invoice.paid', { entityId: id, workspaceId });
       return paid;
     }
 
@@ -427,12 +431,12 @@ export class InvoicesService {
       data:  { status: InvoiceStatus.PARTIAL, amountPaid: newAmountPaid, tdsDeducted: newTds },
       include: INCLUDE_FULL,
     });
-    this.eventEmitter.emit('invoice.partial', { entityId: id, userId, amountPaid: newAmountPaid });
+    this.eventEmitter.emit('invoice.partial', { entityId: id, workspaceId, amountPaid: newAmountPaid });
     return partial;
   }
 
-  async markOverdue(userId: string, id: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async markOverdue(workspaceId: string, id: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
     const overdue = await this.prisma.invoice.update({
@@ -440,12 +444,12 @@ export class InvoicesService {
       data: { status: InvoiceStatus.OVERDUE },
       include: INCLUDE_FULL,
     });
-    this.eventEmitter.emit('invoice.overdue', { entityId: id, userId });
+    this.eventEmitter.emit('invoice.overdue', { entityId: id, workspaceId });
     return overdue;
   }
 
-  async void(userId: string, id: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async void(workspaceId: string, id: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status === InvoiceStatus.DRAFT) {
       throw new BadRequestException('Draft invoices cannot be voided — delete them instead');
@@ -456,8 +460,8 @@ export class InvoicesService {
     return this.prisma.invoice.update({ where: { id }, data: { status: InvoiceStatus.CANCELLED } });
   }
 
-  async delete(userId: string, id: string) {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id, userId } });
+  async delete(workspaceId: string, id: string) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (invoice.status !== InvoiceStatus.DRAFT) {
       throw new BadRequestException('Only draft invoices can be deleted — void non-draft invoices instead');

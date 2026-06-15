@@ -70,7 +70,7 @@ export class EmailService {
   }) {
     await this.prisma.emailLog.create({
       data: {
-        userId:      opts.userId,
+        workspaceId: opts.userId,
         to:          opts.to,
         subject:     opts.subject,
         templateKey: opts.templateKey,

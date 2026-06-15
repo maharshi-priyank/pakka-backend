@@ -37,10 +37,10 @@ export class ExpensesService {
     project: { select: { id: true, name: true } },
   } as const;
 
-  async create(userId: string, dto: CreateExpenseDto) {
+  async create(workspaceId: string, dto: CreateExpenseDto) {
     const expense = await this.prisma.expense.create({
       data: {
-        userId,
+        workspaceId,
         clientId:    dto.clientId,
         projectId:   dto.projectId,
         category:    dto.category,
@@ -60,24 +60,24 @@ export class ExpensesService {
 
     if (!DEFAULT_EXPENSE_CATEGORIES.includes(dto.category as any)) {
       await this.prisma.userExpenseCategory.upsert({
-        where:  { userId_name: { userId, name: dto.category } },
+        where:  { workspaceId_name: { workspaceId, name: dto.category } },
         update: {},
-        create: { userId, name: dto.category },
+        create: { workspaceId, name: dto.category },
       });
     }
 
     return expense;
   }
 
-  async findAll(userId: string, query: QueryExpensesDto) {
+  async findAll(workspaceId: string, query: QueryExpensesDto) {
     const where: {
-      userId:      string;
+      workspaceId:      string;
       clientId?:   string;
       projectId?:  string;
       isBillable?: boolean;
       isBilled?:   boolean;
       date?:       { gte?: Date; lte?: Date };
-    } = { userId };
+    } = { workspaceId };
 
     if (query.clientId)           where.clientId   = query.clientId;
     if (query.projectId)          where.projectId  = query.projectId;
@@ -96,9 +96,9 @@ export class ExpensesService {
     });
   }
 
-  async getCategories(userId: string): Promise<string[]> {
+  async getCategories(workspaceId: string): Promise<string[]> {
     const custom = await this.prisma.userExpenseCategory.findMany({
-      where:   { userId },
+      where:   { workspaceId },
       orderBy: { name: 'asc' },
     });
     const customNames = custom.map(c => c.name);
@@ -108,8 +108,8 @@ export class ExpensesService {
     ];
   }
 
-  async exportCsv(userId: string, query: QueryExpensesDto): Promise<string> {
-    const expenses = await this.findAll(userId, query);
+  async exportCsv(workspaceId: string, query: QueryExpensesDto): Promise<string> {
+    const expenses = await this.findAll(workspaceId, query);
 
     const header = [
       'Date', 'Category', 'Vendor', 'Description', 'Amount',
@@ -146,8 +146,8 @@ export class ExpensesService {
     return [header, ...rows].join('\n');
   }
 
-  async update(userId: string, id: string, dto: UpdateExpenseDto) {
-    await this.findOwned(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateExpenseDto) {
+    await this.findOwned(workspaceId, id);
     return this.prisma.expense.update({
       where: { id },
       data: {
@@ -171,14 +171,14 @@ export class ExpensesService {
     });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOwned(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOwned(workspaceId, id);
     await this.prisma.expense.delete({ where: { id } });
   }
 
-  async billExpenses(userId: string, dto: BillExpensesDto) {
+  async billExpenses(workspaceId: string, dto: BillExpensesDto) {
     const expenses = await this.prisma.expense.findMany({
-      where: { id: { in: dto.expenseIds }, userId, isBilled: false },
+      where: { id: { in: dto.expenseIds }, workspaceId, isBilled: false },
       include: { client: { select: { id: true, name: true } } },
     });
 
@@ -198,7 +198,7 @@ export class ExpensesService {
       gstRate:     0,
     }));
 
-    const invoice = await this.invoices.create(userId, {
+    const invoice = await this.invoices.create(workspaceId, {
       clientId,
       lineItems,
       gstType: GstType.EXEMPT,
@@ -212,8 +212,8 @@ export class ExpensesService {
     return invoice;
   }
 
-  private async findOwned(userId: string, id: string) {
-    const expense = await this.prisma.expense.findFirst({ where: { id, userId } });
+  private async findOwned(workspaceId: string, id: string) {
+    const expense = await this.prisma.expense.findFirst({ where: { id, workspaceId } });
     if (!expense) throw new NotFoundException('Expense not found');
     return expense;
   }

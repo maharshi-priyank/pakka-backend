@@ -39,7 +39,7 @@ export class WorkflowScheduler {
     workflowId:   string
     entityId:     string
     entityType:   string
-    userId:       string
+    workspaceId:  string
     pendingSteps: Prisma.JsonValue
     log:          Prisma.JsonValue
   }) {
@@ -87,7 +87,7 @@ export class WorkflowScheduler {
 
       } else {
         const action = head as ActionNode
-        await this.engine.executeAction(action.action, run.entityId, run.entityType, run.userId)
+        await this.engine.executeAction(action.action, run.entityId, run.entityType, run.workspaceId)
         const logEntry = { stepId: head.id, type: 'action', actionType: action.action.type, executedAt: new Date().toISOString() }
 
         if (!rest.length) {

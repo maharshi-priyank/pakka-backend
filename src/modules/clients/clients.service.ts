@@ -18,15 +18,15 @@ export class ClientsService {
     private readonly eventEmitter:  EventEmitter2,
   ) {}
 
-  async create(userId: string, dto: CreateClientDto) {
+  async create(workspaceId: string, dto: CreateClientDto) {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: workspaceId },
       select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
     });
     const plan = effectivePlan(user!);
     const limit = CLIENT_LIMITS[plan];
     if (isFinite(limit)) {
-      const count = await this.prisma.client.count({ where: { userId } });
+      const count = await this.prisma.client.count({ where: { workspaceId } });
       if (count >= limit) {
         throw new HttpException(
           { message: `${plan === 'FREE' ? 'Free' : 'Solo'} plan: ${limit} client limit reached. Upgrade to add more.`, code: 'PLAN_LIMIT' },
@@ -35,14 +35,14 @@ export class ClientsService {
       }
     }
     const client = await this.prisma.client.create({
-      data: { ...dto, userId, portalToken: nanoid(21) },
+      data: { ...dto, workspaceId, portalToken: nanoid(21) },
     });
-    this.eventEmitter.emit('client.created', { entityId: client.id, userId });
+    this.eventEmitter.emit('client.created', { entityId: client.id, workspaceId });
     return client;
   }
 
-  async regeneratePortalToken(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async regeneratePortalToken(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     const portalToken = nanoid(21);
     const client = await this.prisma.client.update({
       where: { id },
@@ -52,12 +52,12 @@ export class ClientsService {
     return { portalToken: client.portalToken, portalUrl: `${appUrl}/portal/${client.portalToken}` };
   }
 
-  async findAll(userId: string, query: QueryClientsDto) {
+  async findAll(workspaceId: string, query: QueryClientsDto) {
     const { page = 1, limit = 20, search } = query;
     const skip = (page - 1) * limit;
 
     const where = {
-      userId,
+      workspaceId,
       ...(query.includeArchived ? {} : { archivedAt: null }),
       ...(search && {
         OR: [
@@ -91,9 +91,9 @@ export class ClientsService {
     };
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const client = await this.prisma.client.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: {
         proposals: {
           orderBy: { createdAt: 'desc' },
@@ -145,48 +145,48 @@ export class ClientsService {
     return client;
   }
 
-  async update(userId: string, id: string, dto: UpdateClientDto) {
-    await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateClientDto) {
+    await this.findOne(workspaceId, id);
     return this.prisma.client.update({
       where: { id },
       data: dto,
     });
   }
 
-  async listNotes(userId: string, clientId: string) {
-    await this.findOne(userId, clientId);
+  async listNotes(workspaceId: string, clientId: string) {
+    await this.findOne(workspaceId, clientId);
     return this.prisma.clientNote.findMany({
-      where: { clientId, userId },
+      where: { clientId, workspaceId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createNote(userId: string, clientId: string, content: string) {
-    await this.findOne(userId, clientId);
+  async createNote(workspaceId: string, clientId: string, content: string) {
+    await this.findOne(workspaceId, clientId);
     return this.prisma.clientNote.create({
-      data: { userId, clientId, content },
+      data: { workspaceId, clientId, content },
     });
   }
 
-  async deleteNote(userId: string, clientId: string, noteId: string) {
-    await this.findOne(userId, clientId);
-    await this.prisma.clientNote.deleteMany({ where: { id: noteId, userId, clientId } });
+  async deleteNote(workspaceId: string, clientId: string, noteId: string) {
+    await this.findOne(workspaceId, clientId);
+    await this.prisma.clientNote.deleteMany({ where: { id: noteId, workspaceId, clientId } });
   }
 
-  async archive(userId: string, id: string) {
-    const client = await this.findOne(userId, id);
+  async archive(workspaceId: string, id: string) {
+    const client = await this.findOne(workspaceId, id);
     if (client.archivedAt) throw new BadRequestException('Client is already archived');
     return this.prisma.client.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
-  async unarchive(userId: string, id: string) {
-    const client = await this.findOne(userId, id);
+  async unarchive(workspaceId: string, id: string) {
+    const client = await this.findOne(workspaceId, id);
     if (!client.archivedAt) throw new BadRequestException('Client is not archived');
     return this.prisma.client.update({ where: { id }, data: { archivedAt: null } });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     const [proposals, contracts, invoices, projects, meetings] = await Promise.all([
       this.prisma.proposal.count({ where: { clientId: id } }),
       this.prisma.contract.count({ where: { clientId: id } }),

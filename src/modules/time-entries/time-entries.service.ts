@@ -19,10 +19,10 @@ export class TimeEntriesService {
     project: { select: { id: true, name: true } },
   } as const;
 
-  async create(userId: string, dto: CreateTimeEntryDto) {
+  async create(workspaceId: string, dto: CreateTimeEntryDto) {
     return this.prisma.timeEntry.create({
       data: {
-        userId,
+        workspaceId,
         clientId:     dto.clientId,
         projectId:    dto.projectId,
         description:  dto.description,
@@ -34,14 +34,14 @@ export class TimeEntriesService {
     });
   }
 
-  async findAll(userId: string, query: QueryTimeEntriesDto) {
+  async findAll(workspaceId: string, query: QueryTimeEntriesDto) {
     const where: {
-      userId:     string;
+      workspaceId:     string;
       clientId?:  string;
       projectId?: string;
       isBilled?:  boolean;
       date?:      { gte?: Date; lte?: Date };
-    } = { userId };
+    } = { workspaceId };
 
     if (query.clientId)          where.clientId  = query.clientId;
     if (query.projectId)         where.projectId = query.projectId;
@@ -59,8 +59,8 @@ export class TimeEntriesService {
     });
   }
 
-  async update(userId: string, id: string, dto: UpdateTimeEntryDto) {
-    await this.findOwned(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateTimeEntryDto) {
+    await this.findOwned(workspaceId, id);
     return this.prisma.timeEntry.update({
       where: { id },
       data: {
@@ -77,14 +77,14 @@ export class TimeEntriesService {
     });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOwned(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOwned(workspaceId, id);
     await this.prisma.timeEntry.delete({ where: { id } });
   }
 
-  async billEntries(userId: string, dto: BillEntriesDto) {
+  async billEntries(workspaceId: string, dto: BillEntriesDto) {
     const entries = await this.prisma.timeEntry.findMany({
-      where: { id: { in: dto.entryIds }, userId, isBilled: false },
+      where: { id: { in: dto.entryIds }, workspaceId, isBilled: false },
       include: { client: { select: { id: true, name: true } } },
     });
 
@@ -109,7 +109,7 @@ export class TimeEntriesService {
       };
     });
 
-    const invoice = await this.invoices.create(userId, {
+    const invoice = await this.invoices.create(workspaceId, {
       clientId,
       lineItems,
       gstType: GstType.IGST,
@@ -123,8 +123,8 @@ export class TimeEntriesService {
     return invoice;
   }
 
-  private async findOwned(userId: string, id: string) {
-    const entry = await this.prisma.timeEntry.findFirst({ where: { id, userId } });
+  private async findOwned(workspaceId: string, id: string) {
+    const entry = await this.prisma.timeEntry.findFirst({ where: { id, workspaceId } });
     if (!entry) throw new NotFoundException('Time entry not found');
     return entry;
   }

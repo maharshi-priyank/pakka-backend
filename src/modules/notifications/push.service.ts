@@ -51,7 +51,7 @@ export class PushService implements OnModuleInit {
   async sendToUser(userId: string, payload: PushPayload): Promise<void> {
     if (!this.configured) return;
 
-    const subs = await this.prisma.pushSubscription.findMany({ where: { userId } });
+    const subs = await this.prisma.pushSubscription.findMany({ where: { workspaceId: userId } });
     if (subs.length === 0) return;
 
     const data = JSON.stringify(payload);

@@ -31,10 +31,10 @@ export class ContractsService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(userId: string, dto: CreateContractDto) {
+  async create(workspaceId: string, dto: CreateContractDto) {
     return this.prisma.contract.create({
       data: {
-        userId,
+        workspaceId,
         proposalId: dto.proposalId,
         clientId:   dto.clientId,
         title:      dto.title,
@@ -44,9 +44,9 @@ export class ContractsService {
     });
   }
 
-  async createFromProposal(userId: string, proposalId: string) {
+  async createFromProposal(workspaceId: string, proposalId: string) {
     const proposal = await this.prisma.proposal.findFirst({
-      where:   { id: proposalId, userId },
+      where:   { id: proposalId, workspaceId },
       include: { lead: true },
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
@@ -63,7 +63,7 @@ export class ContractsService {
       } else {
         const newClient = await this.prisma.client.create({
           data: {
-            userId,
+            workspaceId,
             name:    lead.name,
             email:   lead.email    ?? undefined,
             phone:   lead.phone    ?? undefined,
@@ -106,7 +106,7 @@ export class ContractsService {
 
     return this.prisma.contract.create({
       data: {
-        userId,
+        workspaceId,
         proposalId: proposal.id,
         clientId,
         title:      `Contract — ${proposal.title}`,
@@ -116,11 +116,11 @@ export class ContractsService {
     });
   }
 
-  async findAll(userId: string, query: QueryContractsDto) {
+  async findAll(workspaceId: string, query: QueryContractsDto) {
     const { page = 1, limit = 20, status, clientId, includeArchived } = query;
     const skip  = (page - 1) * limit;
     const where = {
-      userId,
+      workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(status   && { status }),
       ...(clientId && { clientId }),
@@ -140,9 +140,9 @@ export class ContractsService {
     return { items: contracts, total, page, limit };
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const contract = await this.prisma.contract.findFirst({
-      where:   { id, userId },
+      where:   { id, workspaceId },
       include: INCLUDE_FULL,
     });
     if (!contract) throw new NotFoundException('Contract not found');
@@ -153,18 +153,22 @@ export class ContractsService {
     const contract = await this.prisma.contract.findUnique({
       where: { id },
       include: {
-        user:   { select: { name: true, businessName: true, email: true, logoUrl: true, plan: true, planExpiresAt: true, subscriptionStatus: true } },
-        client: { select: { id: true, name: true, company: true, email: true } },
+        workspace: { select: { name: true, businessName: true, logoUrl: true } },
+        client:    { select: { id: true, name: true, company: true, email: true } },
       },
     });
     if (!contract) throw new NotFoundException('Contract not found');
-    const hideBranding = effectivePlan(contract.user) === 'STUDIO';
-    const { planExpiresAt: _pe, subscriptionStatus: _ss, ...userPublic } = contract.user;
+    const owner = await this.prisma.user.findUnique({
+      where: { id: contract.workspaceId },
+      select: { email: true, plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
+    const hideBranding = effectivePlan(owner!) === 'STUDIO';
+    const userPublic = { ...contract.workspace, email: owner?.email ?? null };
     return { ...contract, user: userPublic, hideBranding, signerOtp: undefined };
   }
 
-  async update(userId: string, id: string, dto: UpdateContractDto) {
-    await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateContractDto) {
+    await this.findOne(workspaceId, id);
     return this.prisma.contract.update({
       where: { id },
       data: {
@@ -178,8 +182,8 @@ export class ContractsService {
     });
   }
 
-  async send(userId: string, id: string) {
-    const contract = await this.findOne(userId, id);
+  async send(workspaceId: string, id: string) {
+    const contract = await this.findOne(workspaceId, id);
     if (contract.status === ContractStatus.SIGNED) {
       throw new ForbiddenException('Contract is already signed');
     }
@@ -191,7 +195,7 @@ export class ContractsService {
       data:  { status: ContractStatus.SENT, signerOtp: otp, sentAt: new Date() },
     });
 
-    this.eventEmitter.emit('contract.sent', { entityId: id, userId });
+    this.eventEmitter.emit('contract.sent', { entityId: id, workspaceId });
     const appUrl = process.env.APP_URL ?? 'http://localhost:5175';
     return {
       contract: { ...updated, signerOtp: undefined },
@@ -230,12 +234,12 @@ export class ContractsService {
       },
     });
 
-    this.eventEmitter.emit('contract.signed', { entityId: id, userId: contract.userId });
+    this.eventEmitter.emit('contract.signed', { entityId: id, workspaceId: contract.workspaceId });
     return { ...signed, signerOtp: undefined };
   }
 
-  async archive(userId: string, id: string) {
-    const contract = await this.findOne(userId, id);
+  async archive(workspaceId: string, id: string) {
+    const contract = await this.findOne(workspaceId, id);
     if (contract.status === ContractStatus.SIGNED) {
       throw new BadRequestException('Cannot archive a signed contract — void it instead');
     }
@@ -243,22 +247,22 @@ export class ContractsService {
     return this.prisma.contract.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
-  async unarchive(userId: string, id: string) {
-    const contract = await this.findOne(userId, id);
+  async unarchive(workspaceId: string, id: string) {
+    const contract = await this.findOne(workspaceId, id);
     if (!contract.archivedAt) throw new BadRequestException('Contract is not archived');
     return this.prisma.contract.update({ where: { id }, data: { archivedAt: null } });
   }
 
-  async void(userId: string, id: string) {
-    const contract = await this.findOne(userId, id);
+  async void(workspaceId: string, id: string) {
+    const contract = await this.findOne(workspaceId, id);
     if (contract.status !== ContractStatus.SIGNED) {
       throw new BadRequestException('Only signed contracts can be voided — archive unsigned contracts instead');
     }
     return this.prisma.contract.update({ where: { id }, data: { status: ContractStatus.VOID } });
   }
 
-  async remove(userId: string, id: string) {
-    const contract = await this.findOne(userId, id);
+  async remove(workspaceId: string, id: string) {
+    const contract = await this.findOne(workspaceId, id);
     if (contract.status === ContractStatus.SIGNED || contract.status === ContractStatus.VOID) {
       throw new BadRequestException('Cannot delete a signed or voided contract');
     }

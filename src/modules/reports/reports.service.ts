@@ -118,7 +118,7 @@ export class ReportsService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         status: { not: InvoiceStatus.DRAFT },
         ...(dateFilter && { createdAt: dateFilter }),
       },
@@ -162,7 +162,7 @@ export class ReportsService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         status: { not: InvoiceStatus.DRAFT },
         ...(dateFilter && { createdAt: dateFilter }),
       },
@@ -218,7 +218,7 @@ export class ReportsService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         status: { not: InvoiceStatus.DRAFT },
         ...(dateFilter && { createdAt: dateFilter }),
       },
@@ -251,7 +251,7 @@ export class ReportsService {
 
     const expenses = await this.prisma.expense.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         ...(dateFilter && { date: dateFilter }),
       },
       select: { category: true, amount: true, isBillable: true, date: true },
@@ -295,7 +295,7 @@ export class ReportsService {
 
     const entries = await this.prisma.timeEntry.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         ...(dateFilter && { date: dateFilter }),
       },
       select: { clientId: true, durationMins: true, hourlyRate: true, isBilled: true, date: true, client: { select: { name: true } } },
@@ -358,7 +358,7 @@ export class ReportsService {
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         ...(basis === 'accrual'
           ? { status: { notIn: [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED] } }
           : {}),
@@ -380,7 +380,7 @@ export class ReportsService {
 
     const expenses = await this.prisma.expense.findMany({
       where: {
-        userId,
+        workspaceId: userId,
         ...(dateFilter && { date: dateFilter }),
       },
       select: {

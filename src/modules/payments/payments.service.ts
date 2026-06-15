@@ -135,7 +135,7 @@ export class PaymentsService {
       data: {
         eventType:   event.type,
         cashfreeRef,
-        userId:      event.data.subscription.customer_details?.customer_id,
+        workspaceId: event.data.subscription.customer_details?.customer_id,
         payload:     event as object,
       },
     });

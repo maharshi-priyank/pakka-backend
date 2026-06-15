@@ -13,21 +13,21 @@ export class MessagesService {
     private readonly emailService:  EmailService,
   ) {}
 
-  private async getOrCreateThread(userId: string, clientId: string, subject?: string) {
+  private async getOrCreateThread(workspaceId: string, clientId: string, subject?: string) {
     const existing = await this.prisma.thread.findUnique({
-      where: { userId_clientId: { userId, clientId } },
+      where: { workspaceId_clientId: { workspaceId, clientId } },
     })
     if (existing) return existing
-    const client = await this.prisma.client.findFirst({ where: { id: clientId, userId } })
+    const client = await this.prisma.client.findFirst({ where: { id: clientId, workspaceId } })
     if (!client) throw new NotFoundException('Client not found')
     return this.prisma.thread.create({
-      data: { userId, clientId, subject: subject ?? null },
+      data: { workspaceId, clientId, subject: subject ?? null },
     })
   }
 
-  async listThreads(userId: string) {
+  async listThreads(workspaceId: string) {
     const threads = await this.prisma.thread.findMany({
-      where:   { userId },
+      where:   { workspaceId },
       include: {
         client:   { select: { id: true, name: true, email: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
@@ -51,25 +51,25 @@ export class MessagesService {
     }))
   }
 
-  async getThread(userId: string, clientId: string) {
-    const thread = await this.getOrCreateThread(userId, clientId)
+  async getThread(workspaceId: string, clientId: string) {
+    const thread = await this.getOrCreateThread(workspaceId, clientId)
     const messages = await this.prisma.message.findMany({
       where:   { threadId: thread.id },
       orderBy: { createdAt: 'asc' },
     })
     const client = await this.prisma.client.findFirst({
-      where:  { id: clientId, userId },
+      where:  { id: clientId, workspaceId },
       select: { id: true, name: true, email: true },
     })
     return { thread, messages, client }
   }
 
-  async sendMessage(userId: string, clientId: string, dto: SendMessageDto) {
+  async sendMessage(workspaceId: string, clientId: string, dto: SendMessageDto) {
     if (dto.attachmentType && dto.attachmentId) {
-      await this.validateAttachment(userId, clientId, dto.attachmentType, dto.attachmentId)
+      await this.validateAttachment(workspaceId, clientId, dto.attachmentType, dto.attachmentId)
     }
 
-    const thread = await this.getOrCreateThread(userId, clientId, dto.subject)
+    const thread = await this.getOrCreateThread(workspaceId, clientId, dto.subject)
 
     if (dto.subject && !thread.subject) {
       await this.prisma.thread.update({ where: { id: thread.id }, data: { subject: dto.subject } })
@@ -86,7 +86,7 @@ export class MessagesService {
       },
     })
 
-    const user   = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user   = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     const client = await this.prisma.client.findUnique({ where: { id: clientId } })
     if (client?.email && user) {
       const portalUrl = `${process.env.PORTAL_BASE_URL ?? 'https://app.getclearwork.in/portal'}/${client.portalToken}#messages`
@@ -99,7 +99,7 @@ export class MessagesService {
          </table>`
       const html = layout(content, user.businessName ?? user.name, `New message from ${user.businessName ?? user.name}`)
       void this.emailService.send({
-        userId,
+        userId:      workspaceId,
         to:          client.email,
         subject,
         html,
@@ -112,9 +112,9 @@ export class MessagesService {
     return message
   }
 
-  async markRead(userId: string, clientId: string) {
+  async markRead(workspaceId: string, clientId: string) {
     const thread = await this.prisma.thread.findUnique({
-      where: { userId_clientId: { userId, clientId } },
+      where: { workspaceId_clientId: { workspaceId, clientId } },
     })
     if (!thread) return
     await this.prisma.message.updateMany({
@@ -123,9 +123,9 @@ export class MessagesService {
     })
   }
 
-  async getUnreadCount(userId: string): Promise<number> {
+  async getUnreadCount(workspaceId: string): Promise<number> {
     const threads = await this.prisma.thread.findMany({
-      where:  { userId },
+      where:  { workspaceId },
       select: { id: true },
     })
     if (!threads.length) return 0
@@ -143,13 +143,13 @@ export class MessagesService {
   async getThreadByToken(token: string) {
     const client = await this.prisma.client.findUnique({ where: { portalToken: token } })
     if (!client) throw new NotFoundException('Portal link invalid')
-    const thread = await this.getOrCreateThread(client.userId, client.id)
+    const thread = await this.getOrCreateThread(client.workspaceId, client.id)
     const messages = await this.prisma.message.findMany({
       where:   { threadId: thread.id },
       orderBy: { createdAt: 'asc' },
     })
     const user = await this.prisma.user.findUnique({
-      where:  { id: client.userId },
+      where:  { id: client.workspaceId },
       select: { businessName: true, name: true, emailSignature: true },
     })
     return { thread, messages, businessName: user?.businessName ?? user?.name ?? 'Your service provider' }
@@ -158,7 +158,7 @@ export class MessagesService {
   async sendReply(token: string, body: string) {
     const client = await this.prisma.client.findUnique({ where: { portalToken: token } })
     if (!client) throw new NotFoundException('Portal link invalid')
-    const thread = await this.getOrCreateThread(client.userId, client.id)
+    const thread = await this.getOrCreateThread(client.workspaceId, client.id)
     await this.prisma.thread.update({ where: { id: thread.id }, data: { updatedAt: new Date() } })
 
     const message = await this.prisma.message.create({
@@ -166,7 +166,7 @@ export class MessagesService {
     })
 
     void this.notifications.create({
-      userId:     client.userId,
+      userId:     client.workspaceId,
       type:       'MESSAGE_RECEIVED',
       title:      `${client.name} replied`,
       body:       body.replace(/<[^>]*>/g, '').slice(0, 120),
@@ -175,7 +175,7 @@ export class MessagesService {
       url:        `/app/inbox?client=${client.id}`,
     }).catch(() => {})
 
-    const user = await this.prisma.user.findUnique({ where: { id: client.userId } })
+    const user = await this.prisma.user.findUnique({ where: { id: client.workspaceId } })
     if (user?.email) {
       const inboxUrl = `https://app.getclearwork.in/app/inbox?client=${client.id}`
       const replySubject = `${client.name} replied to your message`
@@ -187,9 +187,9 @@ export class MessagesService {
          </table>`
       const html = layout(content, user.businessName ?? user.name, replySubject)
       void this.emailService.send({
-        userId:     client.userId,
-        to:         user.email,
-        subject:    replySubject,
+        userId:      client.workspaceId,
+        to:          user.email,
+        subject:     replySubject,
         html,
         templateKey: 'client_message_received',
         entityId:    message.id,
@@ -204,7 +204,7 @@ export class MessagesService {
     const client = await this.prisma.client.findUnique({ where: { portalToken: token } })
     if (!client) return
     const thread = await this.prisma.thread.findUnique({
-      where: { userId_clientId: { userId: client.userId, clientId: client.id } },
+      where: { workspaceId_clientId: { workspaceId: client.workspaceId, clientId: client.id } },
     })
     if (!thread) return
     await this.prisma.message.updateMany({
@@ -214,17 +214,17 @@ export class MessagesService {
   }
 
   private async validateAttachment(
-    userId: string, clientId: string,
+    workspaceId: string, clientId: string,
     type: 'PROPOSAL' | 'INVOICE' | 'CONTRACT', id: string,
   ) {
     if (type === 'PROPOSAL') {
-      const p = await this.prisma.proposal.findFirst({ where: { id, userId, clientId } })
+      const p = await this.prisma.proposal.findFirst({ where: { id, workspaceId, clientId } })
       if (!p) throw new BadRequestException('Proposal not found for this client')
     } else if (type === 'INVOICE') {
-      const i = await this.prisma.invoice.findFirst({ where: { id, userId, clientId } })
+      const i = await this.prisma.invoice.findFirst({ where: { id, workspaceId, clientId } })
       if (!i) throw new BadRequestException('Invoice not found for this client')
     } else if (type === 'CONTRACT') {
-      const c = await this.prisma.contract.findFirst({ where: { id, userId, clientId } })
+      const c = await this.prisma.contract.findFirst({ where: { id, workspaceId, clientId } })
       if (!c) throw new BadRequestException('Contract not found for this client')
     }
   }

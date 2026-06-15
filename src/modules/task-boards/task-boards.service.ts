@@ -51,18 +51,18 @@ const BOARD_INCLUDE = {
 export class TaskBoardsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(userId: string, projectId?: string, includeArchived = false) {
+  async list(workspaceId: string, projectId?: string, includeArchived = false) {
     return this.prisma.taskBoard.findMany({
-      where: { userId, projectId: projectId ?? null, ...(includeArchived ? {} : { archivedAt: null }) },
+      where: { workspaceId, projectId: projectId ?? null, ...(includeArchived ? {} : { archivedAt: null }) },
       orderBy: { position: 'asc' },
       select: { id: true, name: true, position: true, projectId: true, createdAt: true, archivedAt: true },
     })
   }
 
-  async create(userId: string, dto: CreateBoardDto) {
+  async create(workspaceId: string, dto: CreateBoardDto) {
     return this.prisma.taskBoard.create({
       data: {
-        userId,
+        workspaceId,
         projectId: dto.projectId ?? null,
         name: dto.name,
         columns: { create: DEFAULT_COLUMNS },
@@ -71,17 +71,17 @@ export class TaskBoardsService {
     })
   }
 
-  async findOne(userId: string, boardId: string) {
+  async findOne(workspaceId: string, boardId: string) {
     const board = await this.prisma.taskBoard.findUnique({
       where: { id: boardId },
       include: BOARD_INCLUDE,
     })
-    if (!board || board.userId !== userId) throw new NotFoundException('Board not found')
+    if (!board || board.workspaceId !== workspaceId) throw new NotFoundException('Board not found')
     return board
   }
 
-  async update(userId: string, boardId: string, dto: UpdateBoardDto) {
-    await this.assertOwner(userId, boardId)
+  async update(workspaceId: string, boardId: string, dto: UpdateBoardDto) {
+    await this.assertOwner(workspaceId, boardId)
     return this.prisma.taskBoard.update({
       where: { id: boardId },
       data: {
@@ -91,20 +91,20 @@ export class TaskBoardsService {
     })
   }
 
-  async archive(userId: string, boardId: string) {
-    const board = await this.findOne(userId, boardId)
+  async archive(workspaceId: string, boardId: string) {
+    const board = await this.findOne(workspaceId, boardId)
     if (board.archivedAt) throw new BadRequestException('Board is already archived')
     return this.prisma.taskBoard.update({ where: { id: boardId }, data: { archivedAt: new Date() } })
   }
 
-  async unarchive(userId: string, boardId: string) {
-    const board = await this.findOne(userId, boardId)
+  async unarchive(workspaceId: string, boardId: string) {
+    const board = await this.findOne(workspaceId, boardId)
     if (!board.archivedAt) throw new BadRequestException('Board is not archived')
     return this.prisma.taskBoard.update({ where: { id: boardId }, data: { archivedAt: null } })
   }
 
-  async remove(userId: string, boardId: string) {
-    await this.assertOwner(userId, boardId)
+  async remove(workspaceId: string, boardId: string) {
+    await this.assertOwner(workspaceId, boardId)
     const columns = await this.prisma.boardColumn.findMany({ where: { boardId }, select: { id: true } })
     const colIds  = columns.map((c: { id: string }) => c.id)
     if (colIds.length) {
@@ -113,8 +113,8 @@ export class TaskBoardsService {
     await this.prisma.taskBoard.delete({ where: { id: boardId } })
   }
 
-  async createColumn(userId: string, boardId: string, dto: CreateColumnDto) {
-    await this.assertOwner(userId, boardId)
+  async createColumn(workspaceId: string, boardId: string, dto: CreateColumnDto) {
+    await this.assertOwner(workspaceId, boardId)
     const maxPos = await this.prisma.boardColumn.aggregate({
       where: { boardId },
       _max: { position: true },
@@ -125,8 +125,8 @@ export class TaskBoardsService {
     })
   }
 
-  async updateColumn(userId: string, boardId: string, colId: string, dto: UpdateColumnDto) {
-    await this.assertColumnOwner(userId, boardId, colId)
+  async updateColumn(workspaceId: string, boardId: string, colId: string, dto: UpdateColumnDto) {
+    await this.assertColumnOwner(workspaceId, boardId, colId)
     if (dto.isDone === true) {
       await this.prisma.boardColumn.updateMany({
         where: { boardId, isDone: true, id: { not: colId } },
@@ -144,22 +144,22 @@ export class TaskBoardsService {
     })
   }
 
-  async removeColumn(userId: string, boardId: string, colId: string) {
-    await this.assertColumnOwner(userId, boardId, colId)
+  async removeColumn(workspaceId: string, boardId: string, colId: string) {
+    await this.assertColumnOwner(workspaceId, boardId, colId)
     await this.prisma.task.updateMany({ where: { columnId: colId }, data: { columnId: null } })
     await this.prisma.boardColumn.delete({ where: { id: colId } })
   }
 
-  private async assertOwner(userId: string, boardId: string) {
-    const board = await this.prisma.taskBoard.findUnique({ where: { id: boardId }, select: { userId: true } })
-    if (!board || board.userId !== userId) throw new NotFoundException('Board not found')
+  private async assertOwner(workspaceId: string, boardId: string) {
+    const board = await this.prisma.taskBoard.findUnique({ where: { id: boardId }, select: { workspaceId: true } })
+    if (!board || board.workspaceId !== workspaceId) throw new NotFoundException('Board not found')
   }
 
-  private async assertColumnOwner(userId: string, boardId: string, colId: string) {
+  private async assertColumnOwner(workspaceId: string, boardId: string, colId: string) {
     const col = await this.prisma.boardColumn.findUnique({
       where: { id: colId },
-      select: { boardId: true, board: { select: { userId: true } } },
+      select: { boardId: true, board: { select: { workspaceId: true } } },
     })
-    if (!col || col.boardId !== boardId || col.board.userId !== userId) throw new NotFoundException('Column not found')
+    if (!col || col.boardId !== boardId || col.board.workspaceId !== workspaceId) throw new NotFoundException('Column not found')
   }
 }

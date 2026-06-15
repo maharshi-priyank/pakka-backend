@@ -61,7 +61,7 @@ export class GoogleFormsService {
     const effectivePlan = (user.planExpiresAt && user.planExpiresAt < new Date()) ? 'FREE' : user.plan;
     if (effectivePlan === 'FREE') {
       const count = await this.prisma.lead.count({
-        where: { userId: user.id, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } },
+        where: { workspaceId: user.id, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } },
       });
       if (count >= 3) {
         throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
@@ -72,7 +72,7 @@ export class GoogleFormsService {
 
     await this.prisma.lead.create({
       data: {
-        userId:  user.id,
+        workspaceId: user.id,
         name:    mapped.name    || dto.respondentEmail || 'Unknown',
         email:   mapped.email   || dto.respondentEmail || undefined,
         phone:   mapped.phone   || undefined,

@@ -221,7 +221,7 @@ export class UsersService {
     if (!promo || !promo.isActive) throw new NotFoundException('Invalid or expired promo code');
 
     const existing = await this.prisma.promoRedemption.findUnique({
-      where: { codeId_userId: { codeId: promo.id, userId } },
+      where: { codeId_workspaceId: { codeId: promo.id, workspaceId: userId } },
     });
     if (existing) throw new BadRequestException('You have already used this promo code');
 
@@ -237,7 +237,7 @@ export class UsersService {
     }
 
     await this.prisma.$transaction([
-      this.prisma.promoRedemption.create({ data: { codeId: promo.id, userId } }),
+      this.prisma.promoRedemption.create({ data: { codeId: promo.id, workspaceId: userId } }),
       this.prisma.user.update({ where: { id: userId }, data: { plan: promo.plan, planExpiresAt } }),
     ]);
 

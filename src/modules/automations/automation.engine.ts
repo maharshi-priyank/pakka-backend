@@ -15,8 +15,10 @@ import type {
 } from './templates/template.variables'
 
 export interface AutomationEvent {
-  entityId: string
-  userId:   string
+  entityId:    string
+  workspaceId: string
+  /** @deprecated use workspaceId */
+  userId?:     string
 }
 
 @Injectable()
@@ -33,10 +35,10 @@ export class AutomationEngine {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  private async notifySkip(userId: string, entityId: string, entityType: string, reason: string) {
+  private async notifySkip(workspaceId: string, entityId: string, entityType: string, reason: string) {
     await this.prisma.notification.create({
       data: {
-        userId,
+        workspaceId,
         type:       'automation_skip',
         title:      'Email not sent — missing contact info',
         body:       reason,
@@ -50,42 +52,42 @@ export class AutomationEngine {
 
   @OnEvent('invoice.paid')
   async onInvoicePaid(ev: AutomationEvent) {
-    await this.fireRulesForEvent('event.invoice.paid', ev.entityId, 'invoice', ev.userId)
+    await this.fireRulesForEvent('event.invoice.paid', ev.entityId, 'invoice', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('proposal.accepted')
   async onProposalAccepted(ev: AutomationEvent) {
-    await this.fireRulesForEvent('event.proposal.accepted', ev.entityId, 'proposal', ev.userId)
+    await this.fireRulesForEvent('event.proposal.accepted', ev.entityId, 'proposal', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('contract.signed')
   async onContractSigned(ev: AutomationEvent) {
-    await this.fireRulesForEvent('event.contract.signed', ev.entityId, 'contract', ev.userId)
+    await this.fireRulesForEvent('event.contract.signed', ev.entityId, 'contract', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('lead.created')
   async onLeadCreated(ev: AutomationEvent) {
-    await this.fireRulesForEvent('event.lead.created', ev.entityId, 'lead', ev.userId)
+    await this.fireRulesForEvent('event.lead.created', ev.entityId, 'lead', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('invoice.sent')
   async onInvoiceSent(ev: AutomationEvent) {
-    await this.sendEmailToClient({ templateKey: 'invoice_client_link' }, ev.entityId, 'invoice', ev.userId)
+    await this.sendEmailToClient({ templateKey: 'invoice_client_link' }, ev.entityId, 'invoice', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('proposal.sent')
   async onProposalSent(ev: AutomationEvent) {
-    await this.sendEmailToClient({ templateKey: 'proposal_client_link' }, ev.entityId, 'proposal', ev.userId)
+    await this.sendEmailToClient({ templateKey: 'proposal_client_link' }, ev.entityId, 'proposal', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('contract.sent')
   async onContractSent(ev: AutomationEvent) {
-    await this.sendEmailToClient({ templateKey: 'contract_client_sign' }, ev.entityId, 'contract', ev.userId)
+    await this.sendEmailToClient({ templateKey: 'contract_client_sign' }, ev.entityId, 'contract', ev.workspaceId ?? ev.userId!)
   }
 
   @OnEvent('meeting.scheduled')
   async onMeetingScheduled(ev: AutomationEvent) {
-    await this.sendMeetingConfirmation(ev.entityId, ev.userId)
+    await this.sendMeetingConfirmation(ev.entityId, ev.workspaceId ?? ev.userId!)
   }
 
   // ─── Core: fire all matching active rules ──────────────────────────────────
@@ -94,24 +96,24 @@ export class AutomationEngine {
     triggerEvent: string,
     entityId:     string,
     entityType:   string,
-    userId:       string,
+    workspaceId:  string,
   ) {
     const rules = await this.prisma.automationRule.findMany({
-      where: { userId, triggerEvent, isActive: true },
+      where: { workspaceId, triggerEvent, isActive: true },
     })
     for (const rule of rules) {
-      await this.executeRule(rule, entityId, entityType, userId)
+      await this.executeRule(rule, entityId, entityType, workspaceId)
     }
   }
 
   async executeRule(
-    rule:       { id: string; actionType: string; actionConfig: unknown; userId: string },
-    entityId:   string,
-    entityType: string,
-    userId:     string,
+    rule:        { id: string; actionType: string; actionConfig: unknown; workspaceId: string },
+    entityId:    string,
+    entityType:  string,
+    workspaceId: string,
   ) {
     try {
-      await this.dispatchAction(rule.actionType, rule.actionConfig as Record<string, unknown>, entityId, entityType, userId)
+      await this.dispatchAction(rule.actionType, rule.actionConfig as Record<string, unknown>, entityId, entityType, workspaceId)
       await this.automations.recordExecution({ ruleId: rule.id, entityId, entityType, status: 'SUCCESS' })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -127,13 +129,13 @@ export class AutomationEngine {
     actionConfig: Record<string, unknown>,
     entityId:     string,
     entityType:   string,
-    userId:       string,
+    workspaceId:  string,
   ) {
     switch (actionType) {
-      case 'send_email.client': return this.sendEmailToClient(actionConfig, entityId, entityType, userId)
-      case 'send_email.user':   return this.sendEmailToUser(actionConfig, userId, entityId, entityType)
-      case 'create.contract':   return this.autoCreateContract(entityId, userId)
-      case 'create.invoice':    return this.autoCreateInvoice(entityId, userId)
+      case 'send_email.client': return this.sendEmailToClient(actionConfig, entityId, entityType, workspaceId)
+      case 'send_email.user':   return this.sendEmailToUser(actionConfig, workspaceId, entityId, entityType)
+      case 'create.contract':   return this.autoCreateContract(entityId, workspaceId)
+      case 'create.invoice':    return this.autoCreateInvoice(entityId, workspaceId)
       default:
         throw new Error(`Unknown action type: ${actionType}`)
     }
@@ -142,14 +144,14 @@ export class AutomationEngine {
   // ─── Action: send email to client ─────────────────────────────────────────
 
   private async sendEmailToClient(
-    config:     Record<string, unknown>,
-    entityId:   string,
-    entityType: string,
-    userId:     string,
+    config:      Record<string, unknown>,
+    entityId:    string,
+    entityType:  string,
+    workspaceId: string,
   ) {
     const templateKey = config.templateKey as string
     const appUrl      = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
-    const user        = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user        = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     if (!user) return
 
     const businessName = user.businessName ?? user.name
@@ -162,7 +164,7 @@ export class AutomationEngine {
         include: { client: true },
       })
       if (!inv || !inv.client?.email) {
-        await this.notifySkip(userId, entityId, 'invoice', `Invoice ${inv?.invoiceNumber ?? entityId} has no client email — automated email was skipped.`)
+        await this.notifySkip(workspaceId, entityId, 'invoice', `Invoice ${inv?.invoiceNumber ?? entityId} has no client email — automated email was skipped.`)
         return
       }
       to = inv.client.email
@@ -191,7 +193,7 @@ export class AutomationEngine {
       const contractEmail = contract?.client?.email ?? content?.signerEmail
       const contractName  = contract?.client?.name  ?? content?.signerName ?? 'there'
       if (!contract || !contractEmail) {
-        await this.notifySkip(userId, entityId, 'contract', `Contract "${contract?.title ?? entityId}" has no client email — automated email was skipped.`)
+        await this.notifySkip(workspaceId, entityId, 'contract', `Contract "${contract?.title ?? entityId}" has no client email — automated email was skipped.`)
         return
       }
       to = contractEmail
@@ -209,7 +211,7 @@ export class AutomationEngine {
       })
       const clientEmail = proposal?.client?.email ?? (proposal?.lead as { email?: string } | null)?.email
       if (!proposal || !clientEmail) {
-        await this.notifySkip(userId, entityId, 'proposal', `Proposal "${proposal?.title ?? entityId}" has no client email — automated email was skipped.`)
+        await this.notifySkip(workspaceId, entityId, 'proposal', `Proposal "${proposal?.title ?? entityId}" has no client email — automated email was skipped.`)
         return
       }
       to = clientEmail
@@ -224,7 +226,7 @@ export class AutomationEngine {
     } else if (entityType === 'lead') {
       const lead = await this.prisma.lead.findUnique({ where: { id: entityId } })
       if (!lead?.email) {
-        await this.notifySkip(userId, entityId, 'lead', `Lead "${lead?.name ?? entityId}" has no email address — automated email was skipped.`)
+        await this.notifySkip(workspaceId, entityId, 'lead', `Lead "${lead?.name ?? entityId}" has no email address — automated email was skipped.`)
         return
       }
       to = lead.email
@@ -240,19 +242,19 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ userId, to, subject, html, templateKey, entityId, entityType })
+    await this.email.send({ userId: workspaceId, to, subject, html, templateKey, entityId, entityType })
   }
 
   // ─── Action: send email to user (owner) ───────────────────────────────────
 
   private async sendEmailToUser(
-    config:     Record<string, unknown>,
-    userId:     string,
-    entityId:   string,
-    entityType: string,
+    config:      Record<string, unknown>,
+    workspaceId: string,
+    entityId:    string,
+    entityType:  string,
   ) {
     const templateKey = config.templateKey as string
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     if (!user?.email) return
 
     const businessName = user.businessName ?? user.name
@@ -287,12 +289,12 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ userId, to: user.email, subject, html, templateKey, entityId, entityType })
+    await this.email.send({ userId: workspaceId, to: user.email, subject, html, templateKey, entityId, entityType })
   }
 
   // ─── Meeting: confirmation email to client/lead + guests ─────────────────
 
-  private async sendMeetingConfirmation(meetingId: string, userId: string) {
+  private async sendMeetingConfirmation(meetingId: string, workspaceId: string) {
     const meeting = await this.prisma.meeting.findUnique({
       where:   { id: meetingId },
       include: {
@@ -302,7 +304,7 @@ export class AutomationEngine {
     })
     if (!meeting) return
 
-    const user         = await this.prisma.user.findUnique({ where: { id: userId } })
+    const user         = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     if (!user) return
 
     const businessName = user.businessName ?? user.name
@@ -358,20 +360,20 @@ export class AutomationEngine {
       const { subject, html } = renderTemplate('meeting_scheduled_client', vars)
 
       if (outlookCal) {
-        const sent = await outlookCal.sendEmail(userId, { to: recipient.email, subject, html })
+        const sent = await outlookCal.sendEmail(workspaceId, { to: recipient.email, subject, html })
         if (!sent) {
-          await this.email.send({ userId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+          await this.email.send({ userId: workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
         }
       } else {
-        await this.email.send({ userId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+        await this.email.send({ userId: workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
       }
     }
   }
 
   // ─── Send digest email to user (called directly from scheduler) ───────────
 
-  async sendDigestEmail(userId: string, templateKey: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+  async sendDigestEmail(workspaceId: string, templateKey: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: workspaceId } })
     if (!user?.email) return
 
     const businessName = user.businessName ?? user.name
@@ -380,15 +382,15 @@ export class AutomationEngine {
 
     const [revenueAgg, activeLeads, overdueCount, openProposals, followUps] = await Promise.all([
       this.prisma.invoice.aggregate({
-        where: { userId, status: 'PAID', paidAt: { gte: startOfMonth } },
+        where: { workspaceId, status: 'PAID', paidAt: { gte: startOfMonth } },
         _sum:  { total: true },
       }),
-      this.prisma.lead.count({ where: { userId, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } } }),
-      this.prisma.invoice.count({ where: { userId, status: 'OVERDUE' } }),
-      this.prisma.proposal.count({ where: { userId, status: { in: ['SENT', 'OPENED'] } } }),
+      this.prisma.lead.count({ where: { workspaceId, isDeleted: false, stage: { notIn: ['WON', 'LOST'] } } }),
+      this.prisma.invoice.count({ where: { workspaceId, status: 'OVERDUE' } }),
+      this.prisma.proposal.count({ where: { workspaceId, status: { in: ['SENT', 'OPENED'] } } }),
       this.prisma.lead.count({
         where: {
-          userId,
+          workspaceId,
           isDeleted:  false,
           followUpAt: { gte: now, lte: new Date(now.getTime() + 7 * 86_400_000) },
         },
@@ -397,7 +399,7 @@ export class AutomationEngine {
 
     const vars = {
       businessName,
-      revenueThisMonth: `₹${Number(revenueAgg._sum.total ?? 0).toLocaleString('en-IN')}`,
+      revenueThisMonth: `₹${Number(revenueAgg._sum?.total ?? 0).toLocaleString('en-IN')}`,
       activeLeads,
       overdueCount,
       openProposals,
@@ -405,22 +407,22 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ userId, to: user.email, subject, html, templateKey, entityId: userId, entityType: 'user' })
+    await this.email.send({ userId: workspaceId, to: user.email, subject, html, templateKey, entityId: workspaceId, entityType: 'user' })
   }
 
   // ─── Action: auto-create contract ─────────────────────────────────────────
 
-  private async autoCreateContract(proposalId: string, userId: string) {
+  private async autoCreateContract(proposalId: string, workspaceId: string) {
     const contractsService = this.moduleRef.get(ContractsService, { strict: false })
-    await contractsService.createFromProposal(userId, proposalId)
+    await contractsService.createFromProposal(workspaceId, proposalId)
     this.logger.log(`[engine] auto-created contract from proposal=${proposalId}`)
   }
 
   // ─── Action: auto-create invoice ──────────────────────────────────────────
 
-  private async autoCreateInvoice(contractId: string, userId: string) {
+  private async autoCreateInvoice(contractId: string, workspaceId: string) {
     const invoicesService = this.moduleRef.get(InvoicesService, { strict: false })
-    await invoicesService.createFromContract(userId, contractId)
+    await invoicesService.createFromContract(workspaceId, contractId)
     this.logger.log(`[engine] auto-created invoice from contract=${contractId}`)
   }
 }

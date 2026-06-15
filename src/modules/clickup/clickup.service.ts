@@ -140,7 +140,7 @@ export class ClickUpService {
           where:  { clickupListId: list.id },
           update: { name: list.name, description: list.content ?? undefined },
           create: {
-            userId,
+            workspaceId: userId,
             name:         list.name,
             description:  list.content ?? null,
             clickupListId: list.id,
@@ -172,7 +172,7 @@ export class ClickUpService {
       let projectId: string | undefined;
       if (entry.list?.id) {
         const project = await this.prisma.project.findFirst({
-          where:  { clickupListId: entry.list.id, userId },
+          where:  { clickupListId: entry.list.id, workspaceId: userId },
           select: { id: true },
         });
         projectId = project?.id;
@@ -182,7 +182,7 @@ export class ClickUpService {
         where:  { clickupTaskId: entry.task.id },
         update: { durationMins, description: entry.task.name, date: entryDate, projectId },
         create: {
-          userId,
+          workspaceId: userId,
           description:  entry.task.name,
           date:         entryDate,
           durationMins,
@@ -206,7 +206,7 @@ export class ClickUpService {
         where:  { clickupMemberId: memberId },
         update: { name: member.user.username, email: member.user.email },
         create: {
-          userId,
+          workspaceId: userId,
           name:           member.user.username,
           email:          member.user.email,
           clickupMemberId: memberId,

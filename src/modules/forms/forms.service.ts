@@ -13,29 +13,29 @@ export class FormsService {
     private readonly eventEmitter:  EventEmitter2,
   ) {}
 
-  async create(userId: string, dto: CreateFormDto) {
+  async create(workspaceId: string, dto: CreateFormDto) {
     return this.prisma.intakeForm.create({
       data: {
         title:       dto.title,
         description: dto.description,
         fields:      (dto.fields ?? []) as unknown as object[],
-        userId,
+        workspaceId,
         token:       nanoid(21),
       },
     });
   }
 
-  async findAll(userId: string, includeArchived = false) {
+  async findAll(workspaceId: string, includeArchived = false) {
     return this.prisma.intakeForm.findMany({
-      where:   { userId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where:   { workspaceId, ...(includeArchived ? {} : { archivedAt: null }) },
       include: { _count: { select: { submissions: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const form = await this.prisma.intakeForm.findFirst({
-      where:   { id, userId },
+      where:   { id, workspaceId },
       include: {
         submissions: { orderBy: { submittedAt: 'desc' } },
         _count:      { select: { submissions: true } },
@@ -49,7 +49,7 @@ export class FormsService {
     const form = await this.prisma.intakeForm.findUnique({
       where:   { token },
       include: {
-        user: { select: { businessName: true, name: true, logoUrl: true } },
+        workspace: { select: { businessName: true, name: true, logoUrl: true } },
       },
     });
     if (!form) throw new NotFoundException('Form not found');
@@ -59,12 +59,12 @@ export class FormsService {
       description: form.description,
       fields:      form.fields,
       isActive:    form.isActive,
-      user:        form.user,
+      user:        form.workspace,
     };
   }
 
-  async update(userId: string, id: string, dto: UpdateFormDto) {
-    await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateFormDto) {
+    await this.findOne(workspaceId, id);
     return this.prisma.intakeForm.update({
       where: { id },
       data:  {
@@ -75,20 +75,20 @@ export class FormsService {
     });
   }
 
-  async archive(userId: string, id: string) {
-    const form = await this.findOne(userId, id);
+  async archive(workspaceId: string, id: string) {
+    const form = await this.findOne(workspaceId, id);
     if (form.archivedAt) throw new BadRequestException('Form is already archived');
     return this.prisma.intakeForm.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
-  async unarchive(userId: string, id: string) {
-    const form = await this.findOne(userId, id);
+  async unarchive(workspaceId: string, id: string) {
+    const form = await this.findOne(workspaceId, id);
     if (!form.archivedAt) throw new BadRequestException('Form is not archived');
     return this.prisma.intakeForm.update({ where: { id }, data: { archivedAt: null } });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     const submissions = await this.prisma.intakeFormSubmission.count({ where: { formId: id } });
     if (submissions > 0) {
       throw new BadRequestException(`Cannot delete: this form has ${submissions} submission${submissions > 1 ? 's' : ''}. Archive instead.`);
@@ -115,16 +115,16 @@ export class FormsService {
     }
 
     this.eventEmitter.emit('form.submitted', {
-      entityId: form.id,
-      userId:   form.userId,
-      formId:   form.id,
+      entityId:    form.id,
+      workspaceId: form.workspaceId,
+      formId:      form.id,
     });
 
     return submission;
   }
 
   private async createLeadFromSubmission(
-    form: { id: string; userId: string; title: string; leadFieldMap: unknown },
+    form: { id: string; workspaceId: string; title: string; leadFieldMap: unknown },
     dto:  SubmitFormDto,
   ) {
     const fieldMap = (form.leadFieldMap ?? {}) as Record<string, string>;
@@ -149,7 +149,7 @@ export class FormsService {
 
     await this.prisma.lead.create({
       data: {
-        userId:  form.userId,
+        workspaceId:  form.workspaceId,
         name,
         email:   get('email')   || dto.respondentEmail || undefined,
         phone:   get('phone')   || undefined,

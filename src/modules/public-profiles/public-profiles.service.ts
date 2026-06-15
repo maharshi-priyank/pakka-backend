@@ -143,7 +143,7 @@ export class PublicProfilesService {
     if (!user) throw new NotFoundException('Profile not found');
 
     return this.prisma.publicProfileEnquiry.create({
-      data: { userId: user.id, ...dto },
+      data: { workspaceId: user.id, ...dto },
     });
   }
 
@@ -167,28 +167,28 @@ export class PublicProfilesService {
       acceptedProposals,
       respondedLeads,
     ] = await Promise.all([
-      this.prisma.project.count({ where: { userId, status: 'COMPLETED' } }),
+      this.prisma.project.count({ where: { workspaceId: userId, status: 'COMPLETED' } }),
       this.prisma.invoice.aggregate({
-        where: { userId, status: 'PAID' },
+        where: { workspaceId: userId, status: 'PAID' },
         _sum: { total: true },
       }),
       this.prisma.project.groupBy({
         by: ['clientId'],
-        where: { userId, status: 'COMPLETED', clientId: { not: null } },
+        where: { workspaceId: userId, status: 'COMPLETED', clientId: { not: null } },
         _count: true,
       }),
       this.prisma.project.groupBy({
         by: ['clientId'],
-        where: { userId, status: 'COMPLETED', clientId: { not: null } },
+        where: { workspaceId: userId, status: 'COMPLETED', clientId: { not: null } },
         _count: { _all: true },
         having: { clientId: { _count: { gte: 2 } } },
       }),
       this.prisma.proposal.count({
-        where: { userId, status: { in: ['SENT', 'OPENED', 'ACCEPTED', 'DECLINED', 'EXPIRED'] } },
+        where: { workspaceId: userId, status: { in: ['SENT', 'OPENED', 'ACCEPTED', 'DECLINED', 'EXPIRED'] } },
       }),
-      this.prisma.proposal.count({ where: { userId, status: 'ACCEPTED' } }),
+      this.prisma.proposal.count({ where: { workspaceId: userId, status: 'ACCEPTED' } }),
       this.prisma.lead.findMany({
-        where: { userId, isDeleted: false, stage: { not: 'ENQUIRY' } },
+        where: { workspaceId: userId, isDeleted: false, stage: { not: 'ENQUIRY' } },
         select: { createdAt: true, updatedAt: true },
         take: 100,
         orderBy: { createdAt: 'desc' },

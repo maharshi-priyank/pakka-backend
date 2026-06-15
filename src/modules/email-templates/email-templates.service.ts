@@ -19,9 +19,9 @@ export class EmailTemplatesService {
   ) {}
 
   /** All template metadata + whether the user has customised each one */
-  async listTemplates(userId: string) {
+  async listTemplates(workspaceId: string) {
     const overrides = await this.prisma.emailTemplate.findMany({
-      where: { userId },
+      where: { workspaceId },
       select: { templateKey: true, subject: true, updatedAt: true },
     })
     const overrideMap = new Map(overrides.map(o => [o.templateKey, o]))
@@ -34,7 +34,7 @@ export class EmailTemplatesService {
   }
 
   /** Get one template — returns DB override if it exists, else renders system default as HTML */
-  async getTemplate(userId: string, templateKey: string) {
+  async getTemplate(workspaceId: string, templateKey: string) {
     if (!TEMPLATE_KEYS.includes(templateKey)) {
       throw new NotFoundException(`Unknown template key: ${templateKey}`)
     }
@@ -42,7 +42,7 @@ export class EmailTemplatesService {
     const meta = getTemplateMeta(templateKey)!
 
     const override = await this.prisma.emailTemplate.findUnique({
-      where: { userId_templateKey: { userId, templateKey } },
+      where: { workspaceId_templateKey: { workspaceId, templateKey } },
     })
 
     if (override) {
@@ -71,42 +71,42 @@ export class EmailTemplatesService {
   }
 
   /** Save or update a user-customised template */
-  async upsertTemplate(userId: string, templateKey: string, dto: UpsertEmailTemplateDto) {
+  async upsertTemplate(workspaceId: string, templateKey: string, dto: UpsertEmailTemplateDto) {
     if (!TEMPLATE_KEYS.includes(templateKey)) {
       throw new NotFoundException(`Unknown template key: ${templateKey}`)
     }
 
     const record = await this.prisma.emailTemplate.upsert({
-      where:  { userId_templateKey: { userId, templateKey } },
-      create: { userId, templateKey, subject: dto.subject, bodyHtml: dto.bodyHtml },
+      where:  { workspaceId_templateKey: { workspaceId, templateKey } },
+      create: { workspaceId, templateKey, subject: dto.subject, bodyHtml: dto.bodyHtml },
       update: { subject: dto.subject, bodyHtml: dto.bodyHtml },
     })
     return record
   }
 
   /** Reset a template back to system default */
-  async resetTemplate(userId: string, templateKey: string) {
+  async resetTemplate(workspaceId: string, templateKey: string) {
     await this.prisma.emailTemplate.deleteMany({
-      where: { userId, templateKey },
+      where: { workspaceId, templateKey },
     })
     return { reset: true }
   }
 
   /** Send a test email using sample vars to the given address */
-  async sendTestEmail(userId: string, dto: SendTestEmailDto) {
+  async sendTestEmail(workspaceId: string, dto: SendTestEmailDto) {
     const { templateKey, to } = dto
     if (!TEMPLATE_KEYS.includes(templateKey)) {
       throw new NotFoundException(`Unknown template key: ${templateKey}`)
     }
 
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: workspaceId },
       select: { email: true, businessName: true },
     })
     if (!user) throw new NotFoundException('User not found')
 
     const override = await this.prisma.emailTemplate.findUnique({
-      where: { userId_templateKey: { userId, templateKey } },
+      where: { workspaceId_templateKey: { workspaceId, templateKey } },
     })
 
     let subject: string
@@ -130,7 +130,7 @@ export class EmailTemplatesService {
     }
 
     await this.emailService.send({
-      userId,
+      userId: workspaceId,
       to,
       subject: `[TEST] ${subject}`,
       html,
@@ -141,19 +141,19 @@ export class EmailTemplatesService {
   }
 
   /** Preview template HTML with sample data (no email sent) */
-  async previewTemplate(userId: string, templateKey: string) {
+  async previewTemplate(workspaceId: string, templateKey: string) {
     if (!TEMPLATE_KEYS.includes(templateKey)) {
       throw new NotFoundException(`Unknown template key: ${templateKey}`)
     }
 
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: workspaceId },
       select: { businessName: true },
     })
     const businessName = user?.businessName ?? 'Your Business'
 
     const override = await this.prisma.emailTemplate.findUnique({
-      where: { userId_templateKey: { userId, templateKey } },
+      where: { workspaceId_templateKey: { workspaceId, templateKey } },
     })
 
     if (override) {

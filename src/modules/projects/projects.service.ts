@@ -32,10 +32,10 @@ export class ProjectsService {
     return v ? Number(v.toString()) : 0;
   }
 
-  async create(userId: string, dto: CreateProjectDto) {
+  async create(workspaceId: string, dto: CreateProjectDto) {
     return this.prisma.project.create({
       data: {
-        userId,
+        workspaceId,
         name:        dto.name,
         description: dto.description,
         clientId:    dto.clientId,
@@ -51,11 +51,11 @@ export class ProjectsService {
     });
   }
 
-  async findAll(userId: string, query: QueryProjectsDto) {
+  async findAll(workspaceId: string, query: QueryProjectsDto) {
     const { page = 1, limit = 20, search, status, clientId, includeArchived } = query;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = { userId };
+    const where: Record<string, unknown> = { workspaceId };
     if (!includeArchived) where['archivedAt'] = null;
     if (status)   where['status']   = status;
     if (clientId) where['clientId'] = clientId;
@@ -94,9 +94,9 @@ export class ProjectsService {
     return { projects: enriched, total, page, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const project = await this.prisma.project.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: {
         client: { select: { id: true, name: true, company: true, email: true } },
         proposals: {
@@ -127,9 +127,9 @@ export class ProjectsService {
     return project;
   }
 
-  async getStats(userId: string, id: string) {
+  async getStats(workspaceId: string, id: string) {
     const project = await this.prisma.project.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: {
         invoices:    { where: { status: { not: 'DRAFT' } }, select: { status: true, total: true, amountPaid: true } },
         timeEntries: { select: { durationMins: true, hourlyRate: true } },
@@ -161,8 +161,8 @@ export class ProjectsService {
     };
   }
 
-  async update(userId: string, id: string, dto: UpdateProjectDto) {
-    await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateProjectDto) {
+    await this.findOne(workspaceId, id);
     return this.prisma.project.update({
       where: { id },
       data:  {
@@ -181,40 +181,40 @@ export class ProjectsService {
     });
   }
 
-  async listNotes(userId: string, projectId: string) {
-    await this.findOne(userId, projectId);
+  async listNotes(workspaceId: string, projectId: string) {
+    await this.findOne(workspaceId, projectId);
     return this.prisma.projectNote.findMany({
-      where: { projectId, userId },
+      where: { projectId, workspaceId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createNote(userId: string, projectId: string, content: string) {
-    await this.findOne(userId, projectId);
+  async createNote(workspaceId: string, projectId: string, content: string) {
+    await this.findOne(workspaceId, projectId);
     return this.prisma.projectNote.create({
-      data: { userId, projectId, content },
+      data: { workspaceId, projectId, content },
     });
   }
 
-  async deleteNote(userId: string, projectId: string, noteId: string) {
-    await this.findOne(userId, projectId);
-    await this.prisma.projectNote.deleteMany({ where: { id: noteId, userId, projectId } });
+  async deleteNote(workspaceId: string, projectId: string, noteId: string) {
+    await this.findOne(workspaceId, projectId);
+    await this.prisma.projectNote.deleteMany({ where: { id: noteId, workspaceId, projectId } });
   }
 
-  async archive(userId: string, id: string) {
-    const project = await this.findOne(userId, id);
+  async archive(workspaceId: string, id: string) {
+    const project = await this.findOne(workspaceId, id);
     if (project.archivedAt) throw new BadRequestException('Project is already archived');
     return this.prisma.project.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
-  async unarchive(userId: string, id: string) {
-    const project = await this.findOne(userId, id);
+  async unarchive(workspaceId: string, id: string) {
+    const project = await this.findOne(workspaceId, id);
     if (!project.archivedAt) throw new BadRequestException('Project is not archived');
     return this.prisma.project.update({ where: { id }, data: { archivedAt: null } });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     const [tasks, invoices, timeEntries, expenses] = await Promise.all([
       this.prisma.task.count({ where: { projectId: id } }),
       this.prisma.invoice.count({ where: { projectId: id } }),
@@ -235,19 +235,19 @@ export class ProjectsService {
   }
 
   async getProjectPl(
-    userId: string,
+    workspaceId: string,
     projectId: string,
     basis: 'accrual' | 'cash' = 'accrual',
   ) {
     const project = await this.prisma.project.findFirst({
-      where:  { id: projectId, userId },
+      where:  { id: projectId, workspaceId },
       select: { budget: true },
     });
     if (!project) throw new NotFoundException('Project not found');
 
     const invoices = await this.prisma.invoice.findMany({
       where: {
-        userId,
+        workspaceId,
         projectId,
         ...(basis === 'accrual'
           ? { status: { notIn: [InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED] } }
@@ -257,7 +257,7 @@ export class ProjectsService {
     });
 
     const expenses = await this.prisma.expense.findMany({
-      where:  { userId, projectId },
+      where:  { workspaceId, projectId },
       select: { amount: true },
     });
 

@@ -21,15 +21,15 @@ export class MeetingsService {
     private readonly eventEmitter:     EventEmitter2,
   ) {}
 
-  async create(userId: string, dto: CreateMeetingDto) {
+  async create(workspaceId: string, dto: CreateMeetingDto) {
     const user = await this.prisma.user.findUnique({
-      where:  { id: userId },
+      where:  { id: workspaceId },
       select: { googleCalendarConnected: true, outlookConnected: true },
     });
 
     const meeting = await this.prisma.meeting.create({
       data: {
-        userId,
+        workspaceId,
         title:        dto.title,
         agenda:       dto.agenda,
         scheduledAt:  new Date(dto.scheduledAt),
@@ -61,12 +61,12 @@ export class MeetingsService {
     const shouldUseOutlook = useOutlook ?? (dto.provider ? false : user?.outlookConnected);
 
     if (shouldUseGoogle) {
-      const { meetLink, googleEventId } = await this.googleCalendar.createEvent(userId, eventPayload);
+      const { meetLink, googleEventId } = await this.googleCalendar.createEvent(workspaceId, eventPayload);
       if (meetLink || googleEventId) {
         meetingUpdate = { meetLink, googleEventId, meetProvider: 'google' };
       }
     } else if (shouldUseOutlook) {
-      const { meetLink, outlookEventId } = await this.outlookCalendar.createEvent(userId, eventPayload);
+      const { meetLink, outlookEventId } = await this.outlookCalendar.createEvent(workspaceId, eventPayload);
       if (meetLink || outlookEventId) {
         meetingUpdate = { meetLink, outlookEventId, meetProvider: 'outlook' };
       }
@@ -78,17 +78,17 @@ export class MeetingsService {
         data:    meetingUpdate,
         include: INCLUDE_FULL,
       });
-      this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, userId });
+      this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, workspaceId });
       return updated;
     }
 
-    this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, userId });
+    this.eventEmitter.emit('meeting.scheduled', { entityId: meeting.id, workspaceId });
     return meeting;
   }
 
-  async checkConflicts(userId: string, scheduledAt: Date, durationMins: number, provider?: 'google' | 'outlook') {
+  async checkConflicts(workspaceId: string, scheduledAt: Date, durationMins: number, provider?: 'google' | 'outlook') {
     const user = await this.prisma.user.findUnique({
-      where:  { id: userId },
+      where:  { id: workspaceId },
       select: { googleCalendarConnected: true, outlookConnected: true },
     });
 
@@ -96,21 +96,21 @@ export class MeetingsService {
     const useOutlook = provider === 'outlook' ? user?.outlookConnected          : provider ? false : user?.outlookConnected;
 
     if (useGoogle) {
-      return this.googleCalendar.checkConflicts(userId, scheduledAt, durationMins);
+      return this.googleCalendar.checkConflicts(workspaceId, scheduledAt, durationMins);
     }
     if (useOutlook) {
-      return this.outlookCalendar.checkConflicts(userId, scheduledAt, durationMins);
+      return this.outlookCalendar.checkConflicts(workspaceId, scheduledAt, durationMins);
     }
     return { hasConflict: false, conflicts: [] };
   }
 
-  async findAll(userId: string, query: { status?: MeetingStatus; page?: number; limit?: number }) {
+  async findAll(workspaceId: string, query: { status?: MeetingStatus; page?: number; limit?: number }) {
     const page  = query.page  ?? 1;
     const limit = query.limit ?? 20;
     const skip  = (page - 1) * limit;
 
     const where = {
-      userId,
+      workspaceId,
       ...(query.status ? { status: query.status } : {}),
     };
 
@@ -122,16 +122,16 @@ export class MeetingsService {
     return { items, total, page, limit };
   }
 
-  async findUpcoming(userId: string) {
+  async findUpcoming(workspaceId: string) {
     return this.prisma.meeting.findMany({
-      where:   { userId, scheduledAt: { gte: new Date() }, status: MeetingStatus.SCHEDULED },
+      where:   { workspaceId, scheduledAt: { gte: new Date() }, status: MeetingStatus.SCHEDULED },
       include: INCLUDE_FULL,
       orderBy: { scheduledAt: 'asc' },
       take:    5,
     });
   }
 
-  async getUpcomingCount(userId: string) {
+  async getUpcomingCount(workspaceId: string) {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
@@ -139,7 +139,7 @@ export class MeetingsService {
 
     const count = await this.prisma.meeting.count({
       where: {
-        userId,
+        workspaceId,
         scheduledAt: { gte: startOfDay, lte: endOfDay },
         status:      MeetingStatus.SCHEDULED,
       },
@@ -147,17 +147,17 @@ export class MeetingsService {
     return { count };
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const meeting = await this.prisma.meeting.findFirst({
-      where:   { id, userId },
+      where:   { id, workspaceId },
       include: INCLUDE_FULL,
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
     return meeting;
   }
 
-  async update(userId: string, id: string, dto: UpdateMeetingDto) {
-    const meeting = await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateMeetingDto) {
+    const meeting = await this.findOne(workspaceId, id);
 
     const updated = await this.prisma.meeting.update({
       where: { id },
@@ -177,26 +177,26 @@ export class MeetingsService {
         durationMins: dto.durationMins ?? meeting.durationMins,
       };
       if (meeting.googleEventId) {
-        await this.googleCalendar.updateEvent(userId, meeting.googleEventId, calUpdate);
+        await this.googleCalendar.updateEvent(workspaceId, meeting.googleEventId, calUpdate);
       } else if ((meeting as Record<string, unknown>)['outlookEventId']) {
-        await this.outlookCalendar.updateEvent(userId, (meeting as Record<string, unknown>)['outlookEventId'] as string, calUpdate);
+        await this.outlookCalendar.updateEvent(workspaceId, (meeting as Record<string, unknown>)['outlookEventId'] as string, calUpdate);
       }
     }
 
     return updated;
   }
 
-  async complete(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async complete(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     return this.prisma.meeting.update({ where: { id }, data: { status: MeetingStatus.COMPLETED }, include: INCLUDE_FULL });
   }
 
-  async cancel(userId: string, id: string) {
-    const meeting = await this.findOne(userId, id) as Record<string, unknown>;
+  async cancel(workspaceId: string, id: string) {
+    const meeting = await this.findOne(workspaceId, id) as Record<string, unknown>;
     if (meeting['googleEventId']) {
-      await this.googleCalendar.deleteEvent(userId, meeting['googleEventId'] as string);
+      await this.googleCalendar.deleteEvent(workspaceId, meeting['googleEventId'] as string);
     } else if (meeting['outlookEventId']) {
-      await this.outlookCalendar.deleteEvent(userId, meeting['outlookEventId'] as string);
+      await this.outlookCalendar.deleteEvent(workspaceId, meeting['outlookEventId'] as string);
     }
     return this.prisma.meeting.update({ where: { id }, data: { status: MeetingStatus.CANCELLED }, include: INCLUDE_FULL });
   }

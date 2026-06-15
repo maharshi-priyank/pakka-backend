@@ -17,10 +17,10 @@ export class LeadsService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async create(userId: string, dto: CreateLeadDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
+  async create(workspaceId: string, dto: CreateLeadDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: workspaceId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
     if (effectivePlan(user!) === 'FREE') {
-      const count = await this.prisma.lead.count({ where: { userId, archivedAt: null, stage: { notIn: ['WON', 'LOST'] } } });
+      const count = await this.prisma.lead.count({ where: { workspaceId, archivedAt: null, stage: { notIn: ['WON', 'LOST'] } } });
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
     }
 
@@ -29,20 +29,20 @@ export class LeadsService {
         ...dto,
         budget: dto.budget !== undefined ? new Decimal(dto.budget) : undefined,
         followUpAt: dto.followUpAt ? new Date(dto.followUpAt) : undefined,
-        userId,
+        workspaceId,
       },
       include: { client: true },
     });
-    this.eventEmitter.emit('lead.created', { entityId: lead.id, userId });
+    this.eventEmitter.emit('lead.created', { entityId: lead.id, workspaceId });
     return lead;
   }
 
-  async findAll(userId: string, query: QueryLeadsDto) {
+  async findAll(workspaceId: string, query: QueryLeadsDto) {
     const { page = 1, limit = 20, search, stage, includeArchived } = query;
     const skip = (page - 1) * limit;
 
     const where = {
-      userId,
+      workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(stage && { stage }),
       ...(search && {
@@ -64,7 +64,7 @@ export class LeadsService {
       }),
       this.prisma.lead.count({ where }),
       this.prisma.lead.aggregate({
-        where: { userId, archivedAt: null, stage: { notIn: [LeadStage.WON, LeadStage.LOST] }, budget: { not: null } },
+        where: { workspaceId, archivedAt: null, stage: { notIn: [LeadStage.WON, LeadStage.LOST] }, budget: { not: null } },
         _sum: { budget: true },
       }),
     ]);
@@ -78,9 +78,9 @@ export class LeadsService {
     };
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const lead = await this.prisma.lead.findFirst({
-      where: { id, userId },
+      where: { id, workspaceId },
       include: {
         client: true,
         proposals: { orderBy: { createdAt: 'desc' } },
@@ -91,8 +91,8 @@ export class LeadsService {
     return lead;
   }
 
-  async update(userId: string, id: string, dto: UpdateLeadDto) {
-    await this.findOne(userId, id);
+  async update(workspaceId: string, id: string, dto: UpdateLeadDto) {
+    await this.findOne(workspaceId, id);
 
     return this.prisma.lead.update({
       where: { id },
@@ -106,33 +106,33 @@ export class LeadsService {
     });
   }
 
-  async updateStage(userId: string, id: string, stage: LeadStage) {
-    await this.findOne(userId, id);
+  async updateStage(workspaceId: string, id: string, stage: LeadStage) {
+    await this.findOne(workspaceId, id);
 
     const lead = await this.prisma.lead.update({
       where: { id },
       data: { stage, lastActivityAt: new Date() },
     });
 
-    this.eventEmitter.emit('lead.updated', { entityId: id, userId, stage });
+    this.eventEmitter.emit('lead.updated', { entityId: id, workspaceId, stage });
 
     return lead;
   }
 
-  async archive(userId: string, id: string) {
-    const lead = await this.findOne(userId, id);
+  async archive(workspaceId: string, id: string) {
+    const lead = await this.findOne(workspaceId, id);
     if (lead.archivedAt) throw new BadRequestException('Lead is already archived');
     return this.prisma.lead.update({ where: { id }, data: { archivedAt: new Date() } });
   }
 
-  async unarchive(userId: string, id: string) {
-    const lead = await this.findOne(userId, id);
+  async unarchive(workspaceId: string, id: string) {
+    const lead = await this.findOne(workspaceId, id);
     if (!lead.archivedAt) throw new BadRequestException('Lead is not archived');
     return this.prisma.lead.update({ where: { id }, data: { archivedAt: null } });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+  async remove(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id);
     const [proposals, meetings] = await Promise.all([
       this.prisma.proposal.count({ where: { leadId: id } }),
       this.prisma.meeting.count({ where: { leadId: id } }),
@@ -148,8 +148,8 @@ export class LeadsService {
     await this.prisma.lead.delete({ where: { id } });
   }
 
-  async convertToClient(userId: string, leadId: string, dto?: ConvertLeadDto) {
-    const lead = await this.findOne(userId, leadId);
+  async convertToClient(workspaceId: string, leadId: string, dto?: ConvertLeadDto) {
+    const lead = await this.findOne(workspaceId, leadId);
 
     if (lead.clientId) {
       throw new ConflictException('This lead is already linked to a client');
@@ -158,7 +158,7 @@ export class LeadsService {
     const result = await this.prisma.$transaction(async (tx) => {
       const newClient = await tx.client.create({
         data: {
-          userId,
+          workspaceId,
           name:        dto?.name    ?? lead.name,
           email:       dto?.email   ?? lead.email   ?? undefined,
           phone:       dto?.phone   ?? lead.phone   ?? undefined,
@@ -211,7 +211,7 @@ export class LeadsService {
       if (dto?.createProject && dto?.projectName) {
         newProject = await tx.project.create({
           data: {
-            userId,
+            workspaceId,
             name:      dto.projectName,
             clientId:  newClient.id,
             status:    'ACTIVE',
@@ -226,14 +226,14 @@ export class LeadsService {
       return { client: newClient, project: newProject };
     });
 
-    this.eventEmitter.emit('lead.converted', { entityId: leadId, userId, clientId: result.client.id })
+    this.eventEmitter.emit('lead.converted', { entityId: leadId, workspaceId, clientId: result.client.id })
     return result;
   }
 
-  async getPipelineValue(userId: string) {
+  async getPipelineValue(workspaceId: string) {
     const result = await this.prisma.lead.aggregate({
       where: {
-        userId,
+        workspaceId,
         archivedAt: null,
         stage: { notIn: [LeadStage.WON, LeadStage.LOST] },
         budget: { not: null },

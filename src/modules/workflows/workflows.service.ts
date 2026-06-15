@@ -9,10 +9,10 @@ import type { StepNode } from './workflow.engine'
 export class WorkflowsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(userId: string, dto: CreateWorkflowDto) {
+  async create(workspaceId: string, dto: CreateWorkflowDto) {
     return this.prisma.automationWorkflow.create({
       data: {
-        userId,
+        workspaceId,
         name:        dto.name,
         description: dto.description,
         trigger:     { type: 'lead.created', config: {} } as Prisma.InputJsonValue,
@@ -21,15 +21,15 @@ export class WorkflowsService {
     })
   }
 
-  async findAll(userId: string) {
+  async findAll(workspaceId: string) {
     return this.prisma.automationWorkflow.findMany({
-      where:   { userId },
+      where:   { workspaceId },
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { runs: true } } },
     })
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(workspaceId: string, id: string) {
     const workflow = await this.prisma.automationWorkflow.findUnique({
       where:   { id },
       include: {
@@ -40,12 +40,12 @@ export class WorkflowsService {
       },
     })
     if (!workflow)           throw new NotFoundException('Workflow not found')
-    if (workflow.userId !== userId) throw new ForbiddenException()
+    if (workflow.workspaceId !== workspaceId) throw new ForbiddenException()
     return workflow
   }
 
-  async update(userId: string, id: string, dto: UpdateWorkflowDto) {
-    await this.findOne(userId, id)
+  async update(workspaceId: string, id: string, dto: UpdateWorkflowDto) {
+    await this.findOne(workspaceId, id)
     return this.prisma.automationWorkflow.update({
       where: { id },
       data: {
@@ -58,13 +58,13 @@ export class WorkflowsService {
     })
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id)
+  async remove(workspaceId: string, id: string) {
+    await this.findOne(workspaceId, id)
     return this.prisma.automationWorkflow.delete({ where: { id } })
   }
 
-  async getRuns(userId: string, workflowId: string, limit = 20) {
-    await this.findOne(userId, workflowId)
+  async getRuns(workspaceId: string, workflowId: string, limit = 20) {
+    await this.findOne(workspaceId, workflowId)
     return this.prisma.workflowRun.findMany({
       where:   { workflowId },
       orderBy: { startedAt: 'desc' },
@@ -72,7 +72,7 @@ export class WorkflowsService {
     })
   }
 
-  async startRun(workflowId: string, entityId: string, entityType: string, userId: string) {
+  async startRun(workflowId: string, entityId: string, entityType: string, workspaceId: string) {
     const workflow = await this.prisma.automationWorkflow.findUnique({ where: { id: workflowId } })
     if (!workflow) return
 
@@ -82,7 +82,7 @@ export class WorkflowsService {
     await this.prisma.workflowRun.create({
       data: {
         workflowId,
-        userId,
+        workspaceId,
         entityId,
         entityType,
         pendingSteps: pending as unknown as Prisma.InputJsonValue,
