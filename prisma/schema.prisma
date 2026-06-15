@@ -25,6 +25,62 @@ enum DiscountType {
   PERCENTAGE
 }
 
+enum WorkspaceRole {
+  OWNER
+  MEMBER
+}
+
+model Workspace {
+  id                String   @id
+  name              String
+  logoUrl           String?
+  businessName      String?
+  gstNumber         String?
+  panNumber         String?
+  businessType      String?
+  razorpayAccountId String?
+  razorpayKeyId     String?
+  razorpayKeySecret String?
+  bankName          String?
+  bankAccountName   String?
+  bankAccountNumber String?
+  bankIfsc          String?
+  upiId             String?
+  upiQrUrl          String?
+  country           String?
+  currency          String?
+  taxLabel          String?
+  ibanNumber        String?
+  swiftCode         String?
+  routingNumber     String?
+  defaultHsnSac     String?
+  defaultLutNumber  String?
+  emailSignature    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  members     WorkspaceMember[]
+  activeUsers User[]           @relation("ActiveWorkspace")
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  user      User      @relation(fields: [userId],      references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("workspace_members")
+}
+
 model User {
   id                      String           @id
   email                   String           @unique
@@ -107,10 +163,14 @@ model User {
   statsAvgResponseHrs     Int              @default(0)
   statsLastCalculatedAt   DateTime?
   // Team
-  ownerId                 String?
-  owner                   User?            @relation("TeamMembers", fields: [ownerId], references: [id])
-  teamMembers             User[]           @relation("TeamMembers")
-  teamInvitesSent         TeamInvite[]
+  ownerId                  String?
+  owner                    User?             @relation("TeamMembers", fields: [ownerId], references: [id])
+  teamMembers              User[]            @relation("TeamMembers")
+  teamInvitesSent          TeamInvite[]
+  // Workspace
+  activeWorkspaceId        String?
+  activeWorkspace          Workspace?        @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
+  workspaceMemberships     WorkspaceMember[]
 
   leads                   Lead[]
   clients                 Client[]
