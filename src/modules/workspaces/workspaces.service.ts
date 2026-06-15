@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { PrismaService } from '../../prisma/prisma.service'
 import { CreateWorkspaceDto } from './dto/create-workspace.dto'
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto'
+import { PermissionsService } from '../permissions/permissions.service'
 
 const WORKSPACE_LIMITS: Record<string, number> = {
   FREE:   1,
@@ -16,7 +17,10 @@ const isTopPlan = (plan: string) => plan === PLAN_ORDER[PLAN_ORDER.length - 1]
 
 @Injectable()
 export class WorkspacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissionsService: PermissionsService,
+  ) {}
 
   async create(userId: string, userPlan: string, dto: CreateWorkspaceDto) {
     const limit = WORKSPACE_LIMITS[userPlan] ?? 1
@@ -33,7 +37,7 @@ export class WorkspacesService {
     const id = nanoid(21)
     await this.prisma.$transaction([
       this.prisma.workspace.create({ data: { id, name: dto.name } }),
-      this.prisma.workspaceMember.create({ data: { userId, workspaceId: id, role: 'OWNER' } }),
+      this.prisma.workspaceMember.create({ data: { user: { connect: { id: userId } }, workspace: { connect: { id } }, role: 'OWNER', workspaceRole: { connect: { key: 'OWNER' } } } }),
       this.prisma.user.update({ where: { id: userId }, data: { activeWorkspaceId: id } }),
     ])
     return { id, name: dto.name }
@@ -42,10 +46,15 @@ export class WorkspacesService {
   async listForUser(userId: string) {
     const memberships = await this.prisma.workspaceMember.findMany({
       where:   { userId },
-      include: { workspace: true },
+      include: { workspace: true, workspaceRole: true },
       orderBy: { joinedAt: 'asc' },
     })
-    return memberships.map(m => ({ ...m.workspace, role: m.role }))
+    return memberships.map(m => ({
+      ...m.workspace,
+      role:     m.workspaceRole.key,
+      roleId:   m.workspaceRoleId,
+      roleName: m.workspaceRole.name,
+    }))
   }
 
   async switchActive(userId: string, workspaceId: string) {
@@ -81,5 +90,13 @@ export class WorkspacesService {
     })
     if (!membership) throw new NotFoundException('Workspace not found.')
     return { ...membership.workspace, role: membership.role }
+  }
+
+  async getRoles() {
+    return this.permissionsService.listRoles()
+  }
+
+  async getMyPermissions(userId: string, workspaceId: string) {
+    return this.permissionsService.getPermissions(userId, workspaceId)
   }
 }

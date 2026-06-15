@@ -28,7 +28,7 @@ export class UsersService {
     await this.prisma.workspaceMember.upsert({
       where:  { userId_workspaceId: { userId: dto.id, workspaceId: dto.id } },
       update: {},
-      create: { userId: dto.id, workspaceId: dto.id, role: 'OWNER' },
+      create: { user: { connect: { id: dto.id } }, workspace: { connect: { id: dto.id } }, role: 'OWNER', workspaceRole: { connect: { key: 'OWNER' } } },
     });
 
     // Set activeWorkspaceId if not yet set

@@ -19,10 +19,13 @@ export class TeamService {
   async getTeam(owner: User) {
     if (effectivePlan(owner) !== 'STUDIO') return { members: [], invites: [] }
 
-    const [members, invites] = await Promise.all([
-      this.prisma.user.findMany({
-        where:  { ownerId: owner.id },
-        select: { id: true, name: true, email: true, createdAt: true },
+    const [memberRows, invites] = await Promise.all([
+      this.prisma.workspaceMember.findMany({
+        where: { workspaceId: owner.id },
+        include: {
+          user:          { select: { id: true, name: true, email: true, createdAt: true } },
+          workspaceRole: { select: { id: true, name: true, key: true } },
+        },
       }),
       this.prisma.teamInvite.findMany({
         where:   { ownerId: owner.id, accepted: false, expiresAt: { gt: new Date() } },
@@ -31,10 +34,22 @@ export class TeamService {
       }),
     ])
 
+    const members = memberRows
+      .filter(wm => wm.userId !== owner.id)
+      .map(wm => ({
+        id:        wm.user.id,
+        name:      wm.user.name,
+        email:     wm.user.email,
+        createdAt: wm.user.createdAt,
+        roleId:    wm.workspaceRole.id,
+        roleKey:   wm.workspaceRole.key,
+        roleName:  wm.workspaceRole.name,
+      }))
+
     return { members, invites }
   }
 
-  async invite(owner: User, email: string) {
+  async invite(owner: User, email: string, roleId?: string) {
     if (effectivePlan(owner) !== 'STUDIO') {
       throw new HttpException({ message: 'Team members are a Studio plan feature.', code: 'PLAN_LIMIT' }, 402)
     }
@@ -51,14 +66,21 @@ export class TeamService {
     const alreadyMember = await this.prisma.user.findFirst({ where: { email, ownerId: owner.id } })
     if (alreadyMember) throw new BadRequestException('This person is already a team member.')
 
+    // Resolve role — default to MEMBER if not provided
+    let resolvedRoleId = roleId
+    if (!resolvedRoleId) {
+      const memberRole = await this.prisma.workspaceRole.findUnique({ where: { key: 'MEMBER' } })
+      resolvedRoleId = memberRole!.id
+    }
+
     // Upsert invite (reset token + expiry if already pending)
     const token     = nanoid(32)
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
     await this.prisma.teamInvite.upsert({
       where:  { ownerId_email: { ownerId: owner.id, email } },
-      create: { ownerId: owner.id, email, token, expiresAt },
-      update: { token, expiresAt, accepted: false },
+      create: { ownerId: owner.id, email, token, expiresAt, workspaceRoleId: resolvedRoleId },
+      update: { token, expiresAt, accepted: false, workspaceRoleId: resolvedRoleId },
     })
 
     const appUrl    = this.config.get<string>('frontendUrl') ?? 'https://app.getclearwork.in'
@@ -103,6 +125,26 @@ export class TeamService {
     return { message: 'Team member removed.' }
   }
 
+  async updateMemberRole(ownerId: string, memberId: string, roleId: string) {
+    // Validate the role exists and is a system role
+    const role = await this.prisma.workspaceRole.findUnique({ where: { id: roleId } })
+    if (!role) throw new NotFoundException('Role not found.')
+    // Owners cannot be downgraded this way
+    if (role.key === 'OWNER') throw new BadRequestException('Cannot assign OWNER role to a team member.')
+
+    // Find the workspace member record
+    const wm = await this.prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: memberId, workspaceId: ownerId } },
+    })
+    if (!wm) throw new NotFoundException('Team member not found.')
+
+    await this.prisma.workspaceMember.update({
+      where: { userId_workspaceId: { userId: memberId, workspaceId: ownerId } },
+      data:  { workspaceRoleId: roleId },
+    })
+    return { message: 'Role updated.' }
+  }
+
   async getInvitePreview(token: string) {
     const invite = await this.prisma.teamInvite.findUnique({
       where:  { token },
@@ -133,7 +175,10 @@ export class TeamService {
     if (user.email.toLowerCase() !== invite.email.toLowerCase()) {
       throw new BadRequestException('This invite was sent to a different email address.')
     }
-    if (user.ownerId) throw new BadRequestException('You are already a member of another workspace.')
+
+    const workspaceRoleId = invite.workspaceRoleId ?? (
+      await this.prisma.workspaceRole.findUnique({ where: { key: 'MEMBER' } })
+    )!.id
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -143,8 +188,8 @@ export class TeamService {
       this.prisma.teamInvite.update({ where: { token }, data: { accepted: true } }),
       this.prisma.workspaceMember.upsert({
         where:  { userId_workspaceId: { userId, workspaceId: invite.ownerId } },
-        create: { userId, workspaceId: invite.ownerId, role: 'MEMBER' },
-        update: {},
+        create: { userId, workspaceId: invite.ownerId, workspaceRoleId },
+        update: { workspaceRoleId },
       }),
     ])
 

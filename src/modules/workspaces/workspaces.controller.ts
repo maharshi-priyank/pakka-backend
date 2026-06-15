@@ -25,6 +25,19 @@ export class WorkspacesController {
     return this.workspacesService.listForUser(user.id)
   }
 
+  @Get('roles')
+  @ApiOperation({ summary: 'List available workspace roles' })
+  getRoles() {
+    return this.workspacesService.getRoles()
+  }
+
+  @Get('my-permissions')
+  @ApiOperation({ summary: 'Get current user permissions for their active workspace' })
+  getMyPermissions(@CurrentUser() user: User) {
+    if (!user.activeWorkspaceId) return { data: [] }
+    return this.workspacesService.getMyPermissions(user.id, user.activeWorkspaceId)
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single workspace (must be a member)' })
   getOne(@CurrentUser() user: User, @Param('id') id: string) {
