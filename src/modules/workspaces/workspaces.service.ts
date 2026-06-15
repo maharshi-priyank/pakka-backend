@@ -1,10 +1,43 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { nanoid } from 'nanoid'
 import { PrismaService } from '../../prisma/prisma.service'
+import { CreateWorkspaceDto } from './dto/create-workspace.dto'
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto'
+
+const WORKSPACE_LIMITS: Record<string, number> = {
+  FREE:   1,
+  SOLO:   2,
+  STUDIO: 5,
+}
+
+// Ordered lowest → highest. Last entry = top plan (no upgrade path exists above it).
+const PLAN_ORDER = ['FREE', 'SOLO', 'STUDIO'] as const
+const isTopPlan = (plan: string) => plan === PLAN_ORDER[PLAN_ORDER.length - 1]
 
 @Injectable()
 export class WorkspacesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async create(userId: string, userPlan: string, dto: CreateWorkspaceDto) {
+    const limit = WORKSPACE_LIMITS[userPlan] ?? 1
+    const owned = await this.prisma.workspaceMember.count({
+      where: { userId, role: 'OWNER' },
+    })
+    if (owned >= limit) {
+      const msg = isTopPlan(userPlan)
+        ? `You've reached the workspace limit for the Studio plan (${limit}). This is the current maximum.`
+        : `Your ${userPlan} plan allows up to ${limit} workspace${limit === 1 ? '' : 's'}. Upgrade to add more.`
+      throw new ForbiddenException(msg)
+    }
+
+    const id = nanoid(21)
+    await this.prisma.$transaction([
+      this.prisma.workspace.create({ data: { id, name: dto.name } }),
+      this.prisma.workspaceMember.create({ data: { userId, workspaceId: id, role: 'OWNER' } }),
+      this.prisma.user.update({ where: { id: userId }, data: { activeWorkspaceId: id } }),
+    ])
+    return { id, name: dto.name }
+  }
 
   async listForUser(userId: string) {
     const memberships = await this.prisma.workspaceMember.findMany({

@@ -1,7 +1,8 @@
-import { Controller, Get, Patch, Body, Param } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Param, HttpCode, HttpStatus } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { User } from '@prisma/client'
 import { WorkspacesService } from './workspaces.service'
+import { CreateWorkspaceDto } from './dto/create-workspace.dto'
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 
@@ -10,6 +11,13 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator'
 @Controller('workspaces')
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new workspace (becomes the active workspace)' })
+  create(@CurrentUser() user: User, @Body() dto: CreateWorkspaceDto) {
+    return this.workspacesService.create(user.id, user.plan, dto)
+  }
 
   @Get()
   @ApiOperation({ summary: 'List workspaces the current user belongs to' })

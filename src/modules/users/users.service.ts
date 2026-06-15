@@ -58,7 +58,18 @@ export class UsersService {
   }
 
   async update(id: string, data: UpdateUserDto) {
-    return this.prisma.user.update({ where: { id }, data });
+    const user = await this.prisma.user.update({ where: { id }, data });
+
+    // Keep active workspace logo in sync when profile logo changes
+    if ('logoUrl' in data && data.logoUrl !== undefined) {
+      const workspaceId = user.activeWorkspaceId ?? id;
+      await this.prisma.workspace.update({
+        where: { id: workspaceId },
+        data:  { logoUrl: data.logoUrl },
+      });
+    }
+
+    return user;
   }
 
   async saveGoogleTokens(userId: string, tokens: { accessToken: string; refreshToken: string; expiresAt: Date }) {
