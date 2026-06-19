@@ -14,7 +14,7 @@ export class UsersService {
     const user = await this.prisma.user.upsert({
       where:  { id: dto.id },
       update: { email: dto.email, name: dto.name },
-      create: { id: dto.id, email: dto.email, name: dto.name },
+      create: { id: dto.id, email: dto.email, name: dto.name, plan: 'STUDIO', subscriptionStatus: 'ACTIVE' },
     });
 
     // Ensure a workspace exists for this owner (idempotent)
