@@ -51,6 +51,7 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { LeadsProxyModule } from './modules/leads-proxy/leads-proxy.module';
+import { ContactModule } from './modules/contact/contact.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WorkspacePermissionGuard } from './common/guards/workspace-permission.guard';
@@ -128,6 +129,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     WorkspacesModule,
     PermissionsModule,
     LeadsProxyModule,
+    ContactModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
