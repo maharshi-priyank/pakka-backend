@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { InvoiceStatus, ProjectStatus } from '@prisma/client';
+import { ProjectStatus, ProjectStage, ContactStage, InvoiceStatus } from '@prisma/client';
 
 export interface CreateProjectDto {
   name:                string;
   description?:        string;
   clientId?:           string;
+  contactId?:          string;
   status?:             ProjectStatus;
+  projectStage?:       ProjectStage;
   budget?:             number;
   startDate?:          string;
   endDate?:            string;
@@ -19,6 +21,7 @@ export interface QueryProjectsDto {
   search?:          string;
   status?:          ProjectStatus;
   clientId?:        string;
+  contactId?:       string;
   page?:            number;
   limit?:           number;
   includeArchived?: boolean;
@@ -33,32 +36,52 @@ export class ProjectsService {
   }
 
   async create(workspaceId: string, dto: CreateProjectDto) {
-    return this.prisma.project.create({
+    const project = await this.prisma.project.create({
       data: {
         workspaceId,
-        name:        dto.name,
-        description: dto.description,
-        clientId:    dto.clientId,
-        status:      dto.status ?? 'ACTIVE',
-        budget:      dto.budget,
-        startDate:   dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate:     dto.endDate   ? new Date(dto.endDate)   : undefined,
+        name:         dto.name,
+        description:  dto.description,
+        clientId:     dto.clientId,
+        contactId:    dto.contactId,
+        status:       dto.status ?? 'ACTIVE',
+        projectStage: dto.projectStage,
+        budget:       dto.budget,
+        startDate:    dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate:      dto.endDate   ? new Date(dto.endDate)   : undefined,
       },
       include: {
-        client: { select: { id: true, name: true, company: true } },
-        _count: { select: { proposals: true, contracts: true, invoices: true, timeEntries: true, expenses: true } },
+        client:   { select: { id: true, name: true, company: true } },
+        contact:  { select: { id: true, name: true, company: true } },
+        _count:   { select: { proposals: true, contracts: true, invoices: true, timeEntries: true, expenses: true } },
       },
     });
+
+    // R16: A new Project on a PAST_CLIENT contact signals they are active again → CLIENT
+    if (dto.contactId) {
+      const contact = await this.prisma.contact.findUnique({
+        where:  { id: dto.contactId, workspaceId },
+        select: { stage: true },
+      });
+      if (contact?.stage === ('PAST_CLIENT' as ContactStage)) {
+        await this.prisma.contact.update({
+          where: { id: dto.contactId },
+          data:  { stage: 'CLIENT', lastActivityAt: new Date() },
+        });
+      }
+    }
+
+    return project;
   }
 
   async findAll(workspaceId: string, query: QueryProjectsDto) {
-    const { page = 1, limit = 20, search, status, clientId, includeArchived } = query;
+    const { page = 1, limit = 20, search, status, clientId, contactId, includeArchived } = query;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = { workspaceId };
     if (!includeArchived) where['archivedAt'] = null;
-    if (status)   where['status']   = status;
-    if (clientId) where['clientId'] = clientId;
+    if (status)    where['status']    = status;
+    if (clientId)  where['clientId']  = clientId;
+    if (contactId) where['contactId'] = contactId;
     if (search) {
       where['OR'] = [
         { name:        { contains: search, mode: 'insensitive' } },
@@ -73,8 +96,9 @@ export class ProjectsService {
         take:     limit,
         orderBy:  { createdAt: 'desc' },
         include: {
-          client: { select: { id: true, name: true, company: true } },
-          _count: { select: { proposals: true, contracts: true, invoices: true, timeEntries: true, expenses: true } },
+          client:   { select: { id: true, name: true, company: true } },
+          contact:  { select: { id: true, name: true, company: true } },
+          _count:   { select: { proposals: true, contracts: true, invoices: true, timeEntries: true, expenses: true } },
           invoices: {
             where: { status: { not: 'DRAFT' } },
             select: { status: true, total: true, amountPaid: true },
@@ -98,7 +122,8 @@ export class ProjectsService {
     const project = await this.prisma.project.findFirst({
       where: { id, workspaceId },
       include: {
-        client: { select: { id: true, name: true, company: true, email: true } },
+        client:   { select: { id: true, name: true, company: true, email: true } },
+        contact:  { select: { id: true, name: true, company: true, email: true } },
         proposals: {
           orderBy: { createdAt: 'desc' },
           select:  { id: true, title: true, status: true, totalAmount: true, createdAt: true, acceptedAt: true },
@@ -169,14 +194,17 @@ export class ProjectsService {
         name:                dto.name,
         description:         dto.description,
         clientId:            dto.clientId,
+        contactId:           dto.contactId,
         status:              dto.status,
+        projectStage:        dto.projectStage,
         budget:              dto.budget,
         startDate:           dto.startDate ? new Date(dto.startDate) : undefined,
         endDate:             dto.endDate   ? new Date(dto.endDate)   : undefined,
         shareRateWithClient: dto.shareRateWithClient,
       },
       include: {
-        client: { select: { id: true, name: true, company: true } },
+        client:   { select: { id: true, name: true, company: true } },
+        contact:  { select: { id: true, name: true, company: true } },
       },
     });
   }
@@ -214,7 +242,18 @@ export class ProjectsService {
   }
 
   async remove(workspaceId: string, id: string) {
-    await this.findOne(workspaceId, id);
+    const project = await this.findOne(workspaceId, id);
+
+    // Block deleting the last Project on a Contact (R15 / AE6)
+    if (project.contactId) {
+      const siblingCount = await this.prisma.project.count({
+        where: { contactId: project.contactId, workspaceId },
+      });
+      if (siblingCount <= 1) {
+        throw new BadRequestException('A contact must always have at least one project.');
+      }
+    }
+
     const [tasks, invoices, timeEntries, expenses] = await Promise.all([
       this.prisma.task.count({ where: { projectId: id } }),
       this.prisma.invoice.count({ where: { projectId: id } }),

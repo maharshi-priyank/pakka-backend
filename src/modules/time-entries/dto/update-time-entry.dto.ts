@@ -3,6 +3,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateTimeEntryDto {
   @ApiPropertyOptional() @IsString()    @IsOptional() clientId?:     string;
+  @ApiPropertyOptional() @IsString()    @IsOptional() contactId?:    string;
   @ApiPropertyOptional() @IsString()    @IsOptional() projectId?:    string;
   @ApiPropertyOptional() @IsString()    @IsOptional() description?:  string;
   @ApiPropertyOptional() @IsDateString() @IsOptional() date?:        string;

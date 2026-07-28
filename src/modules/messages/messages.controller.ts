@@ -42,4 +42,26 @@ export class MessagesController {
   markRead(@CurrentUser() user: User, @Param('clientId') clientId: string) {
     return this.messagesService.markRead(resolveWorkspaceId(user), clientId)
   }
+
+  // ── Contact-based messaging (Phase C — contacts without a Client record) ──────
+
+  @Get('contact/:contactId')
+  getThreadByContact(@CurrentUser() user: User, @Param('contactId') contactId: string) {
+    return this.messagesService.getThreadByContactId(resolveWorkspaceId(user), contactId)
+  }
+
+  @Post('contact/:contactId')
+  sendMessageToContact(
+    @CurrentUser() user: User,
+    @Param('contactId') contactId: string,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.messagesService.sendMessageToContact(resolveWorkspaceId(user), contactId, dto)
+  }
+
+  @Patch('contact/:contactId/read')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  markReadByContact(@CurrentUser() user: User, @Param('contactId') contactId: string) {
+    return this.messagesService.markReadByContactId(resolveWorkspaceId(user), contactId)
+  }
 }

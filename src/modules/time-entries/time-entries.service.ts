@@ -15,8 +15,9 @@ export class TimeEntriesService {
   ) {}
 
   private readonly projectInclude = {
-    client:  { select: { id: true, name: true } },
-    project: { select: { id: true, name: true } },
+    client:   { select: { id: true, name: true } },
+    contact:  { select: { id: true, name: true } },
+    project:  { select: { id: true, name: true } },
   } as const;
 
   async create(workspaceId: string, dto: CreateTimeEntryDto) {
@@ -24,6 +25,7 @@ export class TimeEntriesService {
       data: {
         workspaceId,
         clientId:     dto.clientId,
+        contactId:    dto.contactId,
         projectId:    dto.projectId,
         description:  dto.description,
         date:         new Date(dto.date),
@@ -65,6 +67,7 @@ export class TimeEntriesService {
       where: { id },
       data: {
         ...(dto.clientId     != null && { clientId:  dto.clientId }),
+        ...(dto.contactId    != null && { contactId: dto.contactId }),
         ...(dto.projectId    != null && { projectId: dto.projectId }),
         ...(dto.description  != null && { description: dto.description }),
         ...(dto.date         != null && { date: new Date(dto.date) }),

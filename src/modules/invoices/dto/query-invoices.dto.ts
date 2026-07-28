@@ -16,4 +16,7 @@ export class QueryInvoicesDto {
 
   @ApiPropertyOptional() @IsString() @IsOptional()
   clientId?: string;
+
+  @ApiPropertyOptional() @IsString() @IsOptional()
+  contactId?: string;
 }

@@ -33,8 +33,9 @@ export class ExpensesService {
   ) {}
 
   private readonly projectInclude = {
-    client:  { select: { id: true, name: true } },
-    project: { select: { id: true, name: true } },
+    client:   { select: { id: true, name: true } },
+    contact:  { select: { id: true, name: true } },
+    project:  { select: { id: true, name: true } },
   } as const;
 
   async create(workspaceId: string, dto: CreateExpenseDto) {
@@ -42,6 +43,7 @@ export class ExpensesService {
       data: {
         workspaceId,
         clientId:    dto.clientId,
+        contactId:   dto.contactId,
         projectId:   dto.projectId,
         category:    dto.category,
         description: dto.description,
@@ -73,6 +75,7 @@ export class ExpensesService {
     const where: {
       workspaceId:      string;
       clientId?:   string;
+      contactId?:  string;
       projectId?:  string;
       isBillable?: boolean;
       isBilled?:   boolean;
@@ -80,6 +83,7 @@ export class ExpensesService {
     } = { workspaceId };
 
     if (query.clientId)           where.clientId   = query.clientId;
+    if (query.contactId)          where.contactId  = query.contactId;
     if (query.projectId)          where.projectId  = query.projectId;
     if (query.isBillable != null)  where.isBillable = query.isBillable;
     if (query.isBilled   != null)  where.isBilled   = query.isBilled;
@@ -152,6 +156,7 @@ export class ExpensesService {
       where: { id },
       data: {
         ...(dto.clientId    != null && { clientId:    dto.clientId }),
+        ...(dto.contactId   != null && { contactId:   dto.contactId }),
         ...(dto.projectId   != null && { projectId:   dto.projectId }),
         ...(dto.category    != null && { category:    dto.category }),
         ...(dto.description != null && { description: dto.description }),
@@ -179,7 +184,7 @@ export class ExpensesService {
   async billExpenses(workspaceId: string, dto: BillExpensesDto) {
     const expenses = await this.prisma.expense.findMany({
       where: { id: { in: dto.expenseIds }, workspaceId, isBilled: false },
-      include: { client: { select: { id: true, name: true } } },
+      include: { client: { select: { id: true, name: true } }, contact: { select: { id: true } } },
     });
 
     if (expenses.length === 0) throw new BadRequestException('No unbilled expenses found');
@@ -187,10 +192,10 @@ export class ExpensesService {
       throw new BadRequestException('Some expenses are already billed or do not belong to you');
     }
 
-    const clientIds = [...new Set(expenses.map(e => e.clientId))];
-    if (clientIds.length > 1) throw new BadRequestException('All expenses must be for the same client');
+    const contactIds = [...new Set(expenses.map(e => e.contactId ?? e.clientId))];
+    if (contactIds.length > 1) throw new BadRequestException('All expenses must be for the same contact');
 
-    const clientId = clientIds[0] ?? undefined;
+    const clientId = expenses[0]?.clientId ?? undefined;
     const lineItems = expenses.map(e => ({
       description: `${e.category}: ${e.description}`,
       qty:         1,

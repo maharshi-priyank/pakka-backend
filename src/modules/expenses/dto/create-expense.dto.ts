@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateExpenseDto {
   @ApiPropertyOptional() @IsString()    @IsOptional() clientId?:    string;
+  @ApiPropertyOptional() @IsString()    @IsOptional() contactId?:   string;
   @ApiPropertyOptional() @IsString()    @IsOptional() projectId?:   string;
   @ApiProperty()         @IsString()               category:      string;
   @ApiProperty()         @IsString()               description:   string;
