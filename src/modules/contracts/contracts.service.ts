@@ -17,10 +17,12 @@ function generateOtp(): string {
 const INCLUDE_FULL = {
   proposal: { select: { id: true, title: true, slug: true } },
   client:   true,
+  contact:  { select: { id: true, name: true, company: true } },
 } as const;
 
 const INCLUDE_LIST = {
   client:  { select: { id: true, name: true, company: true } },
+  contact: { select: { id: true, name: true, company: true } },
   project: { select: { id: true, name: true } },
 } as const;
 
@@ -37,6 +39,7 @@ export class ContractsService {
         workspaceId,
         proposalId: dto.proposalId,
         clientId:   dto.clientId,
+        contactId:  dto.contactId,
         title:      dto.title,
         content:    (dto.content ?? {}) as object,
       },
@@ -109,6 +112,7 @@ export class ContractsService {
         workspaceId,
         proposalId: proposal.id,
         clientId,
+        contactId:  proposal.contactId ?? undefined,
         title:      `Contract — ${proposal.title}`,
         content:    content as object,
       },
@@ -117,13 +121,14 @@ export class ContractsService {
   }
 
   async findAll(workspaceId: string, query: QueryContractsDto) {
-    const { page = 1, limit = 20, status, clientId, includeArchived } = query;
+    const { page = 1, limit = 20, status, clientId, contactId, includeArchived } = query;
     const skip  = (page - 1) * limit;
     const where = {
       workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
-      ...(status   && { status }),
-      ...(clientId && { clientId }),
+      ...(status    && { status }),
+      ...(clientId  && { clientId }),
+      ...(contactId && { contactId }),
     };
 
     const [contracts, total] = await Promise.all([
@@ -172,9 +177,10 @@ export class ContractsService {
     return this.prisma.contract.update({
       where: { id },
       data: {
-        ...(dto.title   && { title:   dto.title }),
-        ...(dto.status  && { status:  dto.status }),
-        ...(dto.clientId  && { clientId:  dto.clientId }),
+        ...(dto.title     && { title:     dto.title }),
+        ...(dto.status    && { status:    dto.status }),
+        ...(dto.clientId  !== undefined && { clientId:  dto.clientId  ?? null }),
+        ...(dto.contactId !== undefined && { contactId: dto.contactId ?? null }),
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
         ...(dto.content   && { content: dto.content as object }),
       },

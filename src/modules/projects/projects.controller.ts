@@ -7,6 +7,7 @@ import { ProjectsService, CreateProjectDto, UpdateProjectDto, QueryProjectsDto }
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { ProjectStatus, User } from '@prisma/client';
+// contactId filter is surfaced in query params below
 
 class CreateNoteDto {
   @IsString() @MinLength(1) content: string;
@@ -30,6 +31,7 @@ export class ProjectsController {
     @Query('search')          search?:          string,
     @Query('status')          status?:          ProjectStatus,
     @Query('clientId')        clientId?:        string,
+    @Query('contactId')       contactId?:       string,
     @Query('page')            page?:            string,
     @Query('limit')           limit?:           string,
     @Query('includeArchived') includeArchived?: string,
@@ -38,6 +40,7 @@ export class ProjectsController {
       search,
       status,
       clientId,
+      contactId,
       page:            page            ? Number(page)  : undefined,
       limit:           limit           ? Number(limit) : undefined,
       includeArchived: includeArchived === 'true',

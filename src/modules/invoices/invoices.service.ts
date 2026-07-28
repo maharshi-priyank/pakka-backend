@@ -12,10 +12,12 @@ import { effectivePlan } from '../users/effective-plan';
 const INCLUDE_FULL = {
   contract: { select: { id: true, title: true } },
   client:   true,
+  contact:  { select: { id: true, name: true, company: true } },
 } as const;
 
 const INCLUDE_LIST = {
   client:   { select: { id: true, name: true, company: true } },
+  contact:  { select: { id: true, name: true, company: true } },
   contract: { select: { id: true, title: true } },
   project:  { select: { id: true, name: true } },
 } as const;
@@ -124,6 +126,7 @@ export class InvoicesService {
       workspaceId,
       contractId:        dto.contractId,
       clientId:          dto.clientId,
+      contactId:         dto.contactId,
       lineItems:         dto.lineItems as object[],
       subtotal,
       gstAmount,
@@ -196,7 +199,7 @@ export class InvoicesService {
   async createFromContract(workspaceId: string, contractId: string) {
     const contract = await this.prisma.contract.findFirst({
       where: { id: contractId, workspaceId },
-      include: { client: true },
+      include: { client: true, contact: { select: { id: true } } },
     });
     if (!contract) throw new NotFoundException('Contract not found');
     if (contract.status !== 'SIGNED') {
@@ -229,6 +232,7 @@ export class InvoicesService {
           workspaceId,
           contractId,
           clientId:  contract.clientId,
+          contactId: contract.contact?.id ?? undefined,
           lineItems: lineItems as object[],
           subtotal:  totals.subtotal,
           gstAmount: totals.gstAmount,
@@ -252,6 +256,7 @@ export class InvoicesService {
       workspaceId,
       contractId,
       clientId:  contract.clientId,
+      contactId: contract.contact?.id ?? undefined,
       lineItems: lineItems as object[],
       subtotal:  totals.subtotal,
       gstAmount: totals.gstAmount,
@@ -269,8 +274,9 @@ export class InvoicesService {
 
     const where = {
       workspaceId,
-      ...(dto.status   ? { status:   dto.status   } : {}),
-      ...(dto.clientId ? { clientId: dto.clientId } : {}),
+      ...(dto.status    ? { status:    dto.status    } : {}),
+      ...(dto.clientId  ? { clientId:  dto.clientId  } : {}),
+      ...(dto.contactId ? { contactId: dto.contactId } : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -316,6 +322,7 @@ export class InvoicesService {
         tdsRate:    dto.tdsRate  != null ? dto.tdsRate  : undefined,
         dueDate:    dto.dueDate  ? new Date(dto.dueDate)  : undefined,
         clientId:   dto.clientId,
+        contactId:  dto.contactId,
         contractId: dto.contractId,
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
       },

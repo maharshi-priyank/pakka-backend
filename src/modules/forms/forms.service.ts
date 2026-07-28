@@ -111,7 +111,7 @@ export class FormsService {
     });
 
     if (form.autoCreateLead) {
-      await this.createLeadFromSubmission(form, dto);
+      await this.createContactFromSubmission(form, dto);
     }
 
     this.eventEmitter.emit('form.submitted', {
@@ -123,7 +123,7 @@ export class FormsService {
     return submission;
   }
 
-  private async createLeadFromSubmission(
+  private async createContactFromSubmission(
     form: { id: string; workspaceId: string; title: string; leadFieldMap: unknown },
     dto:  SubmitFormDto,
   ) {
@@ -141,25 +141,31 @@ export class FormsService {
     const name = get('name') || dto.respondentName || dto.respondentEmail || 'Unknown';
 
     const rawBudget = get('budget');
-    let budget: string | undefined;
+    let dealValue: string | undefined;
     if (rawBudget) {
       const n = parseFloat(rawBudget.replace(/[^0-9.]/g, ''));
-      if (!isNaN(n)) budget = String(n);
+      if (!isNaN(n)) dealValue = String(n);
     }
 
-    await this.prisma.lead.create({
+    const { nanoid } = await import('nanoid');
+    const contact = await this.prisma.contact.create({
       data: {
         workspaceId:  form.workspaceId,
         name,
-        email:   get('email')   || dto.respondentEmail || undefined,
-        phone:   get('phone')   || undefined,
-        company: get('company') || undefined,
-        service: get('service') || undefined,
-        notes:   get('notes')   || undefined,
-        budget:  budget as any,
-        source:  `Form: ${form.title}`,
-        stage:   'ENQUIRY',
+        email:      get('email')   || dto.respondentEmail || undefined,
+        phone:      get('phone')   || undefined,
+        company:    get('company') || undefined,
+        service:    get('service') || undefined,
+        dealValue:  dealValue as any,
+        source:     `Form: ${form.title}`,
+        stage:      'ENQUIRY',
+        portalToken: nanoid(21),
       },
+    });
+
+    // Create messaging thread so workspace can reply to the contact
+    await this.prisma.thread.create({
+      data: { workspaceId: form.workspaceId, contactId: contact.id },
     });
   }
 }

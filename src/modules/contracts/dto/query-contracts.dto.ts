@@ -13,6 +13,9 @@ export class QueryContractsDto extends PaginationDto {
   @ApiPropertyOptional() @IsString() @IsOptional()
   clientId?: string;
 
+  @ApiPropertyOptional() @IsString() @IsOptional()
+  contactId?: string;
+
   @ApiPropertyOptional({ default: false })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)

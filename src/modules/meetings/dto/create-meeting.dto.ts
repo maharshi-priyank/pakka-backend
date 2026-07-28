@@ -19,6 +19,10 @@ export class CreateMeetingDto {
 
   @IsString()
   @IsOptional()
+  contactId?: string;
+
+  @IsString()
+  @IsOptional()
   leadId?: string;
 
   @IsString()

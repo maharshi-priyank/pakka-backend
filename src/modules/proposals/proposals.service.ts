@@ -70,6 +70,7 @@ export class ProposalsService {
         workspaceId,
         leadId:      dto.leadId,
         clientId:    dto.clientId,
+        contactId:   dto.contactId,
         title:       dto.title,
         slug,
         content:     (dto.content ?? {}) as object,
@@ -81,19 +82,20 @@ export class ProposalsService {
           ? { content: { ...(dto.content ?? {}), clientName: dto.clientName, clientEmail: dto.clientEmail } as object }
           : {}),
       },
-      include: { lead: { select: { id: true, name: true } }, client: true, opens: true },
+      include: { lead: { select: { id: true, name: true } }, client: true, contact: { select: { id: true, name: true } }, opens: true },
     });
   }
 
   async findAll(workspaceId: string, query: QueryProposalsDto) {
-    const { page = 1, limit = 20, status, clientId, includeArchived } = query;
+    const { page = 1, limit = 20, status, clientId, contactId, includeArchived } = query;
     const skip = (page - 1) * limit;
 
     const where = {
       workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
-      ...(status   && { status }),
-      ...(clientId && { clientId }),
+      ...(status    && { status }),
+      ...(clientId  && { clientId }),
+      ...(contactId && { contactId }),
     };
 
     const [proposals, total] = await Promise.all([
@@ -105,6 +107,7 @@ export class ProposalsService {
         include: {
           lead:    { select: { id: true, name: true } },
           client:  { select: { id: true, name: true, company: true } },
+          contact: { select: { id: true, name: true, company: true } },
           project: { select: { id: true, name: true } },
           opens:   { select: { id: true, openedAt: true } },
           _count:  { select: { opens: true } },
@@ -161,8 +164,9 @@ export class ProposalsService {
       data: {
         ...(dto.title      && { title: dto.title }),
         ...(dto.leadId     && { leadId: dto.leadId }),
-        ...(dto.clientId                !== undefined && { clientId:  dto.clientId }),
-        ...(dto.projectId               !== undefined && { projectId: dto.projectId ?? null }),
+        ...(dto.clientId   !== undefined && { clientId:   dto.clientId  ?? null }),
+        ...(dto.contactId  !== undefined && { contactId:  dto.contactId ?? null }),
+        ...(dto.projectId  !== undefined && { projectId:  dto.projectId ?? null }),
         ...(dto.status     && { status: dto.status }),
         ...(dto.validUntil && { validUntil: new Date(dto.validUntil) }),
         ...(dto.content && {

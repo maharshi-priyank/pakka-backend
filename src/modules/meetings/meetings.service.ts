@@ -8,8 +8,9 @@ import { CreateMeetingDto } from './dto/create-meeting.dto.js';
 import { UpdateMeetingDto } from './dto/update-meeting.dto.js';
 
 const INCLUDE_FULL = {
-  lead:   { select: { id: true, name: true, email: true } },
-  client: { select: { id: true, name: true, company: true, email: true } },
+  contact: { select: { id: true, name: true, email: true } },
+  lead:    { select: { id: true, name: true, email: true } },
+  client:  { select: { id: true, name: true, company: true, email: true } },
 } as const;
 
 @Injectable()
@@ -34,6 +35,7 @@ export class MeetingsService {
         agenda:       dto.agenda,
         scheduledAt:  new Date(dto.scheduledAt),
         durationMins: dto.durationMins ?? 30,
+        contactId:    dto.contactId,
         leadId:       dto.leadId,
         clientId:     dto.clientId,
         guestEmails:  dto.guestEmails ?? [],
