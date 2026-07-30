@@ -67,6 +67,7 @@ export class AutomationScheduler {
           templateKey: 'meeting_reminder',
           entityId:    m.id,
           entityType:  'meeting',
+          contactId:   m.contact?.id,
         })
       }
 

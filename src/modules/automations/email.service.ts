@@ -36,6 +36,7 @@ export class EmailService {
     templateKey: string
     entityId?:   string
     entityType?: string
+    contactId?:  string
   }): Promise<boolean> {
     const defaultFrom = this.config.get<string>('email.from') ?? 'ClearWork <noreply@clearwork.in>'
 
@@ -55,18 +56,18 @@ export class EmailService {
 
     if (!this.transporter) {
       this.logger.debug(`[email-skip] to=${opts.to} subject="${opts.subject}"`)
-      await this.log({ ...opts, status: 'skipped', error: 'transporter not configured' })
+      await this.log({ ...opts, status: 'skipped', error: 'transporter not configured', body: opts.html })
       return false
     }
 
     try {
       await this.transporter.sendMail({ from, to: opts.to, subject: opts.subject, html: opts.html, replyTo })
-      await this.log({ ...opts, status: 'sent' })
+      await this.log({ ...opts, status: 'sent', body: opts.html })
       this.logger.log(`[email-sent] to=${opts.to} template=${opts.templateKey}`)
       return true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      await this.log({ ...opts, status: 'failed', error: msg })
+      await this.log({ ...opts, status: 'failed', error: msg, body: opts.html })
       this.logger.error(`[email-failed] to=${opts.to} error=${msg}`)
       return false
     }
@@ -79,14 +80,18 @@ export class EmailService {
     templateKey: string
     entityId?:   string
     entityType?: string
+    contactId?:  string
     status:      string
     error?:      string
+    body?:       string
   }) {
     await this.prisma.communicationLog.create({
       data: {
         workspaceId: opts.workspaceId,
+        contactId:   opts.contactId,
         to:          opts.to,
         subject:     opts.subject,
+        body:        opts.body,
         templateKey: opts.templateKey,
         entityId:    opts.entityId,
         entityType:  opts.entityType,

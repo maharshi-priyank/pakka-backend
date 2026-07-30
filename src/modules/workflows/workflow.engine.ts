@@ -287,39 +287,42 @@ export class WorkflowEngine {
     const html    = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#344054;">${body.replace(/\n/g, '<br/>')}</div>`
 
     let to = ''
+    let contactId: string | undefined
     if (recipient === 'user') {
       to = user.email
     } else {
-      to = await this.resolveClientEmail(entityId, entityType)
+      const resolved = await this.resolveClientEmail(entityId, entityType)
+      to = resolved.email
+      contactId = resolved.contactId
     }
     if (!to) return
 
-    await this.email.send({ workspaceId, to, subject, html, templateKey: 'workflow_custom', entityId, entityType })
+    await this.email.send({ workspaceId, to, subject, html, templateKey: 'workflow_custom', entityId, entityType, contactId })
   }
 
-  private async resolveClientEmail(entityId: string, entityType: string): Promise<string> {
+  private async resolveClientEmail(entityId: string, entityType: string): Promise<{ email: string; contactId?: string }> {
     if (entityType === 'invoice') {
       const inv = await this.prisma.invoice.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
-      return inv?.contact?.email ?? inv?.client?.email ?? ''
+      return { email: inv?.contact?.email ?? inv?.client?.email ?? '', contactId: inv?.contact?.id }
     }
     if (entityType === 'proposal') {
       const p = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true, contact: true } })
-      return p?.contact?.email ?? p?.client?.email ?? (p?.lead as { email?: string } | null)?.email ?? ''
+      return { email: p?.contact?.email ?? p?.client?.email ?? (p?.lead as { email?: string } | null)?.email ?? '', contactId: p?.contact?.id }
     }
     if (entityType === 'contract') {
       const c = await this.prisma.contract.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
       const content = c?.content as Record<string, string> | null
-      return c?.contact?.email ?? c?.client?.email ?? content?.signerEmail ?? ''
+      return { email: c?.contact?.email ?? c?.client?.email ?? content?.signerEmail ?? '', contactId: c?.contact?.id }
     }
     if (entityType === 'lead') {
       const l = await this.prisma.lead.findUnique({ where: { id: entityId } })
-      return l?.email ?? ''
+      return { email: l?.email ?? '' }
     }
     if (entityType === 'meeting') {
       const m = await this.prisma.meeting.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
-      return m?.contact?.email ?? m?.client?.email ?? ''
+      return { email: m?.contact?.email ?? m?.client?.email ?? '', contactId: m?.contact?.id }
     }
-    return ''
+    return { email: '' }
   }
 
   private async sendFormLink(config: Record<string, unknown>, entityId: string, entityType: string, workspaceId: string) {
@@ -333,12 +336,12 @@ export class WorkflowEngine {
 
     const appUrl  = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
     const formLink = `${appUrl}/q/${form.token}`
-    const to       = await this.resolveClientEmail(entityId, entityType)
+    const { email: to, contactId } = await this.resolveClientEmail(entityId, entityType)
     if (!to) return
 
     const subject = `${user.businessName ?? user.name} sent you a form`
     const html    = `<p>Hi there,</p><p>Please fill out this form: <a href="${formLink}">${form.title}</a></p>`
-    await this.email.send({ workspaceId, to, subject, html, templateKey: 'workflow_send_form', entityId, entityType })
+    await this.email.send({ workspaceId, to, subject, html, templateKey: 'workflow_send_form', entityId, entityType, contactId })
   }
 
   private async changeLeadStage(config: Record<string, unknown>, entityId: string) {
