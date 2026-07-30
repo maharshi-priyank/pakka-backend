@@ -103,6 +103,7 @@ export class PortalService {
         name:      contact!.name,
         email:     contact!.email,
         company:   contact!.company,
+        stage:     contact!.stage,
       },
       freelancer: {
         businessName: contact!.workspace.businessName,

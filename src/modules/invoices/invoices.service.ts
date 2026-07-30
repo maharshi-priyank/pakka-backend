@@ -357,6 +357,16 @@ export class InvoicesService {
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
+
+    // R13/R14: a client viewing the public page transitions SENT/OVERDUE -> VIEWED.
+    // Atomic conditional updateMany (not read-then-write) so a concurrent payment
+    // confirmation can't be clobbered back to VIEWED (KTD9).
+    const { count } = await this.prisma.invoice.updateMany({
+      where: { id, status: { in: [InvoiceStatus.SENT, InvoiceStatus.OVERDUE] } },
+      data:  { status: InvoiceStatus.VIEWED },
+    });
+    if (count > 0) invoice.status = InvoiceStatus.VIEWED;
+
     const owner = await this.prisma.user.findUnique({
       where: { id: invoice.workspaceId },
       select: { email: true, plan: true, planExpiresAt: true, subscriptionStatus: true },

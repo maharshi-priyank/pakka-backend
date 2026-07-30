@@ -3,19 +3,29 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GstType, LeadStage, ProposalStatus } from '@prisma/client';
+import { GstType, LeadStage, ProposalStatus, Proposal } from '@prisma/client';
 import { effectivePlan } from '../users/effective-plan';
 import Decimal from 'decimal.js';
 import { CreateProposalDto, LineItemDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { QueryProposalsDto } from './dto/query-proposals.dto';
 import { VerifyDepositDto } from './dto/verify-deposit.dto';
+import { SendProposalDto } from './dto/send-proposal.dto';
 import { InvoicesService } from '../invoices/invoices.service';
+
+// R7/KTD7: cap brute-force guessing against the 6-digit viewOtp independent of
+// the generic global rate limiter (not tuned for a sensitive per-secret check).
+const MAX_OTP_ATTEMPTS = 10;
 
 // Generates a short, URL-safe slug like "abc123xy"
 function generateSlug(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+// Mirrors Contract's generateOtp() shape exactly (src/modules/contracts/contracts.service.ts).
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 function calcTotals(lineItems: LineItemDto[], gstType: string) {
@@ -150,7 +160,10 @@ export class ProposalsService {
     });
     const hideBranding = effectivePlan(owner!) === 'STUDIO';
     const userPublic = { ...proposal.workspace, email: owner?.email ?? null };
-    return { ...proposal, user: userPublic, hideBranding };
+    // R9/R12: otpGated stays visible so the client app knows to show the gate,
+    // but viewOtp and the failed-attempt count must never leave the server --
+    // otpFailedAttempts would let a caller poll how many guesses remain.
+    return { ...proposal, user: userPublic, hideBranding, viewOtp: undefined, otpFailedAttempts: undefined };
   }
 
   async update(workspaceId: string, id: string, dto: UpdateProposalDto) {
@@ -181,15 +194,27 @@ export class ProposalsService {
     });
   }
 
-  async send(workspaceId: string, id: string) {
+  async send(workspaceId: string, id: string, dto?: SendProposalDto) {
     const proposal = await this.findOne(workspaceId, id);
     if (proposal.status === ProposalStatus.ACCEPTED) {
       throw new ForbiddenException('Cannot resend an accepted proposal');
     }
 
+    // R7/R8/KTD5: otpGated is only ever set here, in send() — never via the
+    // generic update() DTO — so viewOtp is always generated in the same write
+    // that turns gating on. A resend also regenerates the OTP and resets the
+    // failed-attempt counter (KTD7).
+    const otpGated = dto?.otpGated ?? false;
+    const viewOtp  = otpGated ? generateOtp() : null;
+
     const updated = await this.prisma.proposal.update({
       where: { id },
-      data:  { status: ProposalStatus.SENT },
+      data:  {
+        status: ProposalStatus.SENT,
+        otpGated,
+        viewOtp,
+        otpFailedAttempts: 0,
+      },
     });
 
     if (proposal.leadId) {
@@ -202,8 +227,9 @@ export class ProposalsService {
     this.eventEmitter.emit('proposal.sent', { entityId: id, workspaceId });
     const appUrl = process.env.APP_URL ?? 'http://localhost:5175';
     return {
-      proposal: updated,
+      proposal: { ...updated, viewOtp: undefined },
       shareUrl: `${appUrl}/p/${updated.slug}`,
+      otp:      viewOtp,
     };
   }
 
@@ -244,10 +270,10 @@ export class ProposalsService {
     });
   }
 
-  async recordOpen(slug: string, ipAddress?: string, userAgent?: string) {
-    const proposal = await this.prisma.proposal.findUnique({ where: { slug } });
-    if (!proposal) throw new NotFoundException('Proposal not found');
-
+  // R10: creates the ProposalOpen row and flips SENT -> OPENED. Shared by the
+  // ungated recordOpen() path and by verifyOtp() on a successful OTP check —
+  // gated proposals only reach this via a correct OTP, never on page load.
+  private async recordOpenEffects(proposal: Proposal, ipAddress?: string, userAgent?: string) {
     if (proposal.status === ProposalStatus.SENT) {
       await this.prisma.proposal.update({
         where: { id: proposal.id },
@@ -263,6 +289,55 @@ export class ProposalsService {
     return this.prisma.proposalOpen.create({
       data: { proposalId: proposal.id, ipAddress, userAgent },
     });
+  }
+
+  async recordOpen(slug: string, ipAddress?: string, userAgent?: string) {
+    const proposal = await this.prisma.proposal.findUnique({ where: { slug } });
+    if (!proposal) throw new NotFoundException('Proposal not found');
+
+    // R10: gated proposals must go through verifyOtp() instead — recordOpen()
+    // is the direct, unauthenticated path this plan closes off for them.
+    if (proposal.otpGated) {
+      throw new ForbiddenException('This proposal requires OTP verification');
+    }
+
+    return this.recordOpenEffects(proposal, ipAddress, userAgent);
+  }
+
+  // R12/KTD6: every failure branch below throws this exact same error — no
+  // distinguishable status code or message between a missing slug, a
+  // not-gated proposal, an exhausted attempt cap, or a wrong OTP. Varying any
+  // of them would let an attacker enumerate valid slugs or gated proposals.
+  private invalidOtp(): never {
+    throw new BadRequestException('Invalid code');
+  }
+
+  async verifyOtp(slug: string, otp: string, ipAddress?: string, userAgent?: string) {
+    const proposal = await this.prisma.proposal.findUnique({ where: { slug } });
+    if (!proposal) return this.invalidOtp();
+    if (!proposal.otpGated) return this.invalidOtp();
+    if (proposal.otpFailedAttempts >= MAX_OTP_ATTEMPTS) return this.invalidOtp();
+
+    const expectedBuf = proposal.viewOtp ? Buffer.from(proposal.viewOtp, 'utf8') : null;
+    const actualBuf    = Buffer.from(otp, 'utf8');
+    const matches = !!expectedBuf
+      && expectedBuf.length === actualBuf.length
+      && crypto.timingSafeEqual(expectedBuf, actualBuf);
+
+    if (!matches) {
+      // Atomic increment -- a read-then-write here would let concurrent wrong
+      // guesses race past MAX_OTP_ATTEMPTS, since each request would read the
+      // same stale count and write the same +1 result.
+      await this.prisma.proposal.update({
+        where: { id: proposal.id },
+        data:  { otpFailedAttempts: { increment: 1 } },
+      });
+      return this.invalidOtp();
+    }
+
+    // Correct OTP is not one-shot (unlike Contract's sign()) — a client may
+    // revisit a Proposal multiple times, so viewOtp is left intact here.
+    return this.recordOpenEffects(proposal, ipAddress, userAgent);
   }
 
   async acceptBySlug(slug: string) {
