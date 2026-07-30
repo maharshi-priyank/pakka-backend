@@ -264,7 +264,9 @@ export class ContractsService {
     if (contract.status !== ContractStatus.SIGNED) {
       throw new BadRequestException('Only signed contracts can be voided — archive unsigned contracts instead');
     }
-    return this.prisma.contract.update({ where: { id }, data: { status: ContractStatus.VOID } });
+    const voided = await this.prisma.contract.update({ where: { id }, data: { status: ContractStatus.VOID } });
+    this.eventEmitter.emit('contract.voided', { entityId: id, workspaceId });
+    return voided;
   }
 
   async remove(workspaceId: string, id: string) {

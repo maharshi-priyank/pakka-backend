@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProjectStatus, ProjectStage, ContactStage, InvoiceStatus } from '@prisma/client';
 
@@ -29,7 +30,10 @@ export interface QueryProjectsDto {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:       PrismaService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   private n(v: { toString(): string } | null | undefined): number {
     return v ? Number(v.toString()) : 0;
@@ -187,8 +191,10 @@ export class ProjectsService {
   }
 
   async update(workspaceId: string, id: string, dto: UpdateProjectDto) {
-    await this.findOne(workspaceId, id);
-    return this.prisma.project.update({
+    const before = await this.findOne(workspaceId, id);
+    const wasCancelledBefore = before.status === 'CANCELLED' || before.projectStage === 'CANCELLED';
+
+    const updated = await this.prisma.project.update({
       where: { id },
       data:  {
         name:                dto.name,
@@ -207,6 +213,15 @@ export class ProjectsService {
         contact:  { select: { id: true, name: true, company: true } },
       },
     });
+
+    // R5/KTD2: emit only on a genuine transition into CANCELLED — never if
+    // the project was already cancelled by either field before this update.
+    const isCancelledNow = updated.status === 'CANCELLED' || updated.projectStage === 'CANCELLED';
+    if (!wasCancelledBefore && isCancelledNow) {
+      this.eventEmitter.emit('project.cancelled', { entityId: id, workspaceId });
+    }
+
+    return updated;
   }
 
   async listNotes(workspaceId: string, projectId: string) {
