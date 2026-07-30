@@ -126,6 +126,7 @@ describe('ProposalsService', () => {
         ...baseProposal,
         otpGated: true,
         viewOtp:  '123456',
+        otpFailedAttempts: 3,
         workspace: { name: 'Acme', businessName: null, logoUrl: null },
         attachments: [],
       });
@@ -134,6 +135,7 @@ describe('ProposalsService', () => {
       const result = await service.findBySlug('abc123xy99');
 
       expect(result.viewOtp).toBeUndefined();
+      expect(result.otpFailedAttempts).toBeUndefined();
       expect(result.otpGated).toBe(true);
     });
   });
@@ -208,7 +210,7 @@ describe('ProposalsService', () => {
       await expectGenericFailure(service.verifyOtp('abc123xy99', '000000'));
       expect(prisma.proposal.update).toHaveBeenCalledWith({
         where: { id: 'prop-1' },
-        data:  { otpFailedAttempts: 1 },
+        data:  { otpFailedAttempts: { increment: 1 } },
       });
     });
 

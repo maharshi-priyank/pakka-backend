@@ -161,8 +161,9 @@ export class ProposalsService {
     const hideBranding = effectivePlan(owner!) === 'STUDIO';
     const userPublic = { ...proposal.workspace, email: owner?.email ?? null };
     // R9/R12: otpGated stays visible so the client app knows to show the gate,
-    // but viewOtp itself must never leave the server.
-    return { ...proposal, user: userPublic, hideBranding, viewOtp: undefined };
+    // but viewOtp and the failed-attempt count must never leave the server --
+    // otpFailedAttempts would let a caller poll how many guesses remain.
+    return { ...proposal, user: userPublic, hideBranding, viewOtp: undefined, otpFailedAttempts: undefined };
   }
 
   async update(workspaceId: string, id: string, dto: UpdateProposalDto) {
@@ -324,9 +325,12 @@ export class ProposalsService {
       && crypto.timingSafeEqual(expectedBuf, actualBuf);
 
     if (!matches) {
+      // Atomic increment -- a read-then-write here would let concurrent wrong
+      // guesses race past MAX_OTP_ATTEMPTS, since each request would read the
+      // same stale count and write the same +1 result.
       await this.prisma.proposal.update({
         where: { id: proposal.id },
-        data:  { otpFailedAttempts: proposal.otpFailedAttempts + 1 },
+        data:  { otpFailedAttempts: { increment: 1 } },
       });
       return this.invalidOtp();
     }
