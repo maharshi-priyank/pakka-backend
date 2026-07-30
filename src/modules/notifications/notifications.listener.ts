@@ -4,8 +4,8 @@ import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 interface EventPayload {
-  entityId: string
-  userId:   string
+  entityId:    string
+  workspaceId: string
 }
 
 function rupees(val: unknown): string {
@@ -20,7 +20,7 @@ export class NotificationsListener {
   ) {}
 
   @OnEvent('invoice.paid')
-  async onInvoicePaid({ entityId, userId }: EventPayload) {
+  async onInvoicePaid({ entityId, workspaceId }: EventPayload) {
     const inv = await this.prisma.invoice.findUnique({
       where:   { id: entityId },
       include: { client: true },
@@ -30,7 +30,7 @@ export class NotificationsListener {
     const amount     = inv ? rupees(inv.total) : ''
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'invoice.paid',
       title:      'Payment received',
       body:       `${clientName} paid ${invoiceNo}${amount ? ` · ${amount}` : ''}`,
@@ -40,16 +40,16 @@ export class NotificationsListener {
   }
 
   @OnEvent('proposal.opened')
-  async onProposalOpened({ entityId, userId }: EventPayload) {
+  async onProposalOpened({ entityId, workspaceId }: EventPayload) {
     const proposal = await this.prisma.proposal.findUnique({
       where:   { id: entityId },
-      include: { client: true, lead: true },
+      include: { client: true, lead: true, contact: true },
     })
-    const clientName = proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
+    const clientName = proposal?.contact?.name ?? proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
     const title      = proposal?.title ?? 'your proposal'
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'proposal.opened',
       title:      'Proposal opened',
       body:       `${clientName} opened "${title}"`,
@@ -59,17 +59,17 @@ export class NotificationsListener {
   }
 
   @OnEvent('proposal.accepted')
-  async onProposalAccepted({ entityId, userId }: EventPayload) {
+  async onProposalAccepted({ entityId, workspaceId }: EventPayload) {
     const proposal = await this.prisma.proposal.findUnique({
       where:   { id: entityId },
-      include: { client: true, lead: true },
+      include: { client: true, lead: true, contact: true },
     })
-    const clientName = proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
+    const clientName = proposal?.contact?.name ?? proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
     const title      = proposal?.title ?? 'your proposal'
     const amount     = proposal ? rupees(proposal.totalAmount) : ''
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'proposal.accepted',
       title:      'Proposal accepted!',
       body:       `${clientName} accepted "${title}"${amount ? ` · ${amount}` : ''}`,
@@ -79,16 +79,16 @@ export class NotificationsListener {
   }
 
   @OnEvent('contract.signed')
-  async onContractSigned({ entityId, userId }: EventPayload) {
+  async onContractSigned({ entityId, workspaceId }: EventPayload) {
     const contract = await this.prisma.contract.findUnique({
       where:   { id: entityId },
-      include: { client: true },
+      include: { client: true, contact: true },
     })
-    const clientName    = contract?.client?.name ?? 'Client'
+    const clientName    = contract?.contact?.name ?? contract?.client?.name ?? 'Client'
     const contractTitle = contract?.title ?? 'your contract'
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'contract.signed',
       title:      'Contract signed',
       body:       `${clientName} signed "${contractTitle}"`,
@@ -98,16 +98,16 @@ export class NotificationsListener {
   }
 
   @OnEvent('proposal.declined')
-  async onProposalDeclined({ entityId, userId }: EventPayload) {
+  async onProposalDeclined({ entityId, workspaceId }: EventPayload) {
     const proposal = await this.prisma.proposal.findUnique({
       where:   { id: entityId },
-      include: { client: true, lead: true },
+      include: { client: true, lead: true, contact: true },
     })
-    const clientName = proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
+    const clientName = proposal?.contact?.name ?? proposal?.client?.name ?? proposal?.lead?.name ?? 'A client'
     const title      = proposal?.title ?? 'your proposal'
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'proposal.declined',
       title:      'Proposal declined',
       body:       `${clientName} declined "${title}"`,
@@ -117,7 +117,7 @@ export class NotificationsListener {
   }
 
   @OnEvent('invoice.partial')
-  async onInvoicePartial({ entityId, userId, amountPaid }: EventPayload & { amountPaid: number }) {
+  async onInvoicePartial({ entityId, workspaceId, amountPaid }: EventPayload & { amountPaid: number }) {
     const inv = await this.prisma.invoice.findUnique({
       where:   { id: entityId },
       include: { client: true },
@@ -128,7 +128,7 @@ export class NotificationsListener {
     const total      = inv ? rupees(inv.total) : ''
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'invoice.partial',
       title:      'Partial payment received',
       body:       `${clientName} paid ${paid}${total ? ` of ${total}` : ''} on ${invoiceNo}`,
@@ -138,7 +138,7 @@ export class NotificationsListener {
   }
 
   @OnEvent('invoice.overdue')
-  async onInvoiceOverdue({ entityId, userId }: EventPayload) {
+  async onInvoiceOverdue({ entityId, workspaceId }: EventPayload) {
     const inv = await this.prisma.invoice.findUnique({
       where:   { id: entityId },
       include: { client: true },
@@ -148,7 +148,7 @@ export class NotificationsListener {
     const amount     = inv ? rupees(inv.total) : ''
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'invoice.overdue',
       title:      'Invoice overdue',
       body:       `${invoiceNo}${amount ? ` · ${amount}` : ''} from ${clientName} is now overdue`,
@@ -158,14 +158,14 @@ export class NotificationsListener {
   }
 
   @OnEvent('lead.created')
-  async onLeadCreated({ entityId, userId }: EventPayload) {
+  async onLeadCreated({ entityId, workspaceId }: EventPayload) {
     const lead = await this.prisma.lead.findUnique({ where: { id: entityId } })
     const parts: string[] = [lead?.name ?? 'Someone']
     if (lead?.company) parts.push(lead.company)
     const suffix = lead?.service ? ` — interested in ${lead.service}` : ''
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'lead.created',
       title:      'New enquiry',
       body:       parts.join(' · ') + suffix,
@@ -175,7 +175,7 @@ export class NotificationsListener {
   }
 
   @OnEvent('form.submitted')
-  async onFormSubmitted({ entityId, userId }: EventPayload) {
+  async onFormSubmitted({ entityId, workspaceId }: EventPayload) {
     const form = await this.prisma.intakeForm.findUnique({
       where:   { id: entityId },
       include: { _count: { select: { submissions: true } } },
@@ -184,7 +184,7 @@ export class NotificationsListener {
     const count     = form?._count?.submissions ?? 1
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'form.submitted',
       title:      'New form response',
       body:       `Someone filled out "${formTitle}" · ${count} response${count === 1 ? '' : 's'} total`,
@@ -194,7 +194,7 @@ export class NotificationsListener {
   }
 
   @OnEvent('meeting.scheduled')
-  async onMeetingScheduled({ entityId, userId }: EventPayload) {
+  async onMeetingScheduled({ entityId, workspaceId }: EventPayload) {
     const meeting = await this.prisma.meeting.findUnique({ where: { id: entityId } })
     if (!meeting) return
     const date = new Date(meeting.scheduledAt).toLocaleDateString('en-IN', {
@@ -202,7 +202,7 @@ export class NotificationsListener {
     })
 
     await this.notifications.create({
-      userId,
+      userId:     workspaceId,
       type:       'meeting.scheduled',
       title:      'Meeting scheduled',
       body:       `"${meeting.title}" on ${date}`,

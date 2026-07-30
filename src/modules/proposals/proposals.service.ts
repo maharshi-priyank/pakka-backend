@@ -125,6 +125,7 @@ export class ProposalsService {
       include: {
         lead:      { select: { id: true, name: true, email: true } },
         client:    true,
+        contact:   true,
         opens:     { orderBy: { openedAt: 'desc' }, take: 20 },
         contracts: { select: { id: true, status: true } },
         _count:    { select: { opens: true } },

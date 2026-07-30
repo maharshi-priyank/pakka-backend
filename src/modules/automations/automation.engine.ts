@@ -161,19 +161,20 @@ export class AutomationEngine {
     if (entityType === 'invoice') {
       const inv = await this.prisma.invoice.findUnique({
         where:   { id: entityId },
-        include: { client: true },
+        include: { client: true, contact: true },
       })
-      if (!inv || !inv.client?.email) {
+      const invEmail = inv?.contact?.email ?? inv?.client?.email
+      if (!inv || !invEmail) {
         await this.notifySkip(workspaceId, entityId, 'invoice', `Invoice ${inv?.invoiceNumber ?? entityId} has no client email — automated email was skipped.`)
         return
       }
-      to = inv.client.email
+      to = invEmail
       const dueDate      = inv.dueDate ? inv.dueDate.toLocaleDateString('en-IN') : '—'
       const overdueByDays = inv.dueDate
         ? Math.floor((Date.now() - inv.dueDate.getTime()) / 86_400_000)
         : 0
       vars = {
-        clientName:    inv.client.name,
+        clientName:    inv.contact?.name ?? inv.client?.name ?? 'there',
         businessName,
         userEmail:     user.email,
         invoiceNumber: inv.invoiceNumber,
@@ -187,11 +188,11 @@ export class AutomationEngine {
     } else if (entityType === 'contract') {
       const contract = await this.prisma.contract.findUnique({
         where:   { id: entityId },
-        include: { client: true },
+        include: { client: true, contact: true },
       })
       const content = contract?.content as Record<string, string> | null
-      const contractEmail = contract?.client?.email ?? content?.signerEmail
-      const contractName  = contract?.client?.name  ?? content?.signerName ?? 'there'
+      const contractEmail = contract?.contact?.email ?? contract?.client?.email ?? content?.signerEmail
+      const contractName  = contract?.contact?.name  ?? contract?.client?.name  ?? content?.signerName ?? 'there'
       if (!contract || !contractEmail) {
         await this.notifySkip(workspaceId, entityId, 'contract', `Contract "${contract?.title ?? entityId}" has no client email — automated email was skipped.`)
         return
@@ -207,16 +208,16 @@ export class AutomationEngine {
     } else if (entityType === 'proposal') {
       const proposal = await this.prisma.proposal.findUnique({
         where:   { id: entityId },
-        include: { client: true, lead: true },
+        include: { client: true, lead: true, contact: true },
       })
-      const clientEmail = proposal?.client?.email ?? (proposal?.lead as { email?: string } | null)?.email
+      const clientEmail = proposal?.contact?.email ?? proposal?.client?.email ?? (proposal?.lead as { email?: string } | null)?.email
       if (!proposal || !clientEmail) {
         await this.notifySkip(workspaceId, entityId, 'proposal', `Proposal "${proposal?.title ?? entityId}" has no client email — automated email was skipped.`)
         return
       }
       to = clientEmail
       vars = {
-        clientName:    proposal.client?.name ?? proposal.lead?.name ?? 'there',
+        clientName:    proposal.contact?.name ?? proposal.client?.name ?? proposal.lead?.name ?? 'there',
         businessName,
         proposalTitle: proposal.title,
         proposalLink:  `${appUrl}/p/${proposal.slug}`,
@@ -298,8 +299,9 @@ export class AutomationEngine {
     const meeting = await this.prisma.meeting.findUnique({
       where:   { id: meetingId },
       include: {
-        client: { select: { id: true, name: true, email: true, portalToken: true } },
-        lead:   { select: { id: true, name: true, email: true } },
+        client:  { select: { id: true, name: true, email: true, portalToken: true } },
+        lead:    { select: { id: true, name: true, email: true } },
+        contact: { select: { id: true, name: true, email: true, portalToken: true } },
       },
     })
     if (!meeting) return
@@ -315,10 +317,15 @@ export class AutomationEngine {
       hour: '2-digit', minute: '2-digit', hour12: true,
     })
 
-    // Build list of recipients: client → lead (if no client) → guests
+    // Build list of recipients: contact → client (if no contact) → lead (if no client) → guests
     const recipients: { name: string; email: string; portalLink?: string | null }[] = []
 
-    if (meeting.client?.email) {
+    if (meeting.contact?.email) {
+      const portalLink = meeting.contact.portalToken
+        ? `${appUrl}/portal/${meeting.contact.portalToken}`
+        : null
+      recipients.push({ name: meeting.contact.name, email: meeting.contact.email, portalLink })
+    } else if (meeting.client?.email) {
       const portalLink = meeting.client.portalToken
         ? `${appUrl}/portal/${meeting.client.portalToken}`
         : null
