@@ -28,7 +28,7 @@ export class AutomationScheduler {
 
     const meetings = await this.prisma.meeting.findMany({
       where:   { scheduledAt: { gte: now, lte: inOne }, status: 'SCHEDULED', reminderSent: false },
-      include: { client: true, lead: true },
+      include: { client: true, lead: true, contact: true },
     })
 
     for (const m of meetings) {
@@ -56,9 +56,9 @@ export class AutomationScheduler {
         entityType:  'meeting',
       })
 
-      const clientEmail = m.client?.email ?? (m.lead as { email?: string } | null)?.email
+      const clientEmail = m.contact?.email ?? m.client?.email ?? (m.lead as { email?: string } | null)?.email
       if (clientEmail) {
-        const clientName = m.client?.name ?? (m.lead as { name?: string } | null)?.name ?? 'there'
+        const clientName = m.contact?.name ?? m.client?.name ?? (m.lead as { name?: string } | null)?.name ?? 'there'
         await this.email.send({
           workspaceId: m.workspaceId,
           to:          clientEmail,
@@ -165,11 +165,11 @@ export class AutomationScheduler {
           dueDate:      { lte: overdueBy },
           remindersSent: threshold.reminderIndex,
         },
-        include: { client: true },
+        include: { client: true, contact: true },
       })
 
       for (const inv of invoices) {
-        if (!inv.client?.email) continue
+        if (!inv.contact?.email && !inv.client?.email) continue
         await this.engine.executeRule(rule, inv.id, 'invoice', rule.workspaceId)
         await this.prisma.invoice.update({
           where: { id: inv.id },
@@ -198,10 +198,10 @@ export class AutomationScheduler {
           status:  { in: ['SENT', 'VIEWED'] },
           dueDate: { gte: in3d, lte: in4d },
         },
-        include: { client: true },
+        include: { client: true, contact: true },
       })
       for (const inv of invoices) {
-        if (!inv.client?.email) continue
+        if (!inv.contact?.email && !inv.client?.email) continue
         await this.engine.executeRule(rule, inv.id, 'invoice', rule.workspaceId)
       }
     }
@@ -232,10 +232,10 @@ export class AutomationScheduler {
           status:  'SENT',
           sentAt:  { gte: from, lte: to },
         },
-        include: { client: true },
+        include: { client: true, contact: true },
       })
       for (const c of contracts) {
-        if (!c.client?.email) continue
+        if (!c.contact?.email && !c.client?.email) continue
         await this.engine.executeRule(rule, c.id, 'contract', rule.workspaceId)
       }
     }
@@ -313,10 +313,10 @@ export class AutomationScheduler {
           status:     { in: ['SENT', 'OPENED'] },
           validUntil: { gte: startOfTomorrow, lte: endOfTomorrow },
         },
-        include: { client: true, lead: true },
+        include: { client: true, lead: true, contact: true },
       })
       for (const p of proposals) {
-        const clientEmail = p.client?.email ?? (p.lead as { email?: string } | null)?.email
+        const clientEmail = p.contact?.email ?? p.client?.email ?? (p.lead as { email?: string } | null)?.email
         if (!clientEmail) continue
         await this.engine.executeRule(rule, p.id, 'proposal', rule.workspaceId)
       }

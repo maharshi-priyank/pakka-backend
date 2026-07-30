@@ -158,8 +158,9 @@ export class WorkflowEngine {
       const inv = await this.prisma.invoice.findUnique({ where: { id: entityId }, select: { total: true } })
       actual = inv?.total ? Number(inv.total) : 0
     } else if (field === 'client.hasEmail') {
-      const client = await this.prisma.client.findUnique({ where: { id: entityId }, select: { email: true } })
-      actual = !!client?.email
+      const contact = await this.prisma.contact.findUnique({ where: { id: entityId }, select: { email: true } })
+      const client  = await this.prisma.client.findUnique({ where: { id: entityId }, select: { email: true } })
+      actual = !!(contact?.email ?? client?.email)
     } else {
       return false
     }
@@ -210,28 +211,34 @@ export class WorkflowEngine {
     const vars: MergeVars = { businessName }
 
     if (entityType === 'invoice') {
-      const inv = await this.prisma.invoice.findUnique({ where: { id: entityId }, include: { client: true } })
+      const inv = await this.prisma.invoice.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
       if (inv) {
-        vars.clientName    = inv.client?.name ?? ''
-        vars.clientEmail   = inv.client?.email ?? ''
+        vars.clientName    = inv.contact?.name ?? inv.client?.name ?? ''
+        vars.clientEmail   = inv.contact?.email ?? inv.client?.email ?? ''
         vars.invoiceAmount = `₹${Number(inv.total).toLocaleString('en-IN')}`
         vars.invoiceDueDate = inv.dueDate ? inv.dueDate.toLocaleDateString('en-IN') : '—'
-        vars.portalLink    = inv.client?.portalToken ? `${appUrl}/portal/${inv.client.portalToken}` : ''
+        vars.portalLink    = inv.contact?.portalToken
+          ? `${appUrl}/portal/${inv.contact.portalToken}`
+          : inv.client?.portalToken ? `${appUrl}/portal/${inv.client.portalToken}` : ''
       }
     } else if (entityType === 'proposal') {
-      const p = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true } })
+      const p = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true, contact: true } })
       if (p) {
-        vars.clientName    = p.client?.name ?? (p.lead as { name?: string } | null)?.name ?? ''
-        vars.clientEmail   = p.client?.email ?? (p.lead as { email?: string } | null)?.email ?? ''
+        vars.clientName    = p.contact?.name ?? p.client?.name ?? (p.lead as { name?: string } | null)?.name ?? ''
+        vars.clientEmail   = p.contact?.email ?? p.client?.email ?? (p.lead as { email?: string } | null)?.email ?? ''
         vars.proposalTitle = p.title
-        vars.portalLink    = p.client?.portalToken ? `${appUrl}/portal/${p.client.portalToken}` : ''
+        vars.portalLink    = p.contact?.portalToken
+          ? `${appUrl}/portal/${p.contact.portalToken}`
+          : p.client?.portalToken ? `${appUrl}/portal/${p.client.portalToken}` : ''
       }
     } else if (entityType === 'contract') {
-      const c = await this.prisma.contract.findUnique({ where: { id: entityId }, include: { client: true } })
+      const c = await this.prisma.contract.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
       if (c) {
-        vars.clientName  = c.client?.name ?? ''
-        vars.clientEmail = c.client?.email ?? ''
-        vars.portalLink  = c.client?.portalToken ? `${appUrl}/portal/${c.client.portalToken}` : ''
+        vars.clientName  = c.contact?.name ?? c.client?.name ?? ''
+        vars.clientEmail = c.contact?.email ?? c.client?.email ?? ''
+        vars.portalLink  = c.contact?.portalToken
+          ? `${appUrl}/portal/${c.contact.portalToken}`
+          : c.client?.portalToken ? `${appUrl}/portal/${c.client.portalToken}` : ''
       }
     } else if (entityType === 'lead') {
       const l = await this.prisma.lead.findUnique({ where: { id: entityId } })
@@ -240,13 +247,15 @@ export class WorkflowEngine {
         vars.clientEmail = l.email ?? ''
       }
     } else if (entityType === 'meeting') {
-      const m = await this.prisma.meeting.findUnique({ where: { id: entityId }, include: { client: true } })
+      const m = await this.prisma.meeting.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
       if (m) {
         vars.meetingTitle = m.title
         vars.meetingDate  = m.scheduledAt.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-        vars.clientName   = m.client?.name ?? ''
-        vars.clientEmail  = m.client?.email ?? ''
-        vars.portalLink   = m.client?.portalToken ? `${appUrl}/portal/${m.client.portalToken}` : ''
+        vars.clientName   = m.contact?.name ?? m.client?.name ?? ''
+        vars.clientEmail  = m.contact?.email ?? m.client?.email ?? ''
+        vars.portalLink   = m.contact?.portalToken
+          ? `${appUrl}/portal/${m.contact.portalToken}`
+          : m.client?.portalToken ? `${appUrl}/portal/${m.client.portalToken}` : ''
       }
     } else if (entityType === 'form') {
       const f = await this.prisma.intakeForm.findUnique({ where: { id: entityId } })
@@ -290,25 +299,25 @@ export class WorkflowEngine {
 
   private async resolveClientEmail(entityId: string, entityType: string): Promise<string> {
     if (entityType === 'invoice') {
-      const inv = await this.prisma.invoice.findUnique({ where: { id: entityId }, include: { client: true } })
-      return inv?.client?.email ?? ''
+      const inv = await this.prisma.invoice.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
+      return inv?.contact?.email ?? inv?.client?.email ?? ''
     }
     if (entityType === 'proposal') {
-      const p = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true } })
-      return p?.client?.email ?? (p?.lead as { email?: string } | null)?.email ?? ''
+      const p = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true, contact: true } })
+      return p?.contact?.email ?? p?.client?.email ?? (p?.lead as { email?: string } | null)?.email ?? ''
     }
     if (entityType === 'contract') {
-      const c = await this.prisma.contract.findUnique({ where: { id: entityId }, include: { client: true } })
+      const c = await this.prisma.contract.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
       const content = c?.content as Record<string, string> | null
-      return c?.client?.email ?? content?.signerEmail ?? ''
+      return c?.contact?.email ?? c?.client?.email ?? content?.signerEmail ?? ''
     }
     if (entityType === 'lead') {
       const l = await this.prisma.lead.findUnique({ where: { id: entityId } })
       return l?.email ?? ''
     }
     if (entityType === 'meeting') {
-      const m = await this.prisma.meeting.findUnique({ where: { id: entityId }, include: { client: true } })
-      return m?.client?.email ?? ''
+      const m = await this.prisma.meeting.findUnique({ where: { id: entityId }, include: { client: true, contact: true } })
+      return m?.contact?.email ?? m?.client?.email ?? ''
     }
     return ''
   }

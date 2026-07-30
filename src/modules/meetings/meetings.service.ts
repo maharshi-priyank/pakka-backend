@@ -49,7 +49,7 @@ export class MeetingsService {
       agenda:       meeting.agenda,
       scheduledAt:  meeting.scheduledAt,
       durationMins: meeting.durationMins,
-      clientEmail:  meeting.client?.email,
+      clientEmail:  meeting.contact?.email ?? meeting.client?.email,
       leadEmail:    meeting.lead?.email,
       guestEmails:  meeting.guestEmails,
     };

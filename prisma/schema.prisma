@@ -175,8 +175,8 @@ model User {
   name                    String
   plan                    Plan             @default(FREE)
   planExpiresAt           DateTime?
-  cashfreeSubscriptionId  String?
-  cashfreePlanId          String?
+  razorpaySubscriptionId  String?
+  razorpayPlanId          String?
   stripeCustomerId        String?
   stripeSubscriptionId    String?
   subscriptionStatus      SubscriptionStatus @default(NONE)
@@ -293,7 +293,7 @@ model BillingConfig {
 model BillingEvent {
   id          String   @id @default(cuid())
   eventType   String
-  cashfreeRef String   @unique
+  razorpayRef String   @unique
   workspaceId String?
   payload     Json
   processedAt DateTime @default(now())

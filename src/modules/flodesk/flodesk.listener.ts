@@ -5,8 +5,8 @@ import { FlodeskService } from './flodesk.service.js';
 import { LeadStage } from '@prisma/client';
 
 interface AutomationEvent {
-  entityId: string;
-  userId:   string;
+  entityId:    string;
+  workspaceId: string;
 }
 
 interface LeadUpdatedEvent extends AutomationEvent {
@@ -29,7 +29,7 @@ export class FlodeskListener {
       select: { email: true, name: true },
     });
     if (!client) return;
-    await this.flodesk.syncClient(ev.userId, client);
+    await this.flodesk.syncClient(ev.workspaceId, client);
   }
 
   @OnEvent('lead.created')
@@ -39,7 +39,7 @@ export class FlodeskListener {
       select: { email: true, name: true },
     });
     if (!lead) return;
-    await this.flodesk.syncLead(ev.userId, lead);
+    await this.flodesk.syncLead(ev.workspaceId, lead);
   }
 
   @OnEvent('lead.updated')
@@ -50,7 +50,7 @@ export class FlodeskListener {
       select: { email: true, name: true },
     });
     if (!lead) return;
-    await this.flodesk.syncWonLead(ev.userId, lead);
+    await this.flodesk.syncWonLead(ev.workspaceId, lead);
   }
 
   @OnEvent('invoice.paid')
@@ -60,6 +60,6 @@ export class FlodeskListener {
       select:  { client: { select: { email: true, name: true } } },
     });
     if (!invoice?.client) return;
-    await this.flodesk.syncPaidInvoice(ev.userId, invoice.client.email, invoice.client.name);
+    await this.flodesk.syncPaidInvoice(ev.workspaceId, invoice.client.email, invoice.client.name);
   }
 }

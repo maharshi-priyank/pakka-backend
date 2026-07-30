@@ -90,14 +90,14 @@ export class StripeService {
   }
 
   async handleWebhookEvent(event: { type: string; id: string; data: { object: Record<string, unknown> } }): Promise<void> {
-    const existing = await this.prisma.billingEvent.findUnique({ where: { cashfreeRef: event.id } });
+    const existing = await this.prisma.billingEvent.findUnique({ where: { razorpayRef: event.id } });
     if (existing) {
       this.logger.debug(`Duplicate Stripe event skipped: ${event.id}`);
       return;
     }
 
     await this.prisma.billingEvent.create({
-      data: { eventType: event.type, cashfreeRef: event.id, payload: event as object },
+      data: { eventType: event.type, razorpayRef: event.id, payload: event as object },
     });
 
     const obj = event.data.object;

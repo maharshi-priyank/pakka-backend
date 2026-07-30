@@ -1,15 +1,16 @@
-export interface CashfreeWebhookEvent {
-  type: string;
-  data: {
-    subscription: {
-      subscription_id:   string;
-      plan_id:           string;
-      status:            string;
-      customer_details?: { customer_id?: string };
-      next_payment_date?: string;
-    };
-    payment?: {
-      cf_payment_id?: string;
-    };
+export interface RazorpaySubscriptionEntity {
+  id:           string;
+  plan_id:      string;
+  status:       string;
+  charge_at?:   number;
+  current_end?: number;
+  notes?:       Record<string, string | number>;
+}
+
+export interface RazorpayWebhookEvent {
+  event: string;
+  payload: {
+    subscription?: { entity: RazorpaySubscriptionEntity };
+    payment?:       { entity: { id: string; status?: string } };
   };
 }

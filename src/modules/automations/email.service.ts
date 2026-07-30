@@ -37,7 +37,21 @@ export class EmailService {
     entityId?:   string
     entityType?: string
   }): Promise<boolean> {
-    const from = this.config.get<string>('email.from') ?? 'ClearWork <noreply@clearwork.in>'
+    const defaultFrom = this.config.get<string>('email.from') ?? 'ClearWork <noreply@clearwork.in>'
+
+    // Every automated email sent to a client is on behalf of the freelancer's
+    // business, not ClearWork. We can't send FROM the freelancer's own address
+    // (breaks SPF/DKIM on a shared relay, gets flagged as spoofing) — so we
+    // show their business name in the From header and set Reply-To to their
+    // own inbox, so replies land with them, not in a noreply@ black hole.
+    const owner = await this.prisma.user.findUnique({
+      where:  { id: opts.workspaceId },
+      select: { email: true, businessName: true, name: true },
+    })
+    const businessName = owner?.businessName ?? owner?.name
+    const fromAddress   = defaultFrom.match(/<(.+)>/)?.[1] ?? defaultFrom
+    const from    = businessName ? `${businessName} via ClearWork <${fromAddress}>` : defaultFrom
+    const replyTo = owner?.email
 
     if (!this.transporter) {
       this.logger.debug(`[email-skip] to=${opts.to} subject="${opts.subject}"`)
@@ -46,7 +60,7 @@ export class EmailService {
     }
 
     try {
-      await this.transporter.sendMail({ from, to: opts.to, subject: opts.subject, html: opts.html })
+      await this.transporter.sendMail({ from, to: opts.to, subject: opts.subject, html: opts.html, replyTo })
       await this.log({ ...opts, status: 'sent' })
       this.logger.log(`[email-sent] to=${opts.to} template=${opts.templateKey}`)
       return true

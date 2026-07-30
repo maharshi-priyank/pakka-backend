@@ -1,12 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import Razorpay from 'razorpay';
+import * as crypto from 'crypto';
 import { effectivePlan } from '../users/effective-plan';
 
 @Injectable()
 export class PortalService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma:       PrismaService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private makeRazorpay(keyId: string | null, keySecret: string | null): Razorpay {
@@ -241,5 +244,76 @@ export class PortalService {
       currency: 'INR',
       keyId:    workspaceInfo.razorpayKeyId,
     };
+  }
+
+  async verifyInvoicePayment(
+    token: string,
+    invoiceId: string,
+    dto: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string },
+  ) {
+    // Resolve by contact first (Phase C), then legacy client — same pattern as createInvoiceOrder
+    const contact = await this.prisma.contact.findFirst({
+      where:   { portalToken: token },
+      include: { workspace: { select: { razorpayKeySecret: true } } },
+    });
+
+    let workspaceId: string
+    let razorpayKeySecret: string | null
+    let invoiceWhere: Record<string, string>
+
+    if (contact) {
+      workspaceId       = contact.workspaceId
+      razorpayKeySecret = contact.workspace.razorpayKeySecret
+      invoiceWhere      = { id: invoiceId, contactId: contact.id }
+    } else {
+      const client = await this.prisma.client.findUnique({
+        where:   { portalToken: token },
+        include: { workspace: { select: { razorpayKeySecret: true } } },
+      });
+      if (!client) throw new NotFoundException('Portal link is invalid or has expired');
+      workspaceId       = client.workspaceId
+      razorpayKeySecret = client.workspace.razorpayKeySecret
+      invoiceWhere      = { id: invoiceId, clientId: client.id }
+    }
+
+    const invoice = await this.prisma.invoice.findFirst({ where: invoiceWhere });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === 'PAID') {
+      throw new BadRequestException('Invoice is already fully paid');
+    }
+    // The order must belong to THIS invoice — prevents a valid payment for a
+    // different invoice/order being replayed to mark this one paid.
+    if (!invoice.razorpayOrderId || invoice.razorpayOrderId !== dto.razorpayOrderId) {
+      throw new BadRequestException('Order does not match this invoice');
+    }
+    if (!razorpayKeySecret) {
+      throw new BadRequestException('Connect your Razorpay account in Settings to enable online payments');
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', razorpayKeySecret)
+      .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
+      .digest('hex');
+
+    const signatureValid =
+      expectedSignature.length === dto.razorpaySignature.length &&
+      crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(dto.razorpaySignature));
+
+    if (!signatureValid) {
+      throw new UnauthorizedException('Payment signature verification failed');
+    }
+
+    const paid = await this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data:  {
+        status:          'PAID',
+        amountPaid:      invoice.total,
+        paidAt:          new Date(),
+        razorpayPaymentId: dto.razorpayPaymentId,
+      },
+    });
+    this.eventEmitter.emit('invoice.paid', { entityId: invoiceId, workspaceId });
+
+    return { status: paid.status, paidAt: paid.paidAt };
   }
 }
