@@ -59,13 +59,26 @@ export class UsersService {
 
   async update(id: string, data: UpdateUserDto) {
     const user = await this.prisma.user.update({ where: { id }, data });
+    const workspaceId = user.activeWorkspaceId ?? id;
 
     // Keep active workspace logo in sync when profile logo changes
     if ('logoUrl' in data && data.logoUrl !== undefined) {
-      const workspaceId = user.activeWorkspaceId ?? id;
       await this.prisma.workspace.update({
         where: { id: workspaceId },
         data:  { logoUrl: data.logoUrl },
+      });
+    }
+
+    // Razorpay keys live on both User (legacy, edited via Settings/Onboarding)
+    // and Workspace (read by the client-facing portal payment flow) — keep
+    // Workspace in sync or "Connect Razorpay" never actually enables payments.
+    if ('razorpayKeyId' in data || 'razorpayKeySecret' in data) {
+      await this.prisma.workspace.update({
+        where: { id: workspaceId },
+        data: {
+          ...('razorpayKeyId'     in data && { razorpayKeyId:     data.razorpayKeyId }),
+          ...('razorpayKeySecret' in data && { razorpayKeySecret: data.razorpayKeySecret }),
+        },
       });
     }
 

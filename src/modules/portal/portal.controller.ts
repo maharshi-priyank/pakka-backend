@@ -28,6 +28,19 @@ export class PortalController {
   }
 
   @Public()
+  @Post(':token/invoices/:id/verify-payment')
+  verifyInvoicePayment(
+    @Param('token') token: string,
+    @Param('id')    id:    string,
+    @Body() body: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string },
+  ) {
+    if (!body?.razorpayOrderId || !body?.razorpayPaymentId || !body?.razorpaySignature) {
+      throw new BadRequestException('Missing payment verification fields');
+    }
+    return this.portalService.verifyInvoicePayment(token, id, body);
+  }
+
+  @Public()
   @Get(':token/messages')
   getMessages(@Param('token') token: string) {
     return this.messagesService.getThreadByToken(token);
