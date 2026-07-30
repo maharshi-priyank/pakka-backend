@@ -9,6 +9,8 @@ import { CreateProposalDto } from './dto/create-proposal.dto';
 import { UpdateProposalDto } from './dto/update-proposal.dto';
 import { QueryProposalsDto } from './dto/query-proposals.dto';
 import { VerifyDepositDto } from './dto/verify-deposit.dto';
+import { SendProposalDto } from './dto/send-proposal.dto';
+import { VerifyProposalOtpDto } from './dto/verify-proposal-otp.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
@@ -47,8 +49,8 @@ export class ProposalsController {
   @Post(':id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark proposal as sent and return shareable link' })
-  send(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.svc.send(resolveWorkspaceId(user), id);
+  send(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: SendProposalDto) {
+    return this.svc.send(resolveWorkspaceId(user), id, dto);
   }
 
   @Patch(':id/archive')
@@ -112,5 +114,16 @@ export class ProposalsController {
   @ApiOperation({ summary: 'Verify Razorpay deposit payment and mark proposal deposit as paid' })
   verifyDeposit(@Param('slug') slug: string, @Body() dto: VerifyDepositDto) {
     return this.svc.verifyDeposit(slug, dto);
+  }
+
+  @Post('view/:slug/verify-otp')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify the OTP for a gated proposal and record the view (R9/R10)' })
+  verifyOtp(@Param('slug') slug: string, @Body() dto: VerifyProposalOtpDto, @Req() req: Request) {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+      ?? req.socket.remoteAddress;
+    const ua = req.headers['user-agent'];
+    return this.svc.verifyOtp(slug, dto.otp, ip, ua);
   }
 }
