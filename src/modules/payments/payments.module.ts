@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PAYMENT_PROVIDER } from './payment-provider.interface';
-import { CashfreeProvider } from './cashfree.provider';
+import { RazorpayProvider } from './razorpay.provider';
 import { PlanResolutionService } from './plan-resolution.service';
 import { PaymentsService } from './payments.service';
 import { StripeService } from './stripe.service';
@@ -14,8 +14,8 @@ import { PaymentsController } from './payments.controller';
     PlanResolutionService,
     PaymentsService,
     StripeService,
-    { provide: PAYMENT_PROVIDER, useClass: CashfreeProvider },
-    CashfreeProvider,
+    { provide: PAYMENT_PROVIDER, useClass: RazorpayProvider },
+    RazorpayProvider,
   ],
   exports: [PaymentsService, StripeService],
 })

@@ -1,7 +1,9 @@
 import * as Joi from 'joi';
 
 export const validationSchema = Joi.object({
-  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+  NODE_ENV: Joi.string()
+    .valid('development', 'production', 'test')
+    .default('development'),
   NEW_RELIC_LICENSE_KEY: Joi.string().optional(),
   NEW_RELIC_APP_NAME: Joi.string().default('clearwork-backend'),
   PORT: Joi.number().default(3000),
@@ -11,23 +13,24 @@ export const validationSchema = Joi.object({
   SUPABASE_JWT_SECRET: Joi.string().optional(),
   RAZORPAY_KEY_ID: Joi.string().required(),
   RAZORPAY_KEY_SECRET: Joi.string().required(),
+  RAZORPAY_WEBHOOK_SECRET: Joi.string().required(),
   GEMINI_API_KEY: Joi.string().optional(),
   CORS_ORIGIN: Joi.string().required(),
-  GOOGLE_CLIENT_ID:     Joi.string().optional(),
+  GOOGLE_CLIENT_ID: Joi.string().optional(),
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
-  GOOGLE_REDIRECT_URI:  Joi.string().optional(),
-  MS_CLIENT_ID:         Joi.string().optional(),
-  MS_CLIENT_SECRET:     Joi.string().optional(),
-  MS_TENANT_ID:         Joi.string().default('common'),
-  MS_REDIRECT_URI:      Joi.string().optional(),
-  CLICKUP_CLIENT_ID:     Joi.string().optional(),
+  GOOGLE_REDIRECT_URI: Joi.string().optional(),
+  MS_CLIENT_ID: Joi.string().optional(),
+  MS_CLIENT_SECRET: Joi.string().optional(),
+  MS_TENANT_ID: Joi.string().default('common'),
+  MS_REDIRECT_URI: Joi.string().optional(),
+  CLICKUP_CLIENT_ID: Joi.string().optional(),
   CLICKUP_CLIENT_SECRET: Joi.string().optional(),
-  CLICKUP_REDIRECT_URI:  Joi.string().optional(),
-  CANVA_CLIENT_ID:       Joi.string().optional(),
-  CANVA_CLIENT_SECRET:   Joi.string().optional(),
-  CANVA_REDIRECT_URI:    Joi.string().optional(),
-  VAULT_ENCRYPTION_KEY:  Joi.string().optional(),
-  LEADS_ENGINE_URL:      Joi.string().uri().default('http://localhost:8080'),
+  CLICKUP_REDIRECT_URI: Joi.string().optional(),
+  CANVA_CLIENT_ID: Joi.string().optional(),
+  CANVA_CLIENT_SECRET: Joi.string().optional(),
+  CANVA_REDIRECT_URI: Joi.string().optional(),
+  VAULT_ENCRYPTION_KEY: Joi.string().optional(),
+  LEADS_ENGINE_URL: Joi.string().uri().default('http://localhost:8080'),
   EMAIL_HOST: Joi.string().default('smtpout.secureserver.net'),
   EMAIL_PORT: Joi.number().default(465),
   EMAIL_USER: Joi.string().optional(),
@@ -35,14 +38,10 @@ export const validationSchema = Joi.object({
   EMAIL_FROM: Joi.string().default('ClearWork <noreply@clearwork.in>'),
   APP_URL: Joi.string().default('http://localhost:5173'),
   BACKEND_URL: Joi.string().default('http://localhost:3000/api'),
-  VAPID_PUBLIC_KEY:  Joi.string().optional(),
+  VAPID_PUBLIC_KEY: Joi.string().optional(),
   VAPID_PRIVATE_KEY: Joi.string().optional(),
-  VAPID_SUBJECT:     Joi.string().default('mailto:noreply@clearwork.in'),
-  CASHFREE_APP_ID:       Joi.string().required(),
-  CASHFREE_SECRET_KEY:   Joi.string().required(),
-  CASHFREE_ENVIRONMENT:  Joi.string().valid('sandbox', 'production').default('sandbox'),
-  CASHFREE_WEBHOOK_SECRET: Joi.string().required(),
-  STRIPE_SECRET_KEY:     Joi.string().optional(),
+  VAPID_SUBJECT: Joi.string().default('mailto:noreply@clearwork.in'),
+  STRIPE_SECRET_KEY: Joi.string().optional(),
   STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
   APP_FRONTEND_URL: Joi.string().default('http://localhost:5173'),
 });
@@ -58,27 +57,36 @@ export const configuration = () => ({
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
   },
   google: {
-    clientId:     process.env.GOOGLE_CLIENT_ID,
+    clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri:  process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/google/callback',
+    redirectUri:
+      process.env.GOOGLE_REDIRECT_URI ??
+      'http://localhost:3000/api/v1/auth/google/callback',
   },
   microsoft: {
-    clientId:     process.env.MS_CLIENT_ID,
+    clientId: process.env.MS_CLIENT_ID,
     clientSecret: process.env.MS_CLIENT_SECRET,
-    tenantId:     process.env.MS_TENANT_ID ?? 'common',
-    redirectUri:  process.env.MS_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/microsoft/callback',
+    tenantId: process.env.MS_TENANT_ID ?? 'common',
+    redirectUri:
+      process.env.MS_REDIRECT_URI ??
+      'http://localhost:3000/api/v1/auth/microsoft/callback',
   },
   clickup: {
-    clientId:     process.env.CLICKUP_CLIENT_ID,
+    clientId: process.env.CLICKUP_CLIENT_ID,
     clientSecret: process.env.CLICKUP_CLIENT_SECRET,
-    redirectUri:  process.env.CLICKUP_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/clickup/callback',
+    redirectUri:
+      process.env.CLICKUP_REDIRECT_URI ??
+      'http://localhost:3000/api/v1/auth/clickup/callback',
   },
   canva: {
-    clientId:     process.env.CANVA_CLIENT_ID,
+    clientId: process.env.CANVA_CLIENT_ID,
     clientSecret: process.env.CANVA_CLIENT_SECRET,
-    redirectUri:  process.env.CANVA_REDIRECT_URI ?? 'http://localhost:3000/api/v1/auth/canva/callback',
+    redirectUri:
+      process.env.CANVA_REDIRECT_URI ??
+      'http://localhost:3000/api/v1/auth/canva/callback',
   },
   corsOrigin: process.env.CORS_ORIGIN,
   email: {
@@ -88,7 +96,7 @@ export const configuration = () => ({
     pass: process.env.EMAIL_PASS,
     from: process.env.EMAIL_FROM ?? 'ClearWork <noreply@clearwork.in>',
   },
-  appUrl:     process.env.APP_URL     ?? 'http://localhost:5173',
+  appUrl: process.env.APP_URL ?? 'http://localhost:5173',
   backendUrl: process.env.BACKEND_URL ?? 'http://localhost:3000/api',
   geminiApiKey: process.env.GEMINI_API_KEY,
   newRelic: {
@@ -96,22 +104,20 @@ export const configuration = () => ({
     appName: process.env.NEW_RELIC_APP_NAME ?? 'clearwork-backend',
   },
   webPush: {
-    publicKey:  process.env.VAPID_PUBLIC_KEY,
+    publicKey: process.env.VAPID_PUBLIC_KEY,
     privateKey: process.env.VAPID_PRIVATE_KEY,
-    subject:    process.env.VAPID_SUBJECT ?? 'mailto:noreply@clearwork.in',
+    subject: process.env.VAPID_SUBJECT ?? 'mailto:noreply@clearwork.in',
   },
-  cashfree: {
-    appId:         process.env.CASHFREE_APP_ID,
-    secretKey:     process.env.CASHFREE_SECRET_KEY,
-    environment:   process.env.CASHFREE_ENVIRONMENT ?? 'sandbox',
-    webhookSecret: process.env.CASHFREE_WEBHOOK_SECRET,
-  },
-  frontendUrl:        process.env.APP_FRONTEND_URL ?? process.env.APP_URL ?? 'http://localhost:5173',
-  apiUrl:             process.env.APP_API_URL ?? 'http://localhost:3000/api',
-  vaultEncryptionKey: process.env.VAULT_ENCRYPTION_KEY ?? 'dev_vault_key_32bytes_placeholder!',
-  leadsEngineUrl:     process.env.LEADS_ENGINE_URL ?? 'http://localhost:8080',
+  frontendUrl:
+    process.env.APP_FRONTEND_URL ??
+    process.env.APP_URL ??
+    'http://localhost:5173',
+  apiUrl: process.env.APP_API_URL ?? 'http://localhost:3000/api',
+  vaultEncryptionKey:
+    process.env.VAULT_ENCRYPTION_KEY ?? 'dev_vault_key_32bytes_placeholder!',
+  leadsEngineUrl: process.env.LEADS_ENGINE_URL ?? 'http://localhost:8080',
   stripe: {
-    secretKey:     process.env.STRIPE_SECRET_KEY,
+    secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
 });

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RazorpayProvider } from './razorpay.provider';
 
 export type PlanTier = 'SOLO' | 'STUDIO';
 
@@ -10,19 +11,6 @@ export interface ResolvedPlan {
   windowEnds?: Date;
 }
 
-const PLAN_IDS: Record<PlanTier, Record<string, string>> = {
-  SOLO: {
-    founding:    'plan_solo_founding',
-    earlyaccess: 'plan_solo_earlyaccess',
-    regular:     'plan_solo_regular',
-  },
-  STUDIO: {
-    founding:    'plan_studio_founding',
-    earlyaccess: 'plan_studio_earlyaccess',
-    regular:     'plan_studio_regular',
-  },
-};
-
 const PRICES: Record<PlanTier, Record<string, number>> = {
   SOLO:   { founding: 149, earlyaccess: 199, regular: 299 },
   STUDIO: { founding: 349, earlyaccess: 499, regular: 699 },
@@ -30,7 +18,10 @@ const PRICES: Record<PlanTier, Record<string, number>> = {
 
 @Injectable()
 export class PlanResolutionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:   PrismaService,
+    private readonly razorpay: RazorpayProvider,
+  ) {}
 
   async resolve(tier: PlanTier, now: Date = new Date()): Promise<ResolvedPlan> {
     const config = await this.prisma.billingConfig.findUnique({ where: { id: 'singleton' } });
@@ -48,12 +39,10 @@ export class PlanResolutionService {
       window = 'regular';
     }
 
-    return {
-      planId:    PLAN_IDS[tier][window],
-      price:     PRICES[tier][window],
-      window,
-      windowEnds,
-    };
+    const price  = PRICES[tier][window];
+    const planId = await this.razorpay.getOrCreatePlanId(tier, window, price);
+
+    return { planId, price, window, windowEnds };
   }
 
   async currentPricing(): Promise<{

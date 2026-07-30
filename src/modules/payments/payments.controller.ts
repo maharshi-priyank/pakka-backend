@@ -11,7 +11,8 @@ import { Public } from '../../common/decorators/public.decorator';
 import { PaymentsService } from './payments.service';
 import { StripeService } from './stripe.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
-import type { CashfreeWebhookEvent } from './dto/webhook-event.dto';
+import { VerifySubscriptionPaymentDto } from './dto/verify-subscription-payment.dto';
+import type { RazorpayWebhookEvent } from './dto/webhook-event.dto';
 
 @Controller('payments')
 export class PaymentsController {
@@ -46,6 +47,12 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   currentPricing() {
     return this.payments.currentPricing();
+  }
+
+  @Post('razorpay/verify')
+  @UseGuards(JwtAuthGuard)
+  verifySubscriptionPayment(@Body() dto: VerifySubscriptionPaymentDto) {
+    return this.payments.verifySubscriptionPayment(dto);
   }
 
   @Public()
@@ -111,28 +118,26 @@ export class PaymentsController {
     return { received: true };
   }
 
-  // ── Cashfree webhook ───────────────────────────────────────────────────────
+  // ── Razorpay webhook (subscription lifecycle) ──────────────────────────────
 
   @Public()
   @Post('webhook')
   @HttpCode(200)
   async webhook(
     @Req() req: Request & { rawBody?: Buffer },
-    @Headers('x-webhook-signature') signature: string,
-    @Headers('x-webhook-timestamp') timestamp: string,
-    @Body() body: CashfreeWebhookEvent,
+    @Headers('x-razorpay-signature') signature: string,
+    @Body() body: RazorpayWebhookEvent,
   ) {
     const rawBody = req.rawBody;
+    if (!rawBody || !signature) throw new UnauthorizedException('Missing Razorpay signature');
 
-    if (rawBody && signature && timestamp) {
-      const valid = this.payments.verifyWebhookSignature(rawBody, signature, timestamp);
-      if (!valid) throw new UnauthorizedException('Invalid webhook signature');
-    }
+    const valid = this.payments.verifyWebhookSignature(rawBody, signature);
+    if (!valid) throw new UnauthorizedException('Invalid webhook signature');
 
-    const cashfreeRef = (body as any)?.data?.payment?.cf_payment_id
-      ?? (body as any)?.data?.subscription?.subscription_id + '_' + body.type;
+    const razorpayRef = (body.payload.payment?.entity.id ?? body.payload.subscription?.entity.id)
+      + '_' + body.event;
 
-    await this.payments.handleWebhook(body, cashfreeRef);
+    await this.payments.handleWebhook(body, razorpayRef);
     return { received: true };
   }
 }

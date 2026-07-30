@@ -5,9 +5,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Plan, SubscriptionStatus } from '@prisma/client';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment-provider.interface';
 import { PlanResolutionService, type PlanTier } from './plan-resolution.service';
-import type { CashfreeWebhookEvent } from './dto/webhook-event.dto';
+import type { RazorpayWebhookEvent } from './dto/webhook-event.dto';
 
-type WebhookHandler = (event: CashfreeWebhookEvent) => Promise<void>;
+type WebhookHandler = (event: RazorpayWebhookEvent) => Promise<void>;
 
 @Injectable()
 export class PaymentsService {
@@ -21,11 +21,12 @@ export class PaymentsService {
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {
     this.handlers = {
-      SUBSCRIPTION_ACTIVATED:       this.onActivated.bind(this),
-      SUBSCRIPTION_PAYMENT_SUCCESS:  this.onPaymentSuccess.bind(this),
-      SUBSCRIPTION_PAYMENT_FAILED:   this.onPaymentFailed.bind(this),
-      SUBSCRIPTION_CANCELLED:        this.onCancelled.bind(this),
-      SUBSCRIPTION_PAUSED:           this.onPaused.bind(this),
+      'subscription.activated':  this.onActivated.bind(this),
+      'subscription.charged':    this.onPaymentSuccess.bind(this),
+      'subscription.halted':     this.onPaymentFailed.bind(this),
+      'subscription.cancelled':  this.onCancelled.bind(this),
+      'subscription.completed':  this.onCancelled.bind(this),
+      'subscription.paused':     this.onPaused.bind(this),
     };
   }
 
@@ -57,7 +58,7 @@ export class PaymentsService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data:  { cashfreeSubscriptionId: subscriptionId },
+      data:  { razorpaySubscriptionId: subscriptionId },
     });
 
     return { checkoutUrl };
@@ -71,8 +72,8 @@ export class PaymentsService {
       select: {
         plan: true,
         subscriptionStatus: true,
-        cashfreeSubscriptionId: true,
-        cashfreePlanId: true,
+        razorpaySubscriptionId: true,
+        razorpayPlanId: true,
         billingAnchorDate: true,
         planExpiresAt: true,
       },
@@ -90,15 +91,15 @@ export class PaymentsService {
   async cancelSubscription(userId: string) {
     const user = await this.prisma.user.findUnique({
       where:  { id: userId },
-      select: { cashfreeSubscriptionId: true, subscriptionStatus: true },
+      select: { razorpaySubscriptionId: true, subscriptionStatus: true },
     });
 
-    if (!user?.cashfreeSubscriptionId) throw new NotFoundException('No active subscription found');
+    if (!user?.razorpaySubscriptionId) throw new NotFoundException('No active subscription found');
     if (user.subscriptionStatus !== SubscriptionStatus.ACTIVE) {
       throw new ConflictException('Subscription is not active');
     }
 
-    await this.provider.cancelSubscription(user.cashfreeSubscriptionId);
+    await this.provider.cancelSubscription(user.razorpaySubscriptionId);
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -108,85 +109,111 @@ export class PaymentsService {
     return { message: 'Subscription cancelled. Access continues until end of billing period.' };
   }
 
-  // ── Webhook ────────────────────────────────────────────────────────────────
+  // ── Checkout-time signature verification ───────────────────────────────────
+  // For immediate UX feedback only — the webhook (below) remains the source
+  // of truth for actually updating plan/subscriptionStatus, so a duplicate or
+  // delayed webhook can't cause inconsistent state with this check.
 
-  verifyWebhookSignature(rawBody: Buffer, signature: string, timestamp: string): boolean {
-    const secret = this.config.get<string>('cashfree.secretKey') ?? '';
-    const signedPayload = timestamp + rawBody.toString();
-    const computed = crypto
+  verifySubscriptionPayment(dto: {
+    razorpay_payment_id: string;
+    razorpay_subscription_id: string;
+    razorpay_signature: string;
+  }): { verified: boolean } {
+    const secret = this.config.get<string>('razorpay.keySecret') ?? '';
+    const expected = crypto
       .createHmac('sha256', secret)
-      .update(signedPayload)
-      .digest('base64');
-    return computed === signature;
+      .update(`${dto.razorpay_payment_id}|${dto.razorpay_subscription_id}`)
+      .digest('hex');
+
+    const verified =
+      expected.length === dto.razorpay_signature.length &&
+      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(dto.razorpay_signature));
+
+    if (!verified) {
+      this.logger.warn(`Subscription payment signature mismatch for ${dto.razorpay_subscription_id}`);
+    }
+    return { verified };
   }
 
-  async handleWebhook(event: CashfreeWebhookEvent, cashfreeRef: string): Promise<void> {
+  // ── Webhook ────────────────────────────────────────────────────────────────
+
+  verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
+    const secret = this.config.get<string>('razorpay.webhookSecret') ?? '';
+    const computed = crypto
+      .createHmac('sha256', secret)
+      .update(rawBody)
+      .digest('hex');
+    return computed.length === signature.length &&
+      crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
+  }
+
+  async handleWebhook(event: RazorpayWebhookEvent, razorpayRef: string): Promise<void> {
     // Idempotency: skip if already processed
     const alreadyProcessed = await this.prisma.billingEvent.findUnique({
-      where: { cashfreeRef },
+      where: { razorpayRef },
     });
     if (alreadyProcessed) {
-      this.logger.debug(`Duplicate webhook skipped: ${cashfreeRef}`);
+      this.logger.debug(`Duplicate webhook skipped: ${razorpayRef}`);
       return;
     }
 
     // Record before processing to prevent race conditions
     await this.prisma.billingEvent.create({
       data: {
-        eventType:   event.type,
-        cashfreeRef,
-        workspaceId: event.data.subscription.customer_details?.customer_id,
+        eventType:   event.event,
+        razorpayRef,
+        workspaceId: event.payload.subscription?.entity.notes?.userId as string | undefined,
         payload:     event as object,
       },
     });
 
-    const handler = this.handlers[event.type];
+    const handler = this.handlers[event.event];
     if (handler) {
       await handler(event);
     } else {
-      this.logger.debug(`Unhandled webhook event type: ${event.type}`);
+      this.logger.debug(`Unhandled webhook event type: ${event.event}`);
     }
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
-  private async onActivated(event: CashfreeWebhookEvent): Promise<void> {
-    const sub   = event.data.subscription;
-    const userId = sub.customer_details?.customer_id;
-    if (!userId) return;
+  private async onActivated(event: RazorpayWebhookEvent): Promise<void> {
+    const sub    = event.payload.subscription?.entity;
+    const userId = sub?.notes?.userId as string | undefined;
+    if (!sub || !userId) return;
 
-    const planTier = sub.plan_id.includes('solo') ? Plan.SOLO : Plan.STUDIO;
+    const planTier = sub.plan_id.toLowerCase().includes('solo') ? Plan.SOLO : Plan.STUDIO;
 
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         plan:                   planTier,
         subscriptionStatus:     SubscriptionStatus.ACTIVE,
-        cashfreeSubscriptionId: sub.subscription_id,
-        cashfreePlanId:         sub.plan_id,
-        billingAnchorDate:      sub.next_payment_date ? new Date(sub.next_payment_date) : new Date(),
+        razorpaySubscriptionId: sub.id,
+        razorpayPlanId:         sub.plan_id,
+        billingAnchorDate:      sub.charge_at ? new Date(sub.charge_at * 1000) : new Date(),
         planExpiresAt:          null,
       },
     });
   }
 
-  private async onPaymentSuccess(event: CashfreeWebhookEvent): Promise<void> {
-    const sub    = event.data.subscription;
-    const userId = sub.customer_details?.customer_id;
-    if (!userId) return;
+  private async onPaymentSuccess(event: RazorpayWebhookEvent): Promise<void> {
+    const sub    = event.payload.subscription?.entity;
+    const userId = sub?.notes?.userId as string | undefined;
+    if (!sub || !userId) return;
 
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        billingAnchorDate:  sub.next_payment_date ? new Date(sub.next_payment_date) : undefined,
+        billingAnchorDate:  sub.charge_at ? new Date(sub.charge_at * 1000) : undefined,
         subscriptionStatus: SubscriptionStatus.ACTIVE,
       },
     });
   }
 
-  private async onPaymentFailed(event: CashfreeWebhookEvent): Promise<void> {
-    const sub    = event.data.subscription;
-    const userId = sub.customer_details?.customer_id;
+  private async onPaymentFailed(event: RazorpayWebhookEvent): Promise<void> {
+    const sub    = event.payload.subscription?.entity;
+    const userId = sub?.notes?.userId as string | undefined;
     if (!userId) return;
 
     await this.prisma.user.update({
@@ -195,9 +222,9 @@ export class PaymentsService {
     });
   }
 
-  private async onCancelled(event: CashfreeWebhookEvent): Promise<void> {
-    const sub    = event.data.subscription;
-    const userId = sub.customer_details?.customer_id;
+  private async onCancelled(event: RazorpayWebhookEvent): Promise<void> {
+    const sub    = event.payload.subscription?.entity;
+    const userId = sub?.notes?.userId as string | undefined;
     if (!userId) return;
 
     await this.prisma.user.update({
@@ -209,9 +236,9 @@ export class PaymentsService {
     });
   }
 
-  private async onPaused(event: CashfreeWebhookEvent): Promise<void> {
-    const sub    = event.data.subscription;
-    const userId = sub.customer_details?.customer_id;
+  private async onPaused(event: RazorpayWebhookEvent): Promise<void> {
+    const sub    = event.payload.subscription?.entity;
+    const userId = sub?.notes?.userId as string | undefined;
     if (!userId) return;
 
     await this.prisma.user.update({
