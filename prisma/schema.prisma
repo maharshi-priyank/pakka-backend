@@ -489,6 +489,7 @@ model Contact {
   attachments Attachment[]
   notesList   ClientNote[]
   threads     Thread[]
+  communicationLogs CommunicationLog[]
 
   @@unique([workspaceId, clickupMemberId])
   @@index([workspaceId])
@@ -717,19 +718,28 @@ enum ExecutionStatus {
   SKIPPED
 }
 
-model EmailLog {
-  id          String   @id @default(cuid())
+enum CommunicationChannel {
+  EMAIL
+}
+
+model CommunicationLog {
+  id          String               @id @default(cuid())
   workspaceId String
+  contactId   String?
+  contact     Contact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  channel     CommunicationChannel @default(EMAIL)
   to          String
   subject     String
+  body        String?
   templateKey String
   entityId    String?
   entityType  String?
   status      String
   error       String?
-  sentAt      DateTime @default(now())
+  sentAt      DateTime             @default(now())
 
-  @@map("email_logs")
+  @@index([contactId])
+  @@map("communication_logs")
 }
 
 model Meeting {

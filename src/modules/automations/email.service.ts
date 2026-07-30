@@ -82,7 +82,7 @@ export class EmailService {
     status:      string
     error?:      string
   }) {
-    await this.prisma.emailLog.create({
+    await this.prisma.communicationLog.create({
       data: {
         workspaceId: opts.workspaceId,
         to:          opts.to,
