@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { QueryContactsDto } from './dto/query-contacts.dto';
+import { QueryContactHistoryDto } from './dto/query-contact-history.dto';
 import { ContactStage } from '@prisma/client';
 import { effectivePlan } from '../users/effective-plan';
 
@@ -157,6 +158,79 @@ export class ContactsService {
 
     if (!contact) throw new NotFoundException('Contact not found')
     return contact
+  }
+
+  async getCommunicationHistory(workspaceId: string, id: string, query: QueryContactHistoryDto) {
+    const contact = await this.prisma.contact.findFirst({ where: { id, workspaceId } })
+    if (!contact) throw new NotFoundException('Contact not found')
+
+    const page  = query.page  ?? 1
+    const limit = query.limit ?? 20
+
+    const [emails, thread, meetings] = await Promise.all([
+      this.prisma.communicationLog.findMany({
+        where: { workspaceId, contactId: id, entityType: { not: 'message' } },
+      }),
+      // Read-only equivalent of messages.service.ts's getThreadByContactId() —
+      // that method creates a Thread as a side effect if none exists yet,
+      // which viewing history should never trigger.
+      this.prisma.thread.findFirst({ where: { workspaceId, contactId: id } }),
+      this.prisma.meeting.findMany({
+        where: { workspaceId, contactId: id, status: { not: 'CANCELLED' } },
+      }),
+    ])
+
+    const messages = thread
+      ? await this.prisma.message.findMany({ where: { threadId: thread.id } })
+      : []
+
+    type HistoryEntry = {
+      id:         string
+      kind:       'email' | 'message' | 'meeting'
+      occurredAt: Date
+      title:      string
+      body:       string | null
+      status?:    string
+      error?:     string | null
+      direction?: string
+    }
+
+    const emailEntries: HistoryEntry[] = emails.map(e => ({
+      id:         e.id,
+      kind:       'email',
+      occurredAt: e.sentAt,
+      title:      e.subject,
+      body:       e.body,
+      status:     e.status,
+      error:      e.error,
+    }))
+
+    const messageEntries: HistoryEntry[] = messages.map(m => ({
+      id:         m.id,
+      kind:       'message',
+      occurredAt: m.createdAt,
+      title:      m.body.replace(/<[^>]*>/g, '').slice(0, 60),
+      body:       m.body,
+      direction:  m.senderType,
+    }))
+
+    const meetingEntries: HistoryEntry[] = meetings.map(m => ({
+      id:         m.id,
+      kind:       'meeting',
+      occurredAt: m.scheduledAt,
+      title:      m.title,
+      body:       m.agenda,
+      status:     m.status,
+    }))
+
+    const all = [...emailEntries, ...messageEntries, ...meetingEntries]
+      .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+
+    const total = all.length
+    const start = (page - 1) * limit
+    const items = all.slice(start, start + limit)
+
+    return { items, total, page, limit }
   }
 
   async update(workspaceId: string, id: string, dto: UpdateContactDto) {

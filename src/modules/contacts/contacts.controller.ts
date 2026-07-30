@@ -8,6 +8,7 @@ import { ContactsService } from './contacts.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { QueryContactsDto } from './dto/query-contacts.dto';
+import { QueryContactHistoryDto } from './dto/query-contact-history.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User, ContactStage } from '@prisma/client';
@@ -53,6 +54,16 @@ export class ContactsController {
   @ApiOperation({ summary: 'Get a single contact by ID' })
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.contactsService.findOne(resolveWorkspaceId(user), id);
+  }
+
+  @Get(':id/history')
+  @ApiOperation({ summary: 'Get a contact\'s merged communication history (emails, messages, meetings)' })
+  getCommunicationHistory(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query() query: QueryContactHistoryDto,
+  ) {
+    return this.contactsService.getCommunicationHistory(resolveWorkspaceId(user), id, query);
   }
 
   @Patch(':id')
