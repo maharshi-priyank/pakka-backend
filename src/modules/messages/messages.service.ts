@@ -146,6 +146,7 @@ export class MessagesService {
         templateKey: 'message_received',
         entityId:    message.id,
         entityType:  'message',
+        contactId:   contact.id,
       }).catch(() => { /* non-blocking */ })
     }
 

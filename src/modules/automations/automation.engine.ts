@@ -155,7 +155,8 @@ export class AutomationEngine {
     if (!user) return
 
     const businessName = user.businessName ?? user.name
-    let to      = ''
+    let to        = ''
+    let contactId: string | undefined
     let vars: InvoiceTemplateVars | ContractTemplateVars | ProposalTemplateVars | LeadTemplateVars
 
     if (entityType === 'invoice') {
@@ -169,6 +170,7 @@ export class AutomationEngine {
         return
       }
       to = invEmail
+      contactId = inv.contact?.id
       const dueDate      = inv.dueDate ? inv.dueDate.toLocaleDateString('en-IN') : '—'
       const overdueByDays = inv.dueDate
         ? Math.floor((Date.now() - inv.dueDate.getTime()) / 86_400_000)
@@ -198,6 +200,7 @@ export class AutomationEngine {
         return
       }
       to = contractEmail
+      contactId = contract.contact?.id
       vars = {
         clientName:    contractName,
         businessName,
@@ -216,6 +219,7 @@ export class AutomationEngine {
         return
       }
       to = clientEmail
+      contactId = proposal.contact?.id
       vars = {
         clientName:    proposal.contact?.name ?? proposal.client?.name ?? proposal.lead?.name ?? 'there',
         businessName,
@@ -243,7 +247,7 @@ export class AutomationEngine {
     }
 
     const { subject, html } = renderTemplate(templateKey, vars)
-    await this.email.send({ workspaceId, to, subject, html, templateKey, entityId, entityType })
+    await this.email.send({ workspaceId, to, subject, html, templateKey, entityId, entityType, contactId })
   }
 
   // ─── Action: send email to user (owner) ───────────────────────────────────
@@ -318,13 +322,13 @@ export class AutomationEngine {
     })
 
     // Build list of recipients: contact → client (if no contact) → lead (if no client) → guests
-    const recipients: { name: string; email: string; portalLink?: string | null }[] = []
+    const recipients: { name: string; email: string; portalLink?: string | null; contactId?: string }[] = []
 
     if (meeting.contact?.email) {
       const portalLink = meeting.contact.portalToken
         ? `${appUrl}/portal/${meeting.contact.portalToken}`
         : null
-      recipients.push({ name: meeting.contact.name, email: meeting.contact.email, portalLink })
+      recipients.push({ name: meeting.contact.name, email: meeting.contact.email, portalLink, contactId: meeting.contact.id })
     } else if (meeting.client?.email) {
       const portalLink = meeting.client.portalToken
         ? `${appUrl}/portal/${meeting.client.portalToken}`
@@ -369,10 +373,10 @@ export class AutomationEngine {
       if (outlookCal) {
         const sent = await outlookCal.sendEmail(workspaceId, { to: recipient.email, subject, html })
         if (!sent) {
-          await this.email.send({ workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+          await this.email.send({ workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting', contactId: recipient.contactId })
         }
       } else {
-        await this.email.send({ workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting' })
+        await this.email.send({ workspaceId, to: recipient.email, subject, html, templateKey: 'meeting_scheduled_client', entityId: meetingId, entityType: 'meeting', contactId: recipient.contactId })
       }
     }
   }
