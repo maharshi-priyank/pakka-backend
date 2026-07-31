@@ -68,4 +68,9 @@ export class CreateContractDto {
   @ApiPropertyOptional()
   @ValidateNested() @Type(() => ContractContentDto) @IsOptional()
   content?: ContractContentDto;
+
+  @ApiPropertyOptional({ enum: ['INR', 'USD', 'EUR', 'GBP', 'AED'] })
+  @IsOptional()
+  @IsIn(['INR', 'USD', 'EUR', 'GBP', 'AED'])
+  currency?: string;
 }

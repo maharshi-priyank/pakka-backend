@@ -9,6 +9,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { effectivePlan } from '../users/effective-plan';
+import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -34,6 +35,20 @@ export class ContractsService {
   ) {}
 
   async create(workspaceId: string, dto: CreateContractDto) {
+    const { currency, isExport } = await resolveDocumentCurrency({
+      prisma: this.prisma,
+      workspaceId,
+      contactId: dto.contactId,
+      requestedCurrency: dto.currency,
+    });
+
+    // KTD4: mirrors proposals.service.ts create() -- for export contracts,
+    // force EXEMPT. A client-submitted gstType is honored only when the
+    // resolved currency is INR. Contract has no top-level gstType column, so
+    // the enforced value is written into the persisted content JSON below.
+    const gstType = isExport ? 'EXEMPT' : ((dto.content?.gstType as string | undefined) ?? 'IGST');
+    const content = { ...(dto.content ?? {}), gstType } as object;
+
     return this.prisma.contract.create({
       data: {
         workspaceId,
@@ -41,7 +56,8 @@ export class ContractsService {
         clientId:   dto.clientId,
         contactId:  dto.contactId,
         title:      dto.title,
-        content:    (dto.content ?? {}) as object,
+        content,
+        currency,
       },
       include: INCLUDE_FULL,
     });
@@ -115,6 +131,12 @@ export class ContractsService {
         contactId:  proposal.contactId ?? undefined,
         title:      `Contract — ${proposal.title}`,
         content:    content as object,
+        // KTD6 (mirrored for the Proposal->Contract hop): carries the source
+        // Proposal's currency forward as-is -- a plain nullish-coalesce,
+        // never a fresh Contact/Workspace lookup. The 'INR' floor exists only
+        // for Proposals created before U5 shipped, where currency is still
+        // null (per KTD7's no-backfill policy).
+        currency: proposal.currency ?? 'INR',
       },
       include: INCLUDE_FULL,
     });
@@ -173,7 +195,28 @@ export class ContractsService {
   }
 
   async update(workspaceId: string, id: string, dto: UpdateContractDto) {
-    await this.findOne(workspaceId, id);
+    const existing = await this.findOne(workspaceId, id);
+
+    // KTD4: unlike Proposal's update(), Contract's update() had no
+    // gstType/calcTotals handling at all before this feature -- this adds
+    // fresh enforcement rather than adapting an existing one. Currency is
+    // always resolved (mirrors Proposal's update()) so a currency-only
+    // change is never silently dropped; gstType is only touched when
+    // dto.content is present, since that's the only case a stale
+    // content.gstType could otherwise survive the verbatim overwrite below.
+    // Resolved fresh via U4's helper using the Contract's existing contactId
+    // -- never off the Contract's own persisted currency column, which is
+    // null for every pre-existing row (KTD7's no-backfill policy).
+    const { currency, isExport } = await resolveDocumentCurrency({
+      prisma: this.prisma,
+      workspaceId,
+      contactId: existing.contactId,
+      requestedCurrency: dto.currency,
+    });
+    const content = dto.content
+      ? ({ ...dto.content, gstType: isExport ? 'EXEMPT' : ((dto.content.gstType as string | undefined) ?? 'IGST') } as object)
+      : undefined;
+
     return this.prisma.contract.update({
       where: { id },
       data: {
@@ -182,7 +225,8 @@ export class ContractsService {
         ...(dto.clientId  !== undefined && { clientId:  dto.clientId  ?? null }),
         ...(dto.contactId !== undefined && { contactId: dto.contactId ?? null }),
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
-        ...(dto.content   && { content: dto.content as object }),
+        ...(content && { content }),
+        currency,
       },
       include: INCLUDE_FULL,
     });
