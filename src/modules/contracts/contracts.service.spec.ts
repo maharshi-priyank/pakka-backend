@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ContractsService } from './contracts.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
 
 // U6/KTD1/KTD4/KTD6: create()/update() resolve currency via the shared
 // resolveDocumentCurrency() helper and enforce EXEMPT gstType for non-INR
@@ -37,6 +39,7 @@ describe('ContractsService', () => {
     };
   };
   let emitter: { emit: jest.Mock };
+  let contractTemplates: { getDefault: jest.Mock; findOne: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -64,11 +67,22 @@ describe('ContractsService', () => {
     };
     emitter = { emit: jest.fn() };
 
+    // U5/KTD3: defaults to null (no seeded template yet) so every
+    // pre-existing test in this file -- none of which mock the Contract
+    // template table -- keeps exercising the original hardcoded-fallback
+    // path unchanged. Tests that need a default template override this
+    // per-test via contractTemplates.getDefault.mockResolvedValue(...).
+    contractTemplates = {
+      getDefault: jest.fn().mockResolvedValue(null),
+      findOne:    jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ContractsService,
         { provide: PrismaService, useValue: prisma },
         { provide: EventEmitter2, useValue: emitter },
+        { provide: ContractTemplatesService, useValue: contractTemplates },
       ],
     }).compile();
 
@@ -274,6 +288,237 @@ describe('ContractsService', () => {
       expect(prisma.contact.findUnique).not.toHaveBeenCalled();
       expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
       expect(result.currency).toBe('INR');
+    });
+
+    // U5/KTD5: default-template clause merge. Matched by array position
+    // (clauses[0] -> Payment Terms, clauses[1] -> Terms & Conditions), never
+    // a title-string lookup.
+    describe('default Contract template clause merge (U5/KTD5)', () => {
+      function mockDefaultTemplate(clauses: Array<{ title: string; body: string }>) {
+        contractTemplates.getDefault.mockResolvedValue({
+          id: 'tmpl-1', workspaceId: 'ws-1', isSystem: true, isDefault: true,
+          content: { clauses },
+        });
+      }
+
+      it('uses the default template clause text when the Proposal has no pricingNotes/terms', async () => {
+        mockProposal({ currency: 'INR' });
+        mockDefaultTemplate([
+          { title: 'Payment Terms', body: 'Template: 30% upfront, 70% on delivery.' },
+          { title: 'Terms & Conditions', body: 'Template: governed by the laws of India.' },
+        ]);
+
+        const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+        expect(contractTemplates.getDefault).toHaveBeenCalledWith('ws-1');
+        expect(result.content.clauses[0].body).toBe('Template: 30% upfront, 70% on delivery.');
+        expect(result.content.clauses[1].body).toBe('Template: governed by the laws of India.');
+      });
+
+      it('still lets explicit Proposal pricingNotes/terms win over the default template', async () => {
+        mockProposal({
+          currency: 'INR',
+          content: { pricingNotes: 'Proposal: 100% upfront.', terms: 'Proposal: NDA applies.' },
+        });
+        mockDefaultTemplate([
+          { title: 'Payment Terms', body: 'Template: 30% upfront, 70% on delivery.' },
+          { title: 'Terms & Conditions', body: 'Template: governed by the laws of India.' },
+        ]);
+
+        const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+        expect(result.content.clauses[0].body).toBe('Proposal: 100% upfront.');
+        expect(result.content.clauses[1].body).toBe('Proposal: NDA applies.');
+      });
+
+      it('falls back to the pre-existing hardcoded strings when getDefault() returns null', async () => {
+        mockProposal({ currency: 'INR' });
+        contractTemplates.getDefault.mockResolvedValue(null);
+
+        const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+        expect(result.content.clauses[0].body).toBe('50% advance before work begins. Remaining 50% due on final delivery.');
+        expect(result.content.clauses[1].body).toBe('Standard terms apply.');
+      });
+
+      it('falls back per-slot when the default template has fewer than 2 clause entries', async () => {
+        mockProposal({ currency: 'INR' });
+        mockDefaultTemplate([{ title: 'Payment Terms', body: 'Template: 30% upfront, 70% on delivery.' }]);
+
+        const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+        expect(result.content.clauses[0].body).toBe('Template: 30% upfront, 70% on delivery.');
+        expect(result.content.clauses[1].body).toBe('Standard terms apply.');
+      });
+
+      it('leaves scopeItems/deliverables/exclusions/paymentSchedule/totalAmount/gstAmount unaffected by which template is default (R7)', async () => {
+        mockProposal({
+          currency:        'INR',
+          totalAmount:     5000,
+          gstAmount:       900,
+          content: {
+            scopeItems:      ['Design', 'Build'],
+            deliverables:    ['Figma file', 'Deployed app'],
+            exclusions:      ['Hosting costs'],
+            paymentSchedule: [{ milestone: 'Kickoff', percent: 50 }],
+          },
+        });
+        mockDefaultTemplate([
+          { title: 'Payment Terms', body: 'Template: 30% upfront, 70% on delivery.' },
+          { title: 'Terms & Conditions', body: 'Template: governed by the laws of India.' },
+        ]);
+
+        const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+        expect(result.content.scopeItems).toEqual(['Design', 'Build']);
+        expect(result.content.deliverables).toEqual(['Figma file', 'Deployed app']);
+        expect(result.content.exclusions).toEqual(['Hosting costs']);
+        expect(result.content.paymentSchedule).toEqual([{ milestone: 'Kickoff', percent: 50 }]);
+        expect(result.content.totalAmount).toBe(5000);
+        expect(result.content.gstAmount).toBe(900);
+      });
+
+      // AE1: default template's clause wording + Proposal's real
+      // scope/schedule/amount both correctly land on the same generated
+      // Contract in one pass.
+      it('combines default-template clause wording with the Proposal real scope/schedule/amount on one generated Contract (AE1)', async () => {
+        mockProposal({
+          currency:        'USD',
+          totalAmount:     12000,
+          gstAmount:       0,
+          content: {
+            scopeItems:      ['Discovery', 'Implementation'],
+            deliverables:    ['Source code'],
+            exclusions:      ['Third-party licenses'],
+            paymentSchedule: [
+              { milestone: 'Signing', percent: 40 },
+              { milestone: 'Completion', percent: 60 },
+            ],
+          },
+        });
+        mockDefaultTemplate([
+          { title: 'Payment Terms', body: 'Template: 40/60 split.' },
+          { title: 'Terms & Conditions', body: 'Template: standard SaaS terms.' },
+        ]);
+
+        const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+        expect(result.content.clauses[0].body).toBe('Template: 40/60 split.');
+        expect(result.content.clauses[1].body).toBe('Template: standard SaaS terms.');
+        expect(result.content.scopeItems).toEqual(['Discovery', 'Implementation']);
+        expect(result.content.deliverables).toEqual(['Source code']);
+        expect(result.content.exclusions).toEqual(['Third-party licenses']);
+        expect(result.content.paymentSchedule).toEqual([
+          { milestone: 'Signing', percent: 40 },
+          { milestone: 'Completion', percent: 60 },
+        ]);
+        expect(result.content.totalAmount).toBe(12000);
+        expect(result.currency).toBe('USD');
+      });
+    });
+  });
+
+  // U7/KTD7/KTD8: re-apply a different template's clause bodies onto an
+  // existing Contract by array position, reusing U5's mergeClauseBody()
+  // helper. No Proposal is involved here -- the only priority question is
+  // "does the template supply a body at this position?"
+  describe('reapplyTemplate()', () => {
+    function mockContract(overrides: Record<string, unknown> = {}) {
+      const contract = {
+        id:          'contract-1',
+        workspaceId: 'ws-1',
+        status:      'DRAFT',
+        content: {
+          clauses: [
+            { title: 'Payment Terms', body: 'Original: 50% advance.' },
+            { title: 'Terms & Conditions', body: 'Original: standard terms.' },
+          ],
+          scopeItems:      ['Design'],
+          deliverables:    ['Figma file'],
+          paymentSchedule: [{ milestone: 'Kickoff', percent: 50 }],
+          totalAmount:     5000,
+          gstAmount:       900,
+        },
+        ...overrides,
+      };
+      prisma.contract.findFirst.mockResolvedValue(contract);
+      prisma.contract.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ ...contract, ...data }));
+      return contract;
+    }
+
+    function mockTemplate(clauses: Array<{ title: string; body: string }>) {
+      contractTemplates.findOne.mockResolvedValue({
+        id: 'tmpl-2', workspaceId: 'ws-1', content: { clauses },
+      });
+    }
+
+    it('happy path: replaces clause bodies on a DRAFT Contract, leaves scope/amounts/paymentSchedule unchanged', async () => {
+      mockContract({ status: 'DRAFT' });
+      mockTemplate([
+        { title: 'Payment Terms', body: 'New: 30% upfront.' },
+        { title: 'Terms & Conditions', body: 'New: governed by Indian law.' },
+      ]);
+
+      const result: any = await service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any);
+
+      expect(contractTemplates.findOne).toHaveBeenCalledWith('ws-1', 'tmpl-2');
+      expect(result.content.clauses[0]).toEqual({ title: 'Payment Terms', body: 'New: 30% upfront.' });
+      expect(result.content.clauses[1]).toEqual({ title: 'Terms & Conditions', body: 'New: governed by Indian law.' });
+      expect(result.content.scopeItems).toEqual(['Design']);
+      expect(result.content.deliverables).toEqual(['Figma file']);
+      expect(result.content.paymentSchedule).toEqual([{ milestone: 'Kickoff', percent: 50 }]);
+      expect(result.content.totalAmount).toBe(5000);
+      expect(result.content.gstAmount).toBe(900);
+    });
+
+    it('rejects re-applying on a SIGNED Contract (KTD7)', async () => {
+      mockContract({ status: 'SIGNED' });
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any),
+      ).rejects.toThrow('Cannot re-apply a template to a signed or voided contract');
+      expect(contractTemplates.findOne).not.toHaveBeenCalled();
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects re-applying on a VOID Contract (KTD7)', async () => {
+      mockContract({ status: 'VOID' });
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any),
+      ).rejects.toThrow('Cannot re-apply a template to a signed or voided contract');
+      expect(contractTemplates.findOne).not.toHaveBeenCalled();
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it.each(['SENT', 'DECLINED'])('does not block re-applying on a %s Contract (KTD7)', async (status) => {
+      mockContract({ status });
+      mockTemplate([
+        { title: 'Payment Terms', body: 'New: 30% upfront.' },
+        { title: 'Terms & Conditions', body: 'New: governed by Indian law.' },
+      ]);
+
+      const result: any = await service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any);
+
+      expect(result.content.clauses[0].body).toBe('New: 30% upfront.');
+      expect(result.content.clauses[1].body).toBe('New: governed by Indian law.');
+    });
+
+    // KTD1/IDOR: contractTemplates.findOne() is the workspace-scoped lookup
+    // (never a bare prisma.contractTemplate.findUnique({ where: { id } })),
+    // so a templateId from another workspace throws NotFoundException here
+    // rather than leaking that workspace's template content into this
+    // Contract.
+    it('rejects when templateId belongs to a different workspace', async () => {
+      mockContract({ status: 'DRAFT' });
+      contractTemplates.findOne.mockRejectedValue(new NotFoundException('Template not found'));
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'other-ws-tmpl' } as any),
+      ).rejects.toThrow('Template not found');
+      expect(contractTemplates.findOne).toHaveBeenCalledWith('ws-1', 'other-ws-tmpl');
+      expect(prisma.contract.update).not.toHaveBeenCalled();
     });
   });
 });

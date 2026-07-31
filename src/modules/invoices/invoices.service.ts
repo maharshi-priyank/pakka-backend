@@ -7,8 +7,10 @@ import { GstType, InvoiceStatus } from '@prisma/client';
 import { CreateInvoiceDto, LineItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
+import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { effectivePlan } from '../users/effective-plan';
 import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
+import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
 
 const INCLUDE_FULL = {
   contract: { select: { id: true, title: true } },
@@ -83,8 +85,9 @@ async function createInvoiceWithRetry(
 @Injectable()
 export class InvoicesService {
   constructor(
-    private readonly prisma:        PrismaService,
-    private readonly eventEmitter:  EventEmitter2,
+    private readonly prisma:           PrismaService,
+    private readonly eventEmitter:     EventEmitter2,
+    private readonly invoiceTemplates: InvoiceTemplatesService,
   ) {}
 
   private computeNextRecurrenceDate(from: Date, cycle: string, day: number): Date {
@@ -141,6 +144,9 @@ export class InvoicesService {
       total,
       gstType,
       tdsRate:           dto.tdsRate  != null ? dto.tdsRate  : null,
+      // KTD6: notes was declared on the DTO but silently dropped -- persist it
+      // like any other optional string field (mirrors tdsRate's null-coalesce above).
+      notes:             dto.notes    != null ? dto.notes    : null,
       dueDate:           dto.dueDate  ? new Date(dto.dueDate)  : null,
       currency,
       exchangeRate:      dto.exchangeRate ?? null,
@@ -227,6 +233,14 @@ export class InvoicesService {
     // lookup — the '?? INR' floor exists only for pre-U6 Contracts (currency: null).
     const currency        = contract.currency ?? 'INR';
 
+    // KTD3/KTD6: read the default live off the template table (no AutomationRule
+    // involvement); the default Invoice template's `notes` text is this Invoice's
+    // boilerplate slot, the same role Contract's clauses play for KTD5 -- but
+    // unlike Contract's clauses there's no pre-existing hardcoded fallback here,
+    // so `null` when no default template exists yet is not a regression.
+    const defaultTemplate = await this.invoiceTemplates.getDefault(workspaceId);
+    const notes = (defaultTemplate?.content as { notes?: string } | undefined)?.notes ?? null;
+
     if (paymentSchedule.length > 0) {
       // One DRAFT invoice per milestone, each with correct gstType and proportional GST
       const subtotalBase   = totalAmount - contractGst;
@@ -251,6 +265,7 @@ export class InvoicesService {
           gstType,
           tdsRate,
           currency,
+          notes, // KTD6: same default-template notes applied to every milestone invoice
         }, INCLUDE_FULL);
         invoices.push(inv);
       }
@@ -276,6 +291,7 @@ export class InvoicesService {
       gstType,
       tdsRate,
       currency,
+      notes,
     }, INCLUDE_FULL);
     return [inv];
   }
@@ -361,6 +377,9 @@ export class InvoicesService {
         total,
         gstType,
         tdsRate:    dto.tdsRate  != null ? dto.tdsRate  : undefined,
+        // KTD6: mirrors tdsRate above -- omitted (undefined) when not sent, so an
+        // update that doesn't touch notes leaves the persisted value untouched.
+        notes:      dto.notes    != null ? dto.notes    : undefined,
         dueDate:    dto.dueDate  ? new Date(dto.dueDate)  : undefined,
         clientId:   dto.clientId,
         contactId:  dto.contactId,
@@ -368,6 +387,31 @@ export class InvoicesService {
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
         ...(currency !== undefined && { currency }),
       },
+      include: INCLUDE_FULL,
+    });
+  }
+
+  // U8/R8/R9/KTD7: mirrors update()'s own PAID guard above — re-apply is only
+  // blocked once an Invoice is fully PAID, unlike Contract's SIGNED/VOID guard.
+  async reapplyTemplate(workspaceId: string, id: string, dto: ReapplyTemplateDto) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === InvoiceStatus.PAID) {
+      throw new ForbiddenException('Cannot re-apply a template to a paid invoice');
+    }
+
+    // KTD1: workspace-scoped lookup — never a bare
+    // prisma.invoiceTemplate.findUnique({ where: { id } }), which would let a
+    // templateId from another workspace leak that workspace's template
+    // content into this Invoice (findOne() throws NotFoundException in that case).
+    const template = await this.invoiceTemplates.findOne(workspaceId, dto.templateId);
+    const notes = (template.content as { notes?: string } | undefined)?.notes ?? null;
+
+    // R9: only notes (the boilerplate slot) changes — lineItems, amounts, and
+    // status are left completely untouched.
+    return this.prisma.invoice.update({
+      where: { id },
+      data:  { notes },
       include: INCLUDE_FULL,
     });
   }

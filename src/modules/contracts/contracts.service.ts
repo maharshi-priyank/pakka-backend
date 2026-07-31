@@ -8,8 +8,10 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
+import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { effectivePlan } from '../users/effective-plan';
 import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
+import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -30,8 +32,9 @@ const INCLUDE_LIST = {
 @Injectable()
 export class ContractsService {
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma:            PrismaService,
+    private readonly eventEmitter:      EventEmitter2,
+    private readonly contractTemplates: ContractTemplatesService,
   ) {}
 
   async create(workspaceId: string, dto: CreateContractDto) {
@@ -61,6 +64,27 @@ export class ContractsService {
       },
       include: INCLUDE_FULL,
     });
+  }
+
+  // U5/KTD5 & U7/KTD7: shared by createFromProposal() and reapplyTemplate() so
+  // the position-based clause-body substitution rule lives in exactly one
+  // place. Matched by array position (index), never a title-string lookup,
+  // since R1/R2 let members freely rename/reorder a template's clause
+  // titles. `preferredBody`, when present, wins over the template -- used by
+  // createFromProposal() to let the source Proposal's own pricingNotes/terms
+  // take priority over the default template (KTD5). `fallbackBody` is used
+  // only when neither a preferred body nor a template clause body exists at
+  // that position -- createFromProposal() passes today's hardcoded string;
+  // reapplyTemplate() passes the Contract's own pre-existing body at that
+  // slot, so a template with fewer than 2 clause entries leaves that slot
+  // untouched rather than blanking it.
+  private mergeClauseBody(
+    templateClauses: Array<{ body?: string }> | undefined,
+    index: number,
+    fallbackBody: string,
+    preferredBody?: string,
+  ): string {
+    return preferredBody ?? templateClauses?.[index]?.body ?? fallbackBody;
   }
 
   async createFromProposal(workspaceId: string, proposalId: string) {
@@ -100,6 +124,17 @@ export class ContractsService {
 
     const c = proposal.content as Record<string, unknown>;
 
+    // KTD3/KTD5: read the workspace's default Contract template live off the
+    // template table (no AutomationRule involvement) to fill the two clause
+    // slots the hardcoded fallbacks used to occupy. Matched by array
+    // position -- clauses[0]/clauses[1] -- never a title-string lookup,
+    // since R1/R2 let members freely rename/reorder a template's clause
+    // titles. getDefault() returning null (pre-seed workspace) or a template
+    // with fewer than 2 clause entries falls back to today's exact hardcoded
+    // strings for the missing slot(s) -- zero regression risk.
+    const template = await this.contractTemplates.getDefault(workspaceId);
+    const templateClauses = (template?.content as { clauses?: Array<{ body?: string }> } | undefined)?.clauses;
+
     const content = {
       intro:              `This agreement is entered into between the service provider and the client for the project described below.`,
       projectDescription: `Project: ${proposal.title}`,
@@ -114,11 +149,23 @@ export class ContractsService {
       clauses: [
         {
           title: 'Payment Terms',
-          body:  (c.pricingNotes as string | undefined) ?? '50% advance before work begins. Remaining 50% due on final delivery.',
+          // KTD5: Proposal's own pricingNotes still wins over the template;
+          // the template only fills the slot the hardcoded fallback used to.
+          body: this.mergeClauseBody(
+            templateClauses,
+            0,
+            '50% advance before work begins. Remaining 50% due on final delivery.',
+            c.pricingNotes as string | undefined,
+          ),
         },
         {
           title: 'Terms & Conditions',
-          body:  (c.terms as string | undefined) ?? 'Standard terms apply.',
+          body: this.mergeClauseBody(
+            templateClauses,
+            1,
+            'Standard terms apply.',
+            c.terms as string | undefined,
+          ),
         },
       ],
     };
@@ -137,6 +184,52 @@ export class ContractsService {
         // for Proposals created before U5 shipped, where currency is still
         // null (per KTD7's no-backfill policy).
         currency: proposal.currency ?? 'INR',
+      },
+      include: INCLUDE_FULL,
+    });
+  }
+
+  // U7/KTD7/KTD8: lets a member swap the boilerplate template on an
+  // existing, still-editable Contract. Edit-lock mirrors send()/void()'s
+  // existing SIGNED guard exactly, plus VOID (KTD7) -- no new status values
+  // or lifecycle states introduced. The frontend gates this call behind a
+  // confirmation prompt naming what changes (KTD8); no server-side
+  // confirmation state is needed here.
+  async reapplyTemplate(workspaceId: string, id: string, dto: ReapplyTemplateDto) {
+    const contract = await this.findOne(workspaceId, id);
+    if (contract.status === ContractStatus.SIGNED || contract.status === ContractStatus.VOID) {
+      throw new ForbiddenException('Cannot re-apply a template to a signed or voided contract');
+    }
+
+    // KTD1/IDOR: always resolve the template through contractTemplates'
+    // workspace-scoped findOne() -- never a bare
+    // prisma.contractTemplate.findUnique({ where: { id } }) -- so a
+    // templateId belonging to a different workspace throws
+    // NotFoundException instead of leaking that workspace's template
+    // content into this caller's Contract.
+    const template = await this.contractTemplates.findOne(workspaceId, dto.templateId);
+    const templateClauses = (template.content as { clauses?: Array<{ body?: string }> } | undefined)?.clauses;
+
+    const existingContent = (contract.content as Record<string, unknown>) ?? {};
+    const existingClauses = (existingContent.clauses as Array<{ title: string; body: string }> | undefined) ?? [];
+
+    // U5's mergeClauseBody() helper, reused verbatim: position-based
+    // substitution only, no Proposal-text priority here (there's no
+    // Proposal in play on re-apply) -- the named template's body at each
+    // position always wins when present; a slot the template doesn't
+    // supply keeps its existing body untouched (R9), never blanked.
+    const clauses = existingClauses.map((clause, i) => ({
+      ...clause,
+      body: this.mergeClauseBody(templateClauses, i, clause.body),
+    }));
+
+    return this.prisma.contract.update({
+      where: { id },
+      data: {
+        // R9: only content.clauses[] changes -- scope, deliverables,
+        // amounts, paymentSchedule, and status all pass through
+        // `existingContent` untouched.
+        content: { ...existingContent, clauses } as object,
       },
       include: INCLUDE_FULL,
     });

@@ -107,6 +107,8 @@ model Workspace {
   pushSubscriptions   PushSubscription[]
   meetings            Meeting[]
   proposalTemplates   ProposalTemplate[]
+  contractTemplates   ContractTemplate[]
+  invoiceTemplates    InvoiceTemplate[]
   promoRedemptions    PromoRedemption[]
   intakeForms         IntakeForm[]
   timeEntries         TimeEntry[]
@@ -640,6 +642,7 @@ model Invoice {
   lutNumber         String?
   tdsDeducted       Decimal       @default(0) @db.Decimal(12, 2)
   amountPaid        Decimal       @default(0) @db.Decimal(12, 2)
+  notes             String?
   dueDate           DateTime?
   paidAt            DateTime?
   razorpayOrderId   String?
@@ -808,6 +811,54 @@ model ProposalTemplate {
 
   @@index([workspaceId])
   @@map("proposal_templates")
+}
+
+// KTD2/KTD4: unlike ProposalTemplate's virtual SYSTEM_TEMPLATES constant, the
+// seeded system template here is a real per-workspace row -- isDefault needs
+// mutable per-workspace state a shared constant can't hold. `key` is the
+// seed-idempotency marker ('system-default' for the seeded row, null for
+// every user-created template); Postgres treats each NULL as distinct so
+// user templates never collide with each other or the seeded row.
+model ContractTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key         String?
+  name        String
+  description String?
+  category    String?
+  content     Json
+  totalAmount Decimal   @default(0) @db.Decimal(12, 2)
+  usageCount  Int       @default(0)
+  isDefault   Boolean   @default(false)
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+  @@map("contract_templates")
+}
+
+model InvoiceTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key         String?
+  name        String
+  description String?
+  category    String?
+  content     Json
+  totalAmount Decimal   @default(0) @db.Decimal(12, 2)
+  usageCount  Int       @default(0)
+  isDefault   Boolean   @default(false)
+  isSystem    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+  @@map("invoice_templates")
 }
 
 model AutomationWorkflow {

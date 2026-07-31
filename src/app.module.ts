@@ -30,6 +30,8 @@ import { CanvaAuthModule } from './modules/canva-auth/canva-auth.module';
 import { CanvaModule } from './modules/canva/canva.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { ProposalTemplatesModule } from './modules/proposal-templates/proposal-templates.module';
+import { ContractTemplatesModule } from './modules/contract-templates/contract-templates.module';
+import { InvoiceTemplatesModule } from './modules/invoice-templates/invoice-templates.module';
 import { FormsModule } from './modules/forms/forms.module';
 import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { TimeEntriesModule } from './modules/time-entries/time-entries.module';
@@ -109,6 +111,8 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     CanvaModule,
     MeetingsModule,
     ProposalTemplatesModule,
+    ContractTemplatesModule,
+    InvoiceTemplatesModule,
     FormsModule,
     WorkflowsModule,
     TimeEntriesModule,
