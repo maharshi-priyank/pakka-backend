@@ -108,4 +108,9 @@ export class CreateProposalDto {
   @ValidateNested() @Type(() => ProposalContentDto) @IsOptional()
   content?: ProposalContentDto;
   @ApiPropertyOptional() @IsDateString() @IsOptional() validUntil?: string;
+
+  @ApiPropertyOptional({ enum: ['INR', 'USD', 'EUR', 'GBP', 'AED'] })
+  @IsOptional()
+  @IsIn(['INR', 'USD', 'EUR', 'GBP', 'AED'])
+  currency?: string;
 }

@@ -12,6 +12,7 @@ import { QueryProposalsDto } from './dto/query-proposals.dto';
 import { VerifyDepositDto } from './dto/verify-deposit.dto';
 import { SendProposalDto } from './dto/send-proposal.dto';
 import { InvoicesService } from '../invoices/invoices.service';
+import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
 
 // R7/KTD7: cap brute-force guessing against the 6-digit viewOtp independent of
 // the generic global rate limiter (not tuned for a sensitive per-secret check).
@@ -66,9 +67,30 @@ export class ProposalsService {
       if (count >= 3) throw new HttpException({ message: 'Free plan: 3 proposals/month limit reached.', code: 'PLAN_LIMIT' }, 402);
     }
 
+    const { currency, isExport } = await resolveDocumentCurrency({
+      prisma: this.prisma,
+      workspaceId,
+      contactId: dto.contactId,
+      requestedCurrency: dto.currency,
+    });
+
+    // KTD4: mirrors invoices.service.ts:101-106 -- for export proposals, force
+    // EXEMPT so calcTotals skips GST entirely. A client-submitted gstType is
+    // honored only when the resolved currency is INR. Proposal has no
+    // top-level gstType column, so the enforced value is written into the
+    // persisted content JSON below, not just used transiently here.
     const lineItems = dto.content?.lineItems ?? [];
-    const gstType   = dto.content?.gstType ?? 'IGST';
-    const { subtotal, gstAmount, totalAmount } = calcTotals(lineItems, gstType);
+    const gstType   = isExport ? 'EXEMPT' : (dto.content?.gstType ?? 'IGST');
+    const { gstAmount, totalAmount } = calcTotals(lineItems, gstType);
+
+    const content = {
+      ...(dto.content ?? {}),
+      gstType,
+      // Store client snapshot in content if provided without a clientId
+      ...(dto.clientName && !dto.clientId
+        ? { clientName: dto.clientName, clientEmail: dto.clientEmail }
+        : {}),
+    } as object;
 
     let slug: string;
     // Ensure slug uniqueness
@@ -83,14 +105,11 @@ export class ProposalsService {
         contactId:   dto.contactId,
         title:       dto.title,
         slug,
-        content:     (dto.content ?? {}) as object,
+        content,
+        currency,
         totalAmount,
         gstAmount,
         validUntil:  dto.validUntil ? new Date(dto.validUntil) : undefined,
-        // Store client snapshot in content if provided without a clientId
-        ...(dto.clientName && !dto.clientId
-          ? { content: { ...(dto.content ?? {}), clientName: dto.clientName, clientEmail: dto.clientEmail } as object }
-          : {}),
       },
       include: { lead: { select: { id: true, name: true } }, client: true, contact: { select: { id: true, name: true } }, opens: true },
     });
@@ -169,9 +188,27 @@ export class ProposalsService {
   async update(workspaceId: string, id: string, dto: UpdateProposalDto) {
     const existing = await this.findOne(workspaceId, id);
 
+    // KTD4: resolve currency/isExport fresh via U4's helper on every update --
+    // never off the Proposal's own persisted `currency` column directly. Every
+    // Proposal created before this feature shipped has currency: null, so a
+    // naive check against that column would evaluate every one of them as an
+    // export and silently flip a plain INR Proposal to EXEMPT on its next edit.
+    const contactId = dto.contactId !== undefined ? dto.contactId : existing.contactId;
+    const { currency, isExport } = await resolveDocumentCurrency({
+      prisma: this.prisma,
+      workspaceId,
+      contactId,
+      requestedCurrency: dto.currency,
+    });
+
     const lineItems = dto.content?.lineItems ?? (existing.content as Record<string, unknown>)?.lineItems as LineItemDto[] ?? [];
-    const gstType   = dto.content?.gstType ?? (existing.content as Record<string, unknown>)?.gstType as string ?? 'IGST';
-    const { subtotal, gstAmount, totalAmount } = calcTotals(lineItems, gstType);
+    // A client-submitted gstType (or the previously-persisted one) is honored
+    // only when the resolved currency is INR -- otherwise EXEMPT is enforced,
+    // overriding whatever the request/stale content would otherwise produce.
+    const gstType = isExport
+      ? 'EXEMPT'
+      : (dto.content?.gstType ?? (existing.content as Record<string, unknown>)?.gstType as string ?? 'IGST');
+    const { gstAmount, totalAmount } = calcTotals(lineItems, gstType);
 
     return this.prisma.proposal.update({
       where: { id },
@@ -183,8 +220,9 @@ export class ProposalsService {
         ...(dto.projectId  !== undefined && { projectId:  dto.projectId ?? null }),
         ...(dto.status     && { status: dto.status }),
         ...(dto.validUntil && { validUntil: new Date(dto.validUntil) }),
+        currency,
         ...(dto.content && {
-          content: dto.content as object,
+          content: { ...dto.content, gstType } as object,
           totalAmount,
           gstAmount,
         }),
