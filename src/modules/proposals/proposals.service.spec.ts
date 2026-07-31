@@ -5,10 +5,22 @@ import { ProposalsService } from './proposals.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoicesService } from '../invoices/invoices.service';
 
+// U5: acceptBySlug()'s Razorpay deposit-order flow constructs a real Razorpay
+// client -- mock the module so those tests don't hit the network, and so the
+// currency literal it passes can be asserted on directly.
+jest.mock('razorpay', () => jest.fn().mockImplementation(() => ({
+  orders: { create: jest.fn().mockResolvedValue({ id: 'order_test123' }) },
+})));
+
 // R7/R8/R10/R12: send() opts a Proposal into OTP-gating and generates its
 // viewOtp in the same write; findBySlug() never leaks viewOtp; verifyOtp()
 // gates recordOpen()'s side effects behind a correct OTP with zero
 // information leakage between failure branches (KTD6).
+//
+// U5/KTD1/KTD4: create()/update() resolve currency via the shared
+// resolveDocumentCurrency() helper and enforce EXEMPT gstType for non-INR
+// resolutions -- never off the Proposal's own (possibly null) persisted
+// currency column.
 describe('ProposalsService', () => {
   let service: ProposalsService;
   let prisma: {
@@ -16,6 +28,14 @@ describe('ProposalsService', () => {
       findFirst:   jest.Mock;
       findUnique:  jest.Mock;
       update:      jest.Mock;
+      create:      jest.Mock;
+      count:       jest.Mock;
+    };
+    contact: {
+      findUnique: jest.Mock;
+    };
+    workspace: {
+      findUnique: jest.Mock;
     };
     lead: {
       update: jest.Mock;
@@ -53,6 +73,14 @@ describe('ProposalsService', () => {
         findFirst:  jest.fn(),
         findUnique: jest.fn(),
         update:     jest.fn(),
+        create:     jest.fn(),
+        count:      jest.fn(),
+      },
+      contact: {
+        findUnique: jest.fn(),
+      },
+      workspace: {
+        findUnique: jest.fn(),
       },
       lead: {
         update: jest.fn(),
@@ -241,6 +269,153 @@ describe('ProposalsService', () => {
       // No further attempt increment past the cap — verifyOtp() short-circuits
       // before ever comparing the submitted OTP.
       expect(prisma.proposal.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create()', () => {
+    // Non-FREE plan so effectivePlan() skips the monthly-count limit check
+    // entirely — irrelevant to currency/gstType resolution.
+    const proUser = { plan: 'STUDIO', planExpiresAt: null, subscriptionStatus: 'ACTIVE' };
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue(proUser);
+      prisma.proposal.findUnique.mockResolvedValue(null); // slug-uniqueness check
+      prisma.proposal.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve(data));
+    });
+
+    it('resolves currency from a linked non-INR Contact and forces content.gstType to EXEMPT', async () => {
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
+
+      const result: any = await service.create('ws-1', {
+        title: 'Test proposal', contactId: 'contact-1', content: { lineItems: [] },
+      } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-1', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('USD');
+      expect(result.content.gstType).toBe('EXEMPT');
+    });
+
+    it('leaves gstType following dto.content.gstType (defaulting to IGST) for an INR-linked Contact', async () => {
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'INR' });
+
+      const result: any = await service.create('ws-1', {
+        title: 'Test proposal', contactId: 'contact-2', content: { lineItems: [] },
+      } as any);
+
+      expect(result.currency).toBe('INR');
+      expect(result.content.gstType).toBe('IGST');
+    });
+
+    it('falls through to the Workspace currency when no contactId is given (R8)', async () => {
+      prisma.workspace.findUnique.mockResolvedValue({ currency: 'GBP' });
+
+      const result: any = await service.create('ws-1', {
+        title: 'Test proposal', content: { lineItems: [] },
+      } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('GBP');
+      expect(result.content.gstType).toBe('EXEMPT');
+    });
+  });
+
+  describe('update()', () => {
+    const existingProposal = {
+      ...baseProposal,
+      contactId: 'contact-1',
+      content:   { lineItems: [{ description: 'x', qty: 1, rate: 100, gstRate: 18 }], gstType: 'IGST' },
+      currency:  null as string | null,
+    };
+
+    beforeEach(() => {
+      prisma.proposal.update.mockResolvedValue({});
+    });
+
+    it('persists EXEMPT gstType for a non-INR linked Contact even when the request does not change gstType', async () => {
+      prisma.proposal.findFirst.mockResolvedValue(existingProposal);
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
+
+      await service.update('ws-1', 'prop-1', {
+        content: { lineItems: [{ description: 'x', qty: 1, rate: 100, gstRate: 18 }] },
+      } as any);
+
+      expect(prisma.proposal.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'prop-1' },
+        data:  expect.objectContaining({
+          currency: 'USD',
+          content:  expect.objectContaining({ gstType: 'EXEMPT' }),
+        }),
+      }));
+    });
+
+    // KTD4: every pre-existing Proposal has currency: null -- update() must
+    // re-resolve via the helper (using the linked Contact) rather than ever
+    // reading that null column directly, or every legacy INR Proposal would
+    // wrongly flip to EXEMPT on its next edit.
+    it('does not flip gstType to EXEMPT for a pre-existing null-currency Proposal linked to an INR Contact', async () => {
+      prisma.proposal.findFirst.mockResolvedValue(existingProposal);
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'INR' });
+
+      await service.update('ws-1', 'prop-1', {
+        content: { lineItems: [{ description: 'x', qty: 1, rate: 100, gstRate: 18 }] },
+      } as any);
+
+      expect(prisma.proposal.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          currency: 'INR',
+          content:  expect.objectContaining({ gstType: 'IGST' }),
+        }),
+      }));
+    });
+  });
+
+  describe('acceptBySlug()', () => {
+    // review-fix: Razorpay orders in this integration are hardcoded to
+    // currency: 'INR' (deliberately out of scope -- see the plan's Scope
+    // Boundaries). Now that Proposal.currency is real, creating one for a
+    // non-INR Proposal would mischarge the deposit (e.g. a $500 Proposal
+    // producing a ₹500 order) -- so the auto-deposit order is skipped
+    // entirely for a non-INR Proposal rather than created with a mismatched
+    // currency. The Proposal itself is still accepted.
+    it('skips creating a Razorpay deposit order for a non-INR Proposal, but still accepts it', async () => {
+      const nonInrProposal = {
+        ...baseProposal,
+        status:   'SENT',
+        content:  { paymentSchedule: [{ milestone: 'Deposit', amount: 500 }] },
+        currency: 'USD',
+      };
+      prisma.proposal.findUnique.mockResolvedValue(nonInrProposal);
+      prisma.proposal.update.mockResolvedValue({ ...nonInrProposal, status: 'ACCEPTED', acceptedAt: new Date() });
+
+      const result = await service.acceptBySlug('abc123xy99');
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(result.depositOrder).toBeNull();
+      expect(result.proposal.status).toBe('ACCEPTED');
+    });
+
+    it('still creates the INR-hardcoded Razorpay deposit order for an INR Proposal', async () => {
+      const inrProposal = {
+        ...baseProposal,
+        status:   'SENT',
+        content:  { paymentSchedule: [{ milestone: 'Deposit', amount: 500 }] },
+        currency: 'INR',
+      };
+      prisma.proposal.findUnique.mockResolvedValue(inrProposal);
+      prisma.proposal.update.mockResolvedValue({ ...inrProposal, status: 'ACCEPTED', acceptedAt: new Date() });
+      prisma.user.findUnique.mockResolvedValue({ razorpayKeyId: 'key_123', razorpayKeySecret: 'secret_123' });
+
+      const result = await service.acceptBySlug('abc123xy99');
+
+      expect(result.depositOrder?.currency).toBe('INR');
     });
   });
 });

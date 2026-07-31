@@ -1,0 +1,279 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ContractsService } from './contracts.service';
+import { PrismaService } from '../../prisma/prisma.service';
+
+// U6/KTD1/KTD4/KTD6: create()/update() resolve currency via the shared
+// resolveDocumentCurrency() helper and enforce EXEMPT gstType for non-INR
+// resolutions -- never off the Contract's own (possibly null) persisted
+// currency column. createFromProposal() carries the source Proposal's
+// currency forward as a plain nullish-coalesce, never a fresh lookup.
+//
+// Scoped to this plan's currency/GST behavior only -- not a retroactive
+// full-service test suite (no existing spec file for ContractsService today).
+describe('ContractsService', () => {
+  let service: ContractsService;
+  let prisma: {
+    contract: {
+      create:    jest.Mock;
+      update:    jest.Mock;
+      findFirst: jest.Mock;
+    };
+    proposal: {
+      findFirst: jest.Mock;
+      update:    jest.Mock;
+    };
+    contact: {
+      findUnique: jest.Mock;
+    };
+    workspace: {
+      findUnique: jest.Mock;
+    };
+    lead: {
+      update: jest.Mock;
+    };
+    client: {
+      create: jest.Mock;
+    };
+  };
+  let emitter: { emit: jest.Mock };
+
+  beforeEach(async () => {
+    prisma = {
+      contract: {
+        create:    jest.fn(),
+        update:    jest.fn(),
+        findFirst: jest.fn(),
+      },
+      proposal: {
+        findFirst: jest.fn(),
+        update:    jest.fn(),
+      },
+      contact: {
+        findUnique: jest.fn(),
+      },
+      workspace: {
+        findUnique: jest.fn(),
+      },
+      lead: {
+        update: jest.fn(),
+      },
+      client: {
+        create: jest.fn(),
+      },
+    };
+    emitter = { emit: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ContractsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: EventEmitter2, useValue: emitter },
+      ],
+    }).compile();
+
+    service = module.get<ContractsService>(ContractsService);
+  });
+
+  describe('create()', () => {
+    beforeEach(() => {
+      prisma.contract.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve(data));
+    });
+
+    it('resolves currency from a linked non-INR Contact and forces content.gstType to EXEMPT', async () => {
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'GBP' });
+
+      const result: any = await service.create('ws-1', {
+        title: 'Test contract', contactId: 'contact-1', content: {},
+      } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-1', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('GBP');
+      expect(result.content.gstType).toBe('EXEMPT');
+    });
+
+    it('leaves gstType following dto.content.gstType (defaulting to IGST) for an INR-linked Contact', async () => {
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'INR' });
+
+      const result: any = await service.create('ws-1', {
+        title: 'Test contract', contactId: 'contact-2', content: {},
+      } as any);
+
+      expect(result.currency).toBe('INR');
+      expect(result.content.gstType).toBe('IGST');
+    });
+
+    it('falls through to the Workspace currency when no contactId is given (R8)', async () => {
+      prisma.workspace.findUnique.mockResolvedValue({ currency: 'INR' });
+
+      const result: any = await service.create('ws-1', {
+        title: 'Test contract', content: {},
+      } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('INR');
+      expect(result.content.gstType).toBe('IGST');
+    });
+  });
+
+  describe('update()', () => {
+    const existingContract = {
+      id:          'contract-1',
+      workspaceId: 'ws-1',
+      contactId:   'contact-1',
+      content:     { gstType: 'IGST' },
+      currency:    null as string | null,
+    };
+
+    beforeEach(() => {
+      prisma.contract.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ ...existingContract, ...data }));
+    });
+
+    it('merges the freshly-derived EXEMPT gstType into content for a non-INR linked Contact', async () => {
+      prisma.contract.findFirst.mockResolvedValue(existingContract);
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
+
+      await service.update('ws-1', 'contract-1', {
+        content: { totalAmount: 1000 },
+      } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-1', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'contract-1' },
+        data:  expect.objectContaining({
+          currency: 'USD',
+          content:  expect.objectContaining({ gstType: 'EXEMPT', totalAmount: 1000 }),
+        }),
+      }));
+    });
+
+    // KTD4: every pre-existing Contract has currency: null -- update() must
+    // re-resolve via the helper (using the linked Contact) rather than ever
+    // reading that null column directly, or every legacy INR Contract would
+    // wrongly flip to EXEMPT on its next edit.
+    it('does not flip gstType to EXEMPT for a pre-existing null-currency Contract linked to an INR Contact', async () => {
+      prisma.contract.findFirst.mockResolvedValue(existingContract);
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'INR' });
+
+      await service.update('ws-1', 'contract-1', {
+        content: { totalAmount: 1000 },
+      } as any);
+
+      expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          currency: 'INR',
+          content:  expect.objectContaining({ gstType: 'IGST' }),
+        }),
+      }));
+    });
+
+    // review-fix: a pure metadata edit (title/status alone) touches neither
+    // contactId, currency, nor content, so currency/GST are never re-resolved
+    // -- this is what keeps an unrelated edit from silently re-deriving tax
+    // treatment on an already-finalized Contract.
+    it('does not resolve or touch currency/content for a pure metadata edit', async () => {
+      prisma.contract.findFirst.mockResolvedValue(existingContract);
+
+      await service.update('ws-1', 'contract-1', { title: 'New title' } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { title: 'New title' },
+      }));
+    });
+
+    // review-fix: a currency-only change (no content edit) must still sync
+    // content.gstType together with currency -- previously currency was
+    // persisted unconditionally while content.gstType was only synced when
+    // dto.content was present, so a currency-only change could leave a
+    // stale, inconsistent content.gstType behind a freshly-changed currency.
+    it('persists a currency-only update and keeps content.gstType in sync with it', async () => {
+      prisma.contract.findFirst.mockResolvedValue(existingContract);
+
+      await service.update('ws-1', 'contract-1', { currency: 'GBP' } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: {
+          currency: 'GBP',
+          content:  expect.objectContaining({ gstType: 'EXEMPT' }),
+        },
+      }));
+    });
+
+    // review-fix: a contactId reassignment must resolve currency against the
+    // NEW contact in the same request, not the contact being replaced --
+    // previously resolveDocumentCurrency() was always called with
+    // existing.contactId, so relinking a Contract to a different Contact
+    // left the OLD contact's currency/GST treatment on a row now pointing at
+    // the NEW contact.
+    it('resolves currency against the new contactId when reassigning a Contract to a different Contact', async () => {
+      prisma.contract.findFirst.mockResolvedValue(existingContract);
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
+
+      await service.update('ws-1', 'contract-1', { contactId: 'contact-2' } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-2', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          contactId: 'contact-2',
+          currency:  'USD',
+          content:   expect.objectContaining({ gstType: 'EXEMPT' }),
+        }),
+      }));
+    });
+  });
+
+  describe('createFromProposal()', () => {
+    function mockProposal(overrides: Record<string, unknown>) {
+      prisma.proposal.findFirst.mockResolvedValue({
+        id:         'prop-1',
+        title:      'Website project',
+        clientId:   'client-1',
+        contactId:  'contact-1',
+        content:    {},
+        totalAmount: 100,
+        gstAmount:   0,
+        lead:        null,
+        ...overrides,
+      });
+      prisma.contract.findFirst.mockResolvedValue(null); // no existing Contract for this Proposal
+      prisma.contract.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve(data));
+    }
+
+    it('carries the source Proposal currency forward as-is, without a fresh Contact lookup (KTD6)', async () => {
+      mockProposal({ currency: 'EUR' });
+
+      const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(result.currency).toBe('EUR');
+    });
+
+    it('floors to INR for a pre-U5 Proposal with currency: null, without a fresh lookup', async () => {
+      mockProposal({ currency: null });
+
+      const result: any = await service.createFromProposal('ws-1', 'prop-1');
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
+      expect(result.currency).toBe('INR');
+    });
+  });
+});

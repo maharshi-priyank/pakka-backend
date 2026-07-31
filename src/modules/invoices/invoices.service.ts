@@ -8,6 +8,7 @@ import { CreateInvoiceDto, LineItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
 import { effectivePlan } from '../users/effective-plan';
+import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
 
 const INCLUDE_FULL = {
   contract: { select: { id: true, title: true } },
@@ -99,8 +100,15 @@ export class InvoicesService {
   }
 
   async create(workspaceId: string, dto: CreateInvoiceDto) {
-    const currency = dto.currency ?? 'INR';
-    const isExport = currency !== 'INR';
+    // R5/R7/R8/KTD1: resolve via the shared helper — unchanged for callers that
+    // already send dto.currency (the helper's first resolution step), newly
+    // correct for a contactId-linked Invoice created without an explicit currency.
+    const { currency, isExport } = await resolveDocumentCurrency({
+      prisma: this.prisma,
+      workspaceId,
+      contactId: dto.contactId,
+      requestedCurrency: dto.currency,
+    });
 
     // For export invoices, force EXEMPT so calcTotals skips GST entirely
     const gstType = isExport ? GstType.EXEMPT : (dto.gstType ?? GstType.IGST);
@@ -215,6 +223,9 @@ export class InvoicesService {
     const totalAmount     = (content.totalAmount as number  | undefined) ?? 0;
     const contractGst     = (content.gstAmount   as number  | undefined) ?? 0;
     const tdsRate         = (content.tdsRate     as number  | undefined) ?? null;
+    // KTD6: use the Contract's currency as signed, not a fresh Contact/Workspace
+    // lookup — the '?? INR' floor exists only for pre-U6 Contracts (currency: null).
+    const currency        = contract.currency ?? 'INR';
 
     if (paymentSchedule.length > 0) {
       // One DRAFT invoice per milestone, each with correct gstType and proportional GST
@@ -239,6 +250,7 @@ export class InvoicesService {
           total:     totals.total,
           gstType,
           tdsRate,
+          currency,
         }, INCLUDE_FULL);
         invoices.push(inv);
       }
@@ -263,6 +275,7 @@ export class InvoicesService {
       total:     totals.total,
       gstType,
       tdsRate,
+      currency,
     }, INCLUDE_FULL);
     return [inv];
   }
@@ -307,7 +320,35 @@ export class InvoicesService {
       throw new ForbiddenException('Cannot edit a paid invoice');
     }
 
-    const gstType    = dto.gstType   ?? invoice.gstType;
+    // review-fix: mirrors Proposal/Contract's update() -- only re-resolve
+    // currency when this update could plausibly affect it (contactId or
+    // currency changing). Resolved using dto.contactId when present, else the
+    // Invoice's existing contactId -- a contactId reassignment in the same
+    // call must resolve against the NEW contact, not the old one. Previously
+    // Invoice.update() never touched currency at all, so reassigning an
+    // Invoice to a different Contact left it permanently on whatever currency
+    // it was created with (unlike Proposal/Contract, which already resolved
+    // this on every contactId/currency change).
+    const touchesCurrency = dto.contactId !== undefined || dto.currency !== undefined;
+    let currency: string | undefined;
+    let isExportOverride = false;
+    if (touchesCurrency) {
+      const contactId = dto.contactId !== undefined ? dto.contactId : invoice.contactId;
+      const resolved = await resolveDocumentCurrency({
+        prisma: this.prisma,
+        workspaceId,
+        contactId,
+        requestedCurrency: dto.currency,
+      });
+      currency = resolved.currency;
+      isExportOverride = resolved.isExport;
+    }
+
+    // A client-submitted gstType (or the previously-persisted one) is honored
+    // only when the resolved currency is INR -- otherwise EXEMPT is enforced,
+    // same as Proposal/Contract. When this update doesn't touch currency at
+    // all, behavior is unchanged from before this fix.
+    const gstType    = isExportOverride ? GstType.EXEMPT : (dto.gstType ?? invoice.gstType);
     const lineItems  = dto.lineItems ?? (invoice.lineItems as unknown as LineItemDto[]);
     const { subtotal, gstAmount, total } = calcTotals(lineItems, gstType);
 
@@ -325,6 +366,7 @@ export class InvoicesService {
         contactId:  dto.contactId,
         contractId: dto.contractId,
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
+        ...(currency !== undefined && { currency }),
       },
       include: INCLUDE_FULL,
     });
