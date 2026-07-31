@@ -10,6 +10,7 @@ import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { effectivePlan } from '../users/effective-plan';
 import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
+import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -30,8 +31,9 @@ const INCLUDE_LIST = {
 @Injectable()
 export class ContractsService {
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma:            PrismaService,
+    private readonly eventEmitter:      EventEmitter2,
+    private readonly contractTemplates: ContractTemplatesService,
   ) {}
 
   async create(workspaceId: string, dto: CreateContractDto) {
@@ -100,6 +102,17 @@ export class ContractsService {
 
     const c = proposal.content as Record<string, unknown>;
 
+    // KTD3/KTD5: read the workspace's default Contract template live off the
+    // template table (no AutomationRule involvement) to fill the two clause
+    // slots the hardcoded fallbacks used to occupy. Matched by array
+    // position -- clauses[0]/clauses[1] -- never a title-string lookup,
+    // since R1/R2 let members freely rename/reorder a template's clause
+    // titles. getDefault() returning null (pre-seed workspace) or a template
+    // with fewer than 2 clause entries falls back to today's exact hardcoded
+    // strings for the missing slot(s) -- zero regression risk.
+    const template = await this.contractTemplates.getDefault(workspaceId);
+    const templateClauses = (template?.content as { clauses?: Array<{ body?: string }> } | undefined)?.clauses;
+
     const content = {
       intro:              `This agreement is entered into between the service provider and the client for the project described below.`,
       projectDescription: `Project: ${proposal.title}`,
@@ -114,11 +127,17 @@ export class ContractsService {
       clauses: [
         {
           title: 'Payment Terms',
-          body:  (c.pricingNotes as string | undefined) ?? '50% advance before work begins. Remaining 50% due on final delivery.',
+          // KTD5: Proposal's own pricingNotes still wins over the template;
+          // the template only fills the slot the hardcoded fallback used to.
+          body:  (c.pricingNotes as string | undefined)
+            ?? templateClauses?.[0]?.body
+            ?? '50% advance before work begins. Remaining 50% due on final delivery.',
         },
         {
           title: 'Terms & Conditions',
-          body:  (c.terms as string | undefined) ?? 'Standard terms apply.',
+          body:  (c.terms as string | undefined)
+            ?? templateClauses?.[1]?.body
+            ?? 'Standard terms apply.',
         },
       ],
     };

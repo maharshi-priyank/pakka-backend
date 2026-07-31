@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NotFoundException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
 
 // R13/R14: findByIdPublic() flips SENT/OVERDUE -> VIEWED via an atomic conditional
 // updateMany, and leaves every other status untouched.
@@ -35,6 +36,7 @@ describe('InvoicesService', () => {
       findFirst: jest.Mock;
     };
   };
+  let invoiceTemplates: { getDefault: jest.Mock };
 
   const owner = {
     email:              'owner@example.com',
@@ -75,11 +77,17 @@ describe('InvoicesService', () => {
       },
     };
 
+    // U6: getDefault() defaults to null (pre-seed / no-template state) unless a
+    // test overrides it — matches InvoiceTemplatesService.getDefault()'s own
+    // belt-and-suspenders null return for a workspace with no default yet.
+    invoiceTemplates = { getDefault: jest.fn().mockResolvedValue(null) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InvoicesService,
         { provide: PrismaService, useValue: prisma },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: InvoiceTemplatesService, useValue: invoiceTemplates },
       ],
     }).compile();
 
@@ -198,6 +206,22 @@ describe('InvoicesService', () => {
       });
       expect(result.currency).toBe('GBP');
     });
+
+    // U6/KTD6: dto.notes was declared on CreateInvoiceDto but silently dropped --
+    // this is the regression test proving it's now persisted.
+    it('persists dto.notes when supplied', async () => {
+      const result: any = await service.create('ws-1', {
+        lineItems: baseLineItems, notes: 'Pay within 15 days',
+      } as any);
+
+      expect(result.notes).toBe('Pay within 15 days');
+    });
+
+    it('regression: create() without notes behaves exactly as before (notes null, no new required field)', async () => {
+      const result: any = await service.create('ws-1', { lineItems: baseLineItems } as any);
+
+      expect(result.notes).toBeNull();
+    });
   });
 
   describe('createFromContract()', () => {
@@ -265,6 +289,58 @@ describe('InvoicesService', () => {
       expect(invoices[1].lineItems[0].description).toBe('Delivery');
       expect(invoices[1].lineItems[0].rate).toBe(600);
     });
+
+    // U6/KTD3/KTD6: the default Invoice template's `notes` text becomes the
+    // generated Invoice's boilerplate slot, read live off the template table.
+    it("sets the generated Invoice's notes from the default Invoice template", async () => {
+      prisma.contract.findFirst.mockResolvedValue({ ...baseContract, currency: 'INR' });
+      invoiceTemplates.getDefault.mockResolvedValue({
+        id: 'tmpl-1', content: { notes: 'Standard payment terms apply.' },
+      });
+
+      const [inv]: any = await service.createFromContract('ws-1', 'contract-1');
+
+      expect(invoiceTemplates.getDefault).toHaveBeenCalledWith('ws-1');
+      expect(inv.notes).toBe('Standard payment terms apply.');
+    });
+
+    // Edge case: no default template exists yet (pre-seed state) -- unlike
+    // Contract's clauses (KTD5), Invoice's notes has no hardcoded fallback, so
+    // `null` here matches today's (pre-U6) behavior exactly.
+    it("sets the generated Invoice's notes to null when no default template exists", async () => {
+      prisma.contract.findFirst.mockResolvedValue({ ...baseContract, currency: 'INR' });
+      invoiceTemplates.getDefault.mockResolvedValue(null);
+
+      const [inv]: any = await service.createFromContract('ws-1', 'contract-1');
+
+      expect(inv.notes).toBeNull();
+    });
+
+    // Integration: the multi-milestone branch (one invoice per milestone)
+    // applies the same default-template notes value to every generated invoice.
+    it('applies the same default-template notes value to every invoice in the multi-milestone branch', async () => {
+      prisma.contract.findFirst.mockResolvedValue({
+        ...baseContract,
+        currency: 'INR',
+        content: {
+          totalAmount: 1000,
+          gstAmount:   0,
+          paymentSchedule: [
+            { milestone: 'Kickoff', amount: 400 },
+            { milestone: 'Delivery', amount: 600 },
+          ],
+        },
+      });
+      invoiceTemplates.getDefault.mockResolvedValue({
+        id: 'tmpl-1', content: { notes: 'Standard payment terms apply.' },
+      });
+
+      const invoices: any[] = await service.createFromContract('ws-1', 'contract-1');
+
+      expect(invoices).toHaveLength(2);
+      expect(invoices[0].notes).toBe('Standard payment terms apply.');
+      expect(invoices[1].notes).toBe('Standard payment terms apply.');
+    });
   });
 
   describe('update()', () => {
@@ -280,8 +356,14 @@ describe('InvoicesService', () => {
 
     beforeEach(() => {
       prisma.invoice.findFirst.mockResolvedValue(existingInvoice);
-      prisma.invoice.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ ...existingInvoice, ...data }));
+      // U6: drop undefined-valued keys before merging, the same way Prisma itself
+      // omits `undefined` fields from the generated UPDATE (only a literal `null`
+      // clears a column) -- without this, the ternary-based notes/tdsRate fields
+      // would appear to "clear" on every update that doesn't touch them.
+      prisma.invoice.update.mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+        const defined = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+        return Promise.resolve({ ...existingInvoice, ...defined });
+      });
     });
 
     // review-fix: previously update() never touched currency at all, so
@@ -318,6 +400,26 @@ describe('InvoicesService', () => {
       expect(prisma.contact.findUnique).not.toHaveBeenCalled();
       expect(result.currency).toBe('INR');
       expect(result.gstType).toBe('IGST');
+    });
+
+    // U6/KTD6: update() previously never touched notes -- confirms a new value overwrites it.
+    it('overwrites notes with a new value', async () => {
+      const result: any = await service.update('ws-1', 'inv-1', { notes: 'Updated terms' } as any);
+
+      expect(result.notes).toBe('Updated terms');
+    });
+
+    // KTD6/tdsRate pattern: sending no `notes` computes an `undefined` value for
+    // that key, which Prisma omits from the generated UPDATE entirely (only a
+    // literal `null` clears a column) -- so the persisted value is left untouched.
+    it('regression: update() without notes leaves the persisted value untouched (no new required field)', async () => {
+      await service.update('ws-1', 'inv-1', {
+        lineItems: [{ description: 'y', qty: 2, rate: 50, gstRate: 18 }],
+      } as any);
+
+      expect(prisma.invoice.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ notes: undefined }) }),
+      );
     });
   });
 });
