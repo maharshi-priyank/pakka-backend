@@ -1,13 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
+import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
+import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
+import { resolveWorkspaceId } from './resolve-workspace-id';
 import { UpsertUserDto, UpdateUserDto } from './dto/upsert-user.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly automations:  AutomationsService,
+    private readonly prisma:            PrismaService,
+    private readonly automations:       AutomationsService,
+    private readonly contractTemplates: ContractTemplatesService,
+    private readonly invoiceTemplates:  InvoiceTemplatesService,
   ) {}
 
   async upsert(dto: UpsertUserDto) {
@@ -41,6 +46,16 @@ export class UsersService {
 
     // Idempotent — safe to call on every login
     await this.automations.seedDefaultRules(user.id);
+
+    // KTD4: keyed by resolveWorkspaceId(user), not raw user.id like the call
+    // above -- createFromProposal()/createFromContract() resolve their
+    // workspaceId via resolveWorkspaceId(user) too, so seeding under the
+    // caller's own id would seed a different row than a team member's shared
+    // workspace ever reads from getDefault(), silently defeating R10 for
+    // exactly the population KTD1 exists to protect.
+    const workspaceId = resolveWorkspaceId(user);
+    await this.contractTemplates.seedDefault(workspaceId);
+    await this.invoiceTemplates.seedDefault(workspaceId);
 
     return user;
   }
