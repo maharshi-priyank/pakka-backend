@@ -466,6 +466,9 @@ model Contact {
   company         String?
   gstNumber       String?
   state           String?
+  // R1/R6: per-contact country/currency, inherited by Proposal/Contract/Invoice (KTD1, KTD8).
+  country         String?
+  currency        String?
   portalToken     String?      @unique
   clickupMemberId String?
   source          String?
@@ -518,6 +521,8 @@ model Proposal {
   content     Json
   totalAmount Decimal        @db.Decimal(12, 2)
   gstAmount   Decimal        @default(0) @db.Decimal(12, 2)
+  // R4/R5/R7: inherited from the linked Contact at create() time via resolveDocumentCurrency() (KTD1).
+  currency    String?
   hidePricingTable Boolean   @default(false)
   validUntil      DateTime?
   acceptedAt      DateTime?
@@ -582,6 +587,8 @@ model Contract {
   title      String
   status     ContractStatus @default(DRAFT)
   content    Json
+  // R4/R5/R7/KTD6: inherited at create() time (KTD1) or carried from the source Proposal.
+  currency   String?
   sentAt     DateTime?
   signedAt   DateTime?
   signerOtp  String?
