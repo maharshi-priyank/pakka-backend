@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { InvoiceStatus, LeadStage } from '@prisma/client';
+import { InvoiceStatus, ContactStage } from '@prisma/client';
+
+// Contact replaced Lead as the live pipeline entity -- mirrors
+// contacts.service.ts's ACTIVE_STAGES. WON_STAGES has no single-value
+// equivalent in the old LeadStage enum (which only had WON); a Contact can
+// land in either CLIENT or PAST_CLIENT and both count as "won" here.
+const ACTIVE_STAGES: ContactStage[] = ['ENQUIRY', 'PROPOSAL_SENT', 'NEGOTIATING'];
+const WON_STAGES:    ContactStage[] = ['CLIENT', 'PAST_CLIENT'];
 
 @Injectable()
 export class DashboardService {
@@ -16,9 +23,9 @@ export class DashboardService {
       revenueThisMonth,
       revenueLastMonth,
       overdueInvoices,
-      activeLeads,
+      activeContacts,
       openProposals,
-      pipelineLeads,
+      pipelineContacts,
     ] = await Promise.all([
       // Revenue this month (paid invoices)
       this.prisma.invoice.aggregate({
@@ -36,18 +43,18 @@ export class DashboardService {
         _sum: { total: true },
         _count: true,
       }),
-      // Active leads (not WON or LOST)
-      this.prisma.lead.count({
-        where: { workspaceId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] } },
+      // Active contacts (still in the open pipeline)
+      this.prisma.contact.count({
+        where: { workspaceId, archivedAt: null, stage: { in: ACTIVE_STAGES } },
       }),
       // Open proposals (SENT or OPENED)
       this.prisma.proposal.count({
         where: { workspaceId, status: { in: ['SENT', 'OPENED'] } },
       }),
-      // Pipeline value from active leads
-      this.prisma.lead.aggregate({
-        where: { workspaceId, isDeleted: false, stage: { notIn: [LeadStage.WON, LeadStage.LOST] } },
-        _sum: { budget: true },
+      // Pipeline value from active contacts
+      this.prisma.contact.aggregate({
+        where: { workspaceId, archivedAt: null, stage: { in: ACTIVE_STAGES } },
+        _sum: { dealValue: true },
       }),
     ]);
 
@@ -63,14 +70,14 @@ export class DashboardService {
       revenueChange,
       overdueAmount:     Number(overdueInvoices._sum.total ?? 0),
       overdueCount:      overdueInvoices._count,
-      pipelineValue:     Number(pipelineLeads._sum.budget ?? 0),
-      activeLeads,
+      pipelineValue:     Number(pipelineContacts._sum.dealValue ?? 0),
+      activeContacts,
       openProposals,
     };
   }
 
   async getRecentActivity(workspaceId: string) {
-    const [invoices, contracts, proposals, leads] = await Promise.all([
+    const [invoices, contracts, proposals, contacts] = await Promise.all([
       this.prisma.invoice.findMany({
         where:   { workspaceId, status: { in: [InvoiceStatus.PAID, InvoiceStatus.SENT] } },
         orderBy: { updatedAt: 'desc' },
@@ -89,8 +96,8 @@ export class DashboardService {
         take:    5,
         include: { client: { select: { name: true } }, lead: { select: { name: true } } },
       }),
-      this.prisma.lead.findMany({
-        where:   { workspaceId, isDeleted: false },
+      this.prisma.contact.findMany({
+        where:   { workspaceId, archivedAt: null },
         orderBy: { createdAt: 'desc' },
         take:    5,
       }),
@@ -129,8 +136,8 @@ export class DashboardService {
       }
     }
 
-    for (const l of leads) {
-      events.push({ type: 'lead_added', label: 'New lead added', detail: `${l.name}${l.company ? ` — ${l.company}` : ''}`, time: l.createdAt, entityId: l.id });
+    for (const c of contacts) {
+      events.push({ type: 'contact_added', label: 'New contact added', detail: `${c.name}${c.company ? ` — ${c.company}` : ''}`, time: c.createdAt, entityId: c.id });
     }
 
     return events
@@ -142,12 +149,12 @@ export class DashboardService {
     const now      = new Date();
     const in7Days  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    return this.prisma.lead.findMany({
+    return this.prisma.contact.findMany({
       where: {
         workspaceId,
-        isDeleted:  false,
+        archivedAt: null,
         followUpAt: { gte: now, lte: in7Days },
-        stage:      { notIn: [LeadStage.WON, LeadStage.LOST] },
+        stage:      { notIn: [...WON_STAGES, 'LOST'] },
       },
       orderBy: { followUpAt: 'asc' },
       take: 8,
