@@ -8,6 +8,7 @@ import { CreateInvoiceDto, LineItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
 import { effectivePlan } from '../users/effective-plan';
+import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
 
 const INCLUDE_FULL = {
   contract: { select: { id: true, title: true } },
@@ -99,8 +100,15 @@ export class InvoicesService {
   }
 
   async create(workspaceId: string, dto: CreateInvoiceDto) {
-    const currency = dto.currency ?? 'INR';
-    const isExport = currency !== 'INR';
+    // R5/R7/R8/KTD1: resolve via the shared helper — unchanged for callers that
+    // already send dto.currency (the helper's first resolution step), newly
+    // correct for a contactId-linked Invoice created without an explicit currency.
+    const { currency, isExport } = await resolveDocumentCurrency({
+      prisma: this.prisma,
+      workspaceId,
+      contactId: dto.contactId,
+      requestedCurrency: dto.currency,
+    });
 
     // For export invoices, force EXEMPT so calcTotals skips GST entirely
     const gstType = isExport ? GstType.EXEMPT : (dto.gstType ?? GstType.IGST);
@@ -215,6 +223,9 @@ export class InvoicesService {
     const totalAmount     = (content.totalAmount as number  | undefined) ?? 0;
     const contractGst     = (content.gstAmount   as number  | undefined) ?? 0;
     const tdsRate         = (content.tdsRate     as number  | undefined) ?? null;
+    // KTD6: use the Contract's currency as signed, not a fresh Contact/Workspace
+    // lookup — the '?? INR' floor exists only for pre-U6 Contracts (currency: null).
+    const currency        = contract.currency ?? 'INR';
 
     if (paymentSchedule.length > 0) {
       // One DRAFT invoice per milestone, each with correct gstType and proportional GST
@@ -239,6 +250,7 @@ export class InvoicesService {
           total:     totals.total,
           gstType,
           tdsRate,
+          currency,
         }, INCLUDE_FULL);
         invoices.push(inv);
       }
@@ -263,6 +275,7 @@ export class InvoicesService {
       total:     totals.total,
       gstType,
       tdsRate,
+      currency,
     }, INCLUDE_FULL);
     return [inv];
   }

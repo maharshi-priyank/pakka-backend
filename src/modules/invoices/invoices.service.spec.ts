@@ -6,15 +6,32 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 // R13/R14: findByIdPublic() flips SENT/OVERDUE -> VIEWED via an atomic conditional
 // updateMany, and leaves every other status untouched.
+// U7/KTD1/KTD6: create() resolves currency via the shared resolveDocumentCurrency()
+// helper (unchanged behavior for callers that already send dto.currency, newly
+// correct for a contactId-linked Invoice created without one); createFromContract()
+// carries the source Contract's own currency forward with a plain '?? INR' floor,
+// never a fresh Contact/Workspace lookup.
 describe('InvoicesService', () => {
   let service: InvoicesService;
   let prisma: {
     invoice: {
       findUnique: jest.Mock;
       updateMany: jest.Mock;
+      findFirst:  jest.Mock;
+      findMany:   jest.Mock;
+      create:     jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
+    };
+    contact: {
+      findUnique: jest.Mock;
+    };
+    workspace: {
+      findUnique: jest.Mock;
+    };
+    contract: {
+      findFirst: jest.Mock;
     };
   };
 
@@ -38,9 +55,21 @@ describe('InvoicesService', () => {
       invoice: {
         findUnique: jest.fn(),
         updateMany: jest.fn(),
+        findFirst:  jest.fn(),
+        findMany:   jest.fn(),
+        create:     jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
+      },
+      contact: {
+        findUnique: jest.fn(),
+      },
+      workspace: {
+        findUnique: jest.fn(),
+      },
+      contract: {
+        findFirst: jest.fn(),
       },
     };
 
@@ -108,5 +137,104 @@ describe('InvoicesService', () => {
 
     await expect(service.findByIdPublic('missing')).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.invoice.updateMany).not.toHaveBeenCalled();
+  });
+
+  describe('create()', () => {
+    const baseLineItems = [{ description: 'x', qty: 1, rate: 100, gstRate: 18 }];
+
+    beforeEach(() => {
+      // generateInvoiceNumber()'s uniqueness probe — no prior invoice this year.
+      prisma.invoice.findFirst.mockResolvedValue(null);
+      prisma.invoice.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve(data));
+    });
+
+    it('regression: behaves exactly as before when dto.currency is already sent — no Contact/Workspace lookup', async () => {
+      const result: any = await service.create('ws-1', {
+        lineItems: baseLineItems, currency: 'USD', contactId: 'contact-1',
+      } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
+      expect(result.currency).toBe('USD');
+      expect(result.gstType).toBe('EXEMPT');
+    });
+
+    it('regression: an explicit INR currency behaves exactly as before', async () => {
+      const result: any = await service.create('ws-1', {
+        lineItems: baseLineItems, currency: 'INR',
+      } as any);
+
+      expect(result.currency).toBe('INR');
+      expect(result.gstType).toBe('IGST');
+    });
+
+    it('inherits currency from a linked Contact when dto.currency is omitted (previously would have defaulted to INR unconditionally)', async () => {
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'EUR' });
+
+      const result: any = await service.create('ws-1', {
+        lineItems: baseLineItems, contactId: 'contact-1',
+      } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-1', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('EUR');
+      expect(result.gstType).toBe('EXEMPT');
+    });
+
+    it('falls through to the Workspace currency when no contactId is given (R8)', async () => {
+      prisma.workspace.findUnique.mockResolvedValue({ currency: 'GBP' });
+
+      const result: any = await service.create('ws-1', { lineItems: baseLineItems } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('GBP');
+    });
+  });
+
+  describe('createFromContract()', () => {
+    const baseContract = {
+      id:          'contract-1',
+      workspaceId: 'ws-1',
+      status:      'SIGNED',
+      title:       'Contract title',
+      clientId:    'client-1',
+      client:      { id: 'client-1' },
+      contact:     { id: 'contact-1' },
+      content:     { totalAmount: 1000, gstAmount: 0, paymentSchedule: [] },
+    };
+
+    beforeEach(() => {
+      prisma.invoice.findMany.mockResolvedValue([]); // no invoice already generated
+      prisma.invoice.findFirst.mockResolvedValue(null); // invoice-numbering probe
+      prisma.invoice.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve(data));
+    });
+
+    it("carries the Contract's own currency forward, not a fresh Contact lookup", async () => {
+      prisma.contract.findFirst.mockResolvedValue({ ...baseContract, currency: 'USD' });
+
+      const [inv]: any = await service.createFromContract('ws-1', 'contract-1');
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
+      expect(inv.currency).toBe('USD');
+    });
+
+    it("lands on the INR floor for a pre-U6 Contract with currency: null, confirming no fresh lookup runs", async () => {
+      prisma.contract.findFirst.mockResolvedValue({ ...baseContract, currency: null });
+
+      const [inv]: any = await service.createFromContract('ws-1', 'contract-1');
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
+      expect(inv.currency).toBe('INR');
+    });
   });
 });
