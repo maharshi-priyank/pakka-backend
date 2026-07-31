@@ -7,6 +7,7 @@ import { GstType, InvoiceStatus } from '@prisma/client';
 import { CreateInvoiceDto, LineItemDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
+import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { effectivePlan } from '../users/effective-plan';
 import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
 import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
@@ -386,6 +387,31 @@ export class InvoicesService {
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
         ...(currency !== undefined && { currency }),
       },
+      include: INCLUDE_FULL,
+    });
+  }
+
+  // U8/R8/R9/KTD7: mirrors update()'s own PAID guard above — re-apply is only
+  // blocked once an Invoice is fully PAID, unlike Contract's SIGNED/VOID guard.
+  async reapplyTemplate(workspaceId: string, id: string, dto: ReapplyTemplateDto) {
+    const invoice = await this.prisma.invoice.findFirst({ where: { id, workspaceId } });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === InvoiceStatus.PAID) {
+      throw new ForbiddenException('Cannot re-apply a template to a paid invoice');
+    }
+
+    // KTD1: workspace-scoped lookup — never a bare
+    // prisma.invoiceTemplate.findUnique({ where: { id } }), which would let a
+    // templateId from another workspace leak that workspace's template
+    // content into this Invoice (findOne() throws NotFoundException in that case).
+    const template = await this.invoiceTemplates.findOne(workspaceId, dto.templateId);
+    const notes = (template.content as { notes?: string } | undefined)?.notes ?? null;
+
+    // R9: only notes (the boilerplate slot) changes — lineItems, amounts, and
+    // status are left completely untouched.
+    return this.prisma.invoice.update({
+      where: { id },
+      data:  { notes },
       include: INCLUDE_FULL,
     });
   }

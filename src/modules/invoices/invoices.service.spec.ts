@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
@@ -36,7 +36,7 @@ describe('InvoicesService', () => {
       findFirst: jest.Mock;
     };
   };
-  let invoiceTemplates: { getDefault: jest.Mock };
+  let invoiceTemplates: { getDefault: jest.Mock; findOne: jest.Mock };
 
   const owner = {
     email:              'owner@example.com',
@@ -80,7 +80,9 @@ describe('InvoicesService', () => {
     // U6: getDefault() defaults to null (pre-seed / no-template state) unless a
     // test overrides it — matches InvoiceTemplatesService.getDefault()'s own
     // belt-and-suspenders null return for a workspace with no default yet.
-    invoiceTemplates = { getDefault: jest.fn().mockResolvedValue(null) };
+    // U8: findOne() has no default resolved value — each reapplyTemplate() test
+    // sets it explicitly (either a workspace-scoped template or a rejection).
+    invoiceTemplates = { getDefault: jest.fn().mockResolvedValue(null), findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -420,6 +422,89 @@ describe('InvoicesService', () => {
       expect(prisma.invoice.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ notes: undefined }) }),
       );
+    });
+  });
+
+  // U8/R8/R9/KTD7/KTD1: re-apply replaces only `notes` (Invoice's boilerplate
+  // slot), is blocked only on PAID, and must resolve the named template through
+  // InvoiceTemplatesService.findOne() -- the workspace-scoped lookup -- never a
+  // bare prisma.invoiceTemplate.findUnique({ where: { id } }), which would leak
+  // another workspace's template content (the IDOR class KTD1 documents).
+  describe('reapplyTemplate()', () => {
+    const existingInvoice = {
+      id:          'inv-1',
+      workspaceId: 'ws-1',
+      status:      'DRAFT',
+      lineItems:   [{ description: 'x', qty: 1, rate: 100, gstRate: 18 }],
+      subtotal:    100,
+      gstAmount:   18,
+      total:       118,
+      notes:       'Old notes',
+    };
+
+    beforeEach(() => {
+      // Merge the update's `data` onto whatever findFirst() resolved for this
+      // test (not the fixed `existingInvoice` constant) so a test asserting
+      // "status unchanged" for a non-DRAFT invoice sees its own status echoed back.
+      prisma.invoice.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+        const found = await prisma.invoice.findFirst.mock.results.at(-1)?.value;
+        return { ...existingInvoice, ...found, ...data };
+      });
+    });
+
+    it('replaces notes on a DRAFT invoice, leaving line items/amounts/status unchanged', async () => {
+      prisma.invoice.findFirst.mockResolvedValue({ ...existingInvoice, status: 'DRAFT' });
+      invoiceTemplates.findOne.mockResolvedValue({
+        id: 'tmpl-2', content: { notes: 'New boilerplate notes' },
+      });
+
+      const result: any = await service.reapplyTemplate('ws-1', 'inv-1', { templateId: 'tmpl-2' });
+
+      expect(invoiceTemplates.findOne).toHaveBeenCalledWith('ws-1', 'tmpl-2');
+      expect(prisma.invoice.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'inv-1' }, data: { notes: 'New boilerplate notes' } }),
+      );
+      expect(result.notes).toBe('New boilerplate notes');
+      expect(result.lineItems).toEqual(existingInvoice.lineItems);
+      expect(result.subtotal).toBe(100);
+      expect(result.gstAmount).toBe(18);
+      expect(result.total).toBe(118);
+      expect(result.status).toBe('DRAFT');
+    });
+
+    it.each(['SENT', 'VIEWED', 'PARTIAL', 'OVERDUE'])(
+      'succeeds on a %s invoice (not blocked, per KTD7 -- only PAID blocks)',
+      async (status) => {
+        prisma.invoice.findFirst.mockResolvedValue({ ...existingInvoice, status });
+        invoiceTemplates.findOne.mockResolvedValue({
+          id: 'tmpl-2', content: { notes: 'New boilerplate notes' },
+        });
+
+        const result: any = await service.reapplyTemplate('ws-1', 'inv-1', { templateId: 'tmpl-2' });
+
+        expect(result.notes).toBe('New boilerplate notes');
+        expect(result.status).toBe(status);
+      },
+    );
+
+    it('rejects re-applying a template on a PAID invoice', async () => {
+      prisma.invoice.findFirst.mockResolvedValue({ ...existingInvoice, status: 'PAID' });
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'inv-1', { templateId: 'tmpl-2' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(invoiceTemplates.findOne).not.toHaveBeenCalled();
+      expect(prisma.invoice.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects when templateId belongs to a different workspace', async () => {
+      prisma.invoice.findFirst.mockResolvedValue({ ...existingInvoice, status: 'DRAFT' });
+      invoiceTemplates.findOne.mockRejectedValue(new NotFoundException('Template not found'));
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'inv-1', { templateId: 'tmpl-other-ws' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.invoice.update).not.toHaveBeenCalled();
     });
   });
 });

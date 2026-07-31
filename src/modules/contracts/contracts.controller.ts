@@ -9,6 +9,7 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
+import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
@@ -48,6 +49,13 @@ export class ContractsController {
   @ApiOperation({ summary: 'Update contract content or status' })
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateContractDto) {
     return this.svc.update(resolveWorkspaceId(user), id, dto);
+  }
+
+  @Post(':id/reapply-template')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Re-apply a different template\'s boilerplate clauses (draft/sent/declined only)' })
+  reapplyTemplate(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ReapplyTemplateDto) {
+    return this.svc.reapplyTemplate(resolveWorkspaceId(user), id, dto);
   }
 
   @Post(':id/send')

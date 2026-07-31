@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ContractsService } from './contracts.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -38,7 +39,7 @@ describe('ContractsService', () => {
     };
   };
   let emitter: { emit: jest.Mock };
-  let contractTemplates: { getDefault: jest.Mock };
+  let contractTemplates: { getDefault: jest.Mock; findOne: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -71,7 +72,10 @@ describe('ContractsService', () => {
     // template table -- keeps exercising the original hardcoded-fallback
     // path unchanged. Tests that need a default template override this
     // per-test via contractTemplates.getDefault.mockResolvedValue(...).
-    contractTemplates = { getDefault: jest.fn().mockResolvedValue(null) };
+    contractTemplates = {
+      getDefault: jest.fn().mockResolvedValue(null),
+      findOne:    jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -411,6 +415,110 @@ describe('ContractsService', () => {
         expect(result.content.totalAmount).toBe(12000);
         expect(result.currency).toBe('USD');
       });
+    });
+  });
+
+  // U7/KTD7/KTD8: re-apply a different template's clause bodies onto an
+  // existing Contract by array position, reusing U5's mergeClauseBody()
+  // helper. No Proposal is involved here -- the only priority question is
+  // "does the template supply a body at this position?"
+  describe('reapplyTemplate()', () => {
+    function mockContract(overrides: Record<string, unknown> = {}) {
+      const contract = {
+        id:          'contract-1',
+        workspaceId: 'ws-1',
+        status:      'DRAFT',
+        content: {
+          clauses: [
+            { title: 'Payment Terms', body: 'Original: 50% advance.' },
+            { title: 'Terms & Conditions', body: 'Original: standard terms.' },
+          ],
+          scopeItems:      ['Design'],
+          deliverables:    ['Figma file'],
+          paymentSchedule: [{ milestone: 'Kickoff', percent: 50 }],
+          totalAmount:     5000,
+          gstAmount:       900,
+        },
+        ...overrides,
+      };
+      prisma.contract.findFirst.mockResolvedValue(contract);
+      prisma.contract.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ ...contract, ...data }));
+      return contract;
+    }
+
+    function mockTemplate(clauses: Array<{ title: string; body: string }>) {
+      contractTemplates.findOne.mockResolvedValue({
+        id: 'tmpl-2', workspaceId: 'ws-1', content: { clauses },
+      });
+    }
+
+    it('happy path: replaces clause bodies on a DRAFT Contract, leaves scope/amounts/paymentSchedule unchanged', async () => {
+      mockContract({ status: 'DRAFT' });
+      mockTemplate([
+        { title: 'Payment Terms', body: 'New: 30% upfront.' },
+        { title: 'Terms & Conditions', body: 'New: governed by Indian law.' },
+      ]);
+
+      const result: any = await service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any);
+
+      expect(contractTemplates.findOne).toHaveBeenCalledWith('ws-1', 'tmpl-2');
+      expect(result.content.clauses[0]).toEqual({ title: 'Payment Terms', body: 'New: 30% upfront.' });
+      expect(result.content.clauses[1]).toEqual({ title: 'Terms & Conditions', body: 'New: governed by Indian law.' });
+      expect(result.content.scopeItems).toEqual(['Design']);
+      expect(result.content.deliverables).toEqual(['Figma file']);
+      expect(result.content.paymentSchedule).toEqual([{ milestone: 'Kickoff', percent: 50 }]);
+      expect(result.content.totalAmount).toBe(5000);
+      expect(result.content.gstAmount).toBe(900);
+    });
+
+    it('rejects re-applying on a SIGNED Contract (KTD7)', async () => {
+      mockContract({ status: 'SIGNED' });
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any),
+      ).rejects.toThrow('Cannot re-apply a template to a signed or voided contract');
+      expect(contractTemplates.findOne).not.toHaveBeenCalled();
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects re-applying on a VOID Contract (KTD7)', async () => {
+      mockContract({ status: 'VOID' });
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any),
+      ).rejects.toThrow('Cannot re-apply a template to a signed or voided contract');
+      expect(contractTemplates.findOne).not.toHaveBeenCalled();
+      expect(prisma.contract.update).not.toHaveBeenCalled();
+    });
+
+    it.each(['SENT', 'DECLINED'])('does not block re-applying on a %s Contract (KTD7)', async (status) => {
+      mockContract({ status });
+      mockTemplate([
+        { title: 'Payment Terms', body: 'New: 30% upfront.' },
+        { title: 'Terms & Conditions', body: 'New: governed by Indian law.' },
+      ]);
+
+      const result: any = await service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'tmpl-2' } as any);
+
+      expect(result.content.clauses[0].body).toBe('New: 30% upfront.');
+      expect(result.content.clauses[1].body).toBe('New: governed by Indian law.');
+    });
+
+    // KTD1/IDOR: contractTemplates.findOne() is the workspace-scoped lookup
+    // (never a bare prisma.contractTemplate.findUnique({ where: { id } })),
+    // so a templateId from another workspace throws NotFoundException here
+    // rather than leaking that workspace's template content into this
+    // Contract.
+    it('rejects when templateId belongs to a different workspace', async () => {
+      mockContract({ status: 'DRAFT' });
+      contractTemplates.findOne.mockRejectedValue(new NotFoundException('Template not found'));
+
+      await expect(
+        service.reapplyTemplate('ws-1', 'contract-1', { templateId: 'other-ws-tmpl' } as any),
+      ).rejects.toThrow('Template not found');
+      expect(contractTemplates.findOne).toHaveBeenCalledWith('ws-1', 'other-ws-tmpl');
+      expect(prisma.contract.update).not.toHaveBeenCalled();
     });
   });
 });

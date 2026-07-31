@@ -7,6 +7,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
@@ -77,6 +78,17 @@ export class InvoicesController {
     @Body() dto: RecordPaymentDto,
   ) {
     return this.invoicesService.recordPayment(resolveWorkspaceId(user), id, dto);
+  }
+
+  // U8/R8/R9: swaps only the boilerplate `notes` field on an existing Invoice;
+  // scope/amounts/status are untouched (KTD7 guards PAID, mirrors update()'s guard).
+  @Post(':id/reapply-template')
+  reapplyTemplate(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: ReapplyTemplateDto,
+  ) {
+    return this.invoicesService.reapplyTemplate(resolveWorkspaceId(user), id, dto);
   }
 
   @Post(':id/mark-overdue')
