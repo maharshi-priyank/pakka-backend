@@ -197,25 +197,39 @@ export class ContractsService {
   async update(workspaceId: string, id: string, dto: UpdateContractDto) {
     const existing = await this.findOne(workspaceId, id);
 
-    // KTD4: unlike Proposal's update(), Contract's update() had no
-    // gstType/calcTotals handling at all before this feature -- this adds
-    // fresh enforcement rather than adapting an existing one. Currency is
-    // always resolved (mirrors Proposal's update()) so a currency-only
-    // change is never silently dropped; gstType is only touched when
-    // dto.content is present, since that's the only case a stale
-    // content.gstType could otherwise survive the verbatim overwrite below.
-    // Resolved fresh via U4's helper using the Contract's existing contactId
-    // -- never off the Contract's own persisted currency column, which is
-    // null for every pre-existing row (KTD7's no-backfill policy).
-    const { currency, isExport } = await resolveDocumentCurrency({
-      prisma: this.prisma,
-      workspaceId,
-      contactId: existing.contactId,
-      requestedCurrency: dto.currency,
-    });
-    const content = dto.content
-      ? ({ ...dto.content, gstType: isExport ? 'EXEMPT' : ((dto.content.gstType as string | undefined) ?? 'IGST') } as object)
-      : undefined;
+    // KTD4/review-fix: mirrors Proposal's update() exactly. Only re-resolve
+    // currency/GST when this update could plausibly affect them (contactId,
+    // currency, or content changing) -- never on a pure metadata edit
+    // (title/status alone). currency and content.gstType are always
+    // recomputed TOGETHER, never independently -- previously currency was
+    // always re-resolved and persisted while content.gstType was only synced
+    // when dto.content was present, so a contactId-only reassignment could
+    // leave a stale, inconsistent content.gstType behind a freshly-changed
+    // currency. Resolved using dto.contactId when present, else the
+    // Contract's existing contactId -- a request reassigning contactId in
+    // the same call must resolve against the NEW contact, not the old one.
+    // Never resolved off the Contract's own persisted currency column, which
+    // is null for every pre-existing row (KTD7's no-backfill policy).
+    const touchesCurrency = dto.contactId !== undefined || dto.currency !== undefined || dto.content !== undefined;
+
+    let currencyUpdate: { currency: string; content: object } | undefined;
+    if (touchesCurrency) {
+      const contactId = dto.contactId !== undefined ? dto.contactId : existing.contactId;
+      const { currency, isExport } = await resolveDocumentCurrency({
+        prisma: this.prisma,
+        workspaceId,
+        contactId,
+        requestedCurrency: dto.currency,
+      });
+      const existingContent = (existing.content as Record<string, unknown>) ?? {};
+      const gstType = isExport
+        ? 'EXEMPT'
+        : ((dto.content?.gstType as string | undefined) ?? (existingContent.gstType as string | undefined) ?? 'IGST');
+      currencyUpdate = {
+        currency,
+        content: { ...existingContent, ...dto.content, gstType } as object,
+      };
+    }
 
     return this.prisma.contract.update({
       where: { id },
@@ -225,8 +239,7 @@ export class ContractsService {
         ...(dto.clientId  !== undefined && { clientId:  dto.clientId  ?? null }),
         ...(dto.contactId !== undefined && { contactId: dto.contactId ?? null }),
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
-        ...(content && { content }),
-        currency,
+        ...currencyUpdate,
       },
       include: INCLUDE_FULL,
     });

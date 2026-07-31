@@ -320,7 +320,35 @@ export class InvoicesService {
       throw new ForbiddenException('Cannot edit a paid invoice');
     }
 
-    const gstType    = dto.gstType   ?? invoice.gstType;
+    // review-fix: mirrors Proposal/Contract's update() -- only re-resolve
+    // currency when this update could plausibly affect it (contactId or
+    // currency changing). Resolved using dto.contactId when present, else the
+    // Invoice's existing contactId -- a contactId reassignment in the same
+    // call must resolve against the NEW contact, not the old one. Previously
+    // Invoice.update() never touched currency at all, so reassigning an
+    // Invoice to a different Contact left it permanently on whatever currency
+    // it was created with (unlike Proposal/Contract, which already resolved
+    // this on every contactId/currency change).
+    const touchesCurrency = dto.contactId !== undefined || dto.currency !== undefined;
+    let currency: string | undefined;
+    let isExportOverride = false;
+    if (touchesCurrency) {
+      const contactId = dto.contactId !== undefined ? dto.contactId : invoice.contactId;
+      const resolved = await resolveDocumentCurrency({
+        prisma: this.prisma,
+        workspaceId,
+        contactId,
+        requestedCurrency: dto.currency,
+      });
+      currency = resolved.currency;
+      isExportOverride = resolved.isExport;
+    }
+
+    // A client-submitted gstType (or the previously-persisted one) is honored
+    // only when the resolved currency is INR -- otherwise EXEMPT is enforced,
+    // same as Proposal/Contract. When this update doesn't touch currency at
+    // all, behavior is unchanged from before this fix.
+    const gstType    = isExportOverride ? GstType.EXEMPT : (dto.gstType ?? invoice.gstType);
     const lineItems  = dto.lineItems ?? (invoice.lineItems as unknown as LineItemDto[]);
     const { subtotal, gstAmount, total } = calcTotals(lineItems, gstType);
 
@@ -338,6 +366,7 @@ export class InvoicesService {
         contactId:  dto.contactId,
         contractId: dto.contractId,
         ...(dto.projectId !== undefined && { projectId: dto.projectId ?? null }),
+        ...(currency !== undefined && { currency }),
       },
       include: INCLUDE_FULL,
     });

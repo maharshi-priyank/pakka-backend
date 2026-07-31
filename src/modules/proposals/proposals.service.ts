@@ -188,27 +188,48 @@ export class ProposalsService {
   async update(workspaceId: string, id: string, dto: UpdateProposalDto) {
     const existing = await this.findOne(workspaceId, id);
 
-    // KTD4: resolve currency/isExport fresh via U4's helper on every update --
-    // never off the Proposal's own persisted `currency` column directly. Every
-    // Proposal created before this feature shipped has currency: null, so a
-    // naive check against that column would evaluate every one of them as an
-    // export and silently flip a plain INR Proposal to EXEMPT on its next edit.
-    const contactId = dto.contactId !== undefined ? dto.contactId : existing.contactId;
-    const { currency, isExport } = await resolveDocumentCurrency({
-      prisma: this.prisma,
-      workspaceId,
-      contactId,
-      requestedCurrency: dto.currency,
-    });
+    // KTD4/review-fix: only re-resolve currency/GST when this update could
+    // plausibly affect them (contactId, currency, or content changing) --
+    // never on a pure metadata edit (title/status/validUntil alone). currency
+    // and content.gstType/totals are always recomputed TOGETHER now, never
+    // independently -- a request that changes contactId but not content used
+    // to leave a stale content.gstType behind a freshly-changed currency
+    // column, which could silently flip a document between taxable and
+    // export-exempt without the persisted totals ever reflecting it. Gating
+    // on "did this request touch something currency-relevant" also means a
+    // pure metadata edit on an already-ACCEPTED Proposal never silently
+    // re-derives its tax treatment. Never resolved off the Proposal's own
+    // persisted `currency` column directly -- every Proposal created before
+    // this feature shipped has currency: null, so a naive check against that
+    // column would evaluate every one of them as an export.
+    const touchesCurrency = dto.contactId !== undefined || dto.currency !== undefined || dto.content !== undefined;
 
-    const lineItems = dto.content?.lineItems ?? (existing.content as Record<string, unknown>)?.lineItems as LineItemDto[] ?? [];
-    // A client-submitted gstType (or the previously-persisted one) is honored
-    // only when the resolved currency is INR -- otherwise EXEMPT is enforced,
-    // overriding whatever the request/stale content would otherwise produce.
-    const gstType = isExport
-      ? 'EXEMPT'
-      : (dto.content?.gstType ?? (existing.content as Record<string, unknown>)?.gstType as string ?? 'IGST');
-    const { gstAmount, totalAmount } = calcTotals(lineItems, gstType);
+    let currencyUpdate: { currency: string; content: object; totalAmount: Decimal; gstAmount: Decimal } | undefined;
+    if (touchesCurrency) {
+      const contactId = dto.contactId !== undefined ? dto.contactId : existing.contactId;
+      const { currency, isExport } = await resolveDocumentCurrency({
+        prisma: this.prisma,
+        workspaceId,
+        contactId,
+        requestedCurrency: dto.currency,
+      });
+
+      const existingContent = (existing.content as Record<string, unknown>) ?? {};
+      const lineItems = dto.content?.lineItems ?? (existingContent.lineItems as LineItemDto[]) ?? [];
+      // A client-submitted gstType (or the previously-persisted one) is honored
+      // only when the resolved currency is INR -- otherwise EXEMPT is enforced,
+      // overriding whatever the request/stale content would otherwise produce.
+      const gstType = isExport
+        ? 'EXEMPT'
+        : (dto.content?.gstType ?? (existingContent.gstType as string) ?? 'IGST');
+      const { gstAmount, totalAmount } = calcTotals(lineItems, gstType);
+      currencyUpdate = {
+        currency,
+        content: { ...existingContent, ...dto.content, gstType } as object,
+        totalAmount,
+        gstAmount,
+      };
+    }
 
     return this.prisma.proposal.update({
       where: { id },
@@ -220,12 +241,7 @@ export class ProposalsService {
         ...(dto.projectId  !== undefined && { projectId:  dto.projectId ?? null }),
         ...(dto.status     && { status: dto.status }),
         ...(dto.validUntil && { validUntil: new Date(dto.validUntil) }),
-        currency,
-        ...(dto.content && {
-          content: { ...dto.content, gstType } as object,
-          totalAmount,
-          gstAmount,
-        }),
+        ...currencyUpdate,
         ...(dto.hidePricingTable !== undefined && { hidePricingTable: dto.hidePricingTable }),
       },
       include: { lead: { select: { id: true, name: true } }, client: true, opens: true },
@@ -421,7 +437,15 @@ export class ProposalsService {
     const paymentSchedule = (proposal.content as Record<string, unknown>)
       ?.paymentSchedule as Array<{ milestone: string; amount: number }> | undefined;
 
-    if (paymentSchedule?.length) {
+    // review-fix: this integration's Razorpay orders are hardcoded to
+    // currency: 'INR' below (deliberately out of scope for this feature --
+    // see the plan's Scope Boundaries). Now that Proposal.currency is real,
+    // creating an order for a non-INR Proposal would charge the deposit
+    // amount as if it were INR paise -- e.g. a $500 Proposal would create a
+    // ₹500 order, wrong currency AND wrong amount by the exchange rate. Skip
+    // the auto-deposit order rather than silently mischarge; the Proposal is
+    // still accepted, the freelancer just collects that deposit manually.
+    if (paymentSchedule?.length && (proposal.currency ?? 'INR') === 'INR') {
       const deposit = paymentSchedule[0];
       try {
         const proposalUser = await this.prisma.user.findUnique({

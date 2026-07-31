@@ -179,28 +179,62 @@ describe('ContractsService', () => {
       }));
     });
 
-    it('does not touch content when dto.content is absent, but still resolves and persists currency', async () => {
+    // review-fix: a pure metadata edit (title/status alone) touches neither
+    // contactId, currency, nor content, so currency/GST are never re-resolved
+    // -- this is what keeps an unrelated edit from silently re-deriving tax
+    // treatment on an already-finalized Contract.
+    it('does not resolve or touch currency/content for a pure metadata edit', async () => {
       prisma.contract.findFirst.mockResolvedValue(existingContract);
-      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
 
       await service.update('ws-1', 'contract-1', { title: 'New title' } as any);
 
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
       expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: { title: 'New title', currency: 'USD' },
+        data: { title: 'New title' },
       }));
     });
 
-    // A currency-only change (no content edit) must still persist -- mirrors
-    // Proposal's update(), which always resolves currency regardless of
-    // whether dto.content is present.
-    it('persists a currency-only update with no dto.content', async () => {
+    // review-fix: a currency-only change (no content edit) must still sync
+    // content.gstType together with currency -- previously currency was
+    // persisted unconditionally while content.gstType was only synced when
+    // dto.content was present, so a currency-only change could leave a
+    // stale, inconsistent content.gstType behind a freshly-changed currency.
+    it('persists a currency-only update and keeps content.gstType in sync with it', async () => {
       prisma.contract.findFirst.mockResolvedValue(existingContract);
 
       await service.update('ws-1', 'contract-1', { currency: 'GBP' } as any);
 
       expect(prisma.contact.findUnique).not.toHaveBeenCalled();
       expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: { currency: 'GBP' },
+        data: {
+          currency: 'GBP',
+          content:  expect.objectContaining({ gstType: 'EXEMPT' }),
+        },
+      }));
+    });
+
+    // review-fix: a contactId reassignment must resolve currency against the
+    // NEW contact in the same request, not the contact being replaced --
+    // previously resolveDocumentCurrency() was always called with
+    // existing.contactId, so relinking a Contract to a different Contact
+    // left the OLD contact's currency/GST treatment on a row now pointing at
+    // the NEW contact.
+    it('resolves currency against the new contactId when reassigning a Contract to a different Contact', async () => {
+      prisma.contract.findFirst.mockResolvedValue(existingContract);
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
+
+      await service.update('ws-1', 'contract-1', { contactId: 'contact-2' } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-2', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(prisma.contract.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          contactId: 'contact-2',
+          currency:  'USD',
+          content:   expect.objectContaining({ gstType: 'EXEMPT' }),
+        }),
       }));
     });
   });

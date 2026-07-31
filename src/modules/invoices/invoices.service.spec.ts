@@ -20,6 +20,7 @@ describe('InvoicesService', () => {
       findFirst:  jest.Mock;
       findMany:   jest.Mock;
       create:     jest.Mock;
+      update:     jest.Mock;
     };
     user: {
       findUnique: jest.Mock;
@@ -58,6 +59,7 @@ describe('InvoicesService', () => {
         findFirst:  jest.fn(),
         findMany:   jest.fn(),
         create:     jest.fn(),
+        update:     jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
@@ -235,6 +237,87 @@ describe('InvoicesService', () => {
       expect(prisma.contact.findUnique).not.toHaveBeenCalled();
       expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
       expect(inv.currency).toBe('INR');
+    });
+
+    it('creates one DRAFT invoice per milestone, each carrying the Contract currency forward, when the Contract has a paymentSchedule', async () => {
+      prisma.contract.findFirst.mockResolvedValue({
+        ...baseContract,
+        currency: 'EUR',
+        content: {
+          totalAmount: 1000,
+          gstAmount:   0,
+          paymentSchedule: [
+            { milestone: 'Kickoff', amount: 400 },
+            { milestone: 'Delivery', amount: 600 },
+          ],
+        },
+      });
+
+      const invoices: any[] = await service.createFromContract('ws-1', 'contract-1');
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(prisma.workspace.findUnique).not.toHaveBeenCalled();
+      expect(invoices).toHaveLength(2);
+      expect(invoices[0].currency).toBe('EUR');
+      expect(invoices[1].currency).toBe('EUR');
+      expect(invoices[0].lineItems[0].description).toBe('Kickoff');
+      expect(invoices[0].lineItems[0].rate).toBe(400);
+      expect(invoices[1].lineItems[0].description).toBe('Delivery');
+      expect(invoices[1].lineItems[0].rate).toBe(600);
+    });
+  });
+
+  describe('update()', () => {
+    const existingInvoice = {
+      id:          'inv-1',
+      workspaceId: 'ws-1',
+      status:      'DRAFT',
+      contactId:   'contact-1',
+      currency:    'INR',
+      gstType:     'IGST',
+      lineItems:   [{ description: 'x', qty: 1, rate: 100, gstRate: 18 }],
+    };
+
+    beforeEach(() => {
+      prisma.invoice.findFirst.mockResolvedValue(existingInvoice);
+      prisma.invoice.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({ ...existingInvoice, ...data }));
+    });
+
+    // review-fix: previously update() never touched currency at all, so
+    // reassigning an Invoice to a different Contact left it permanently on
+    // its original currency -- unlike Proposal/Contract's update(), which
+    // already resolved this. Resolved against the NEW contactId, not the
+    // Invoice's existing one.
+    it('re-resolves currency and forces EXEMPT gstType when reassigned to a non-INR Contact', async () => {
+      prisma.contact.findUnique.mockResolvedValue({ currency: 'USD' });
+
+      const result: any = await service.update('ws-1', 'inv-1', { contactId: 'contact-2' } as any);
+
+      expect(prisma.contact.findUnique).toHaveBeenCalledWith({
+        where:  { id: 'contact-2', workspaceId: 'ws-1' },
+        select: { currency: true },
+      });
+      expect(result.currency).toBe('USD');
+      expect(result.gstType).toBe('EXEMPT');
+    });
+
+    it('re-resolves currency when dto.currency is sent directly, without a Contact lookup', async () => {
+      const result: any = await service.update('ws-1', 'inv-1', { currency: 'GBP' } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(result.currency).toBe('GBP');
+      expect(result.gstType).toBe('EXEMPT');
+    });
+
+    it('does not resolve or touch currency for a pure lineItems/metadata edit', async () => {
+      const result: any = await service.update('ws-1', 'inv-1', {
+        lineItems: [{ description: 'y', qty: 2, rate: 50, gstRate: 18 }],
+      } as any);
+
+      expect(prisma.contact.findUnique).not.toHaveBeenCalled();
+      expect(result.currency).toBe('INR');
+      expect(result.gstType).toBe('IGST');
     });
   });
 });

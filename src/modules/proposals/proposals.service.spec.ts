@@ -378,7 +378,14 @@ describe('ProposalsService', () => {
   });
 
   describe('acceptBySlug()', () => {
-    it('regression: still hardcodes INR for the Razorpay deposit order on a non-INR Proposal', async () => {
+    // review-fix: Razorpay orders in this integration are hardcoded to
+    // currency: 'INR' (deliberately out of scope -- see the plan's Scope
+    // Boundaries). Now that Proposal.currency is real, creating one for a
+    // non-INR Proposal would mischarge the deposit (e.g. a $500 Proposal
+    // producing a ₹500 order) -- so the auto-deposit order is skipped
+    // entirely for a non-INR Proposal rather than created with a mismatched
+    // currency. The Proposal itself is still accepted.
+    it('skips creating a Razorpay deposit order for a non-INR Proposal, but still accepts it', async () => {
       const nonInrProposal = {
         ...baseProposal,
         status:   'SENT',
@@ -387,6 +394,23 @@ describe('ProposalsService', () => {
       };
       prisma.proposal.findUnique.mockResolvedValue(nonInrProposal);
       prisma.proposal.update.mockResolvedValue({ ...nonInrProposal, status: 'ACCEPTED', acceptedAt: new Date() });
+
+      const result = await service.acceptBySlug('abc123xy99');
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(result.depositOrder).toBeNull();
+      expect(result.proposal.status).toBe('ACCEPTED');
+    });
+
+    it('still creates the INR-hardcoded Razorpay deposit order for an INR Proposal', async () => {
+      const inrProposal = {
+        ...baseProposal,
+        status:   'SENT',
+        content:  { paymentSchedule: [{ milestone: 'Deposit', amount: 500 }] },
+        currency: 'INR',
+      };
+      prisma.proposal.findUnique.mockResolvedValue(inrProposal);
+      prisma.proposal.update.mockResolvedValue({ ...inrProposal, status: 'ACCEPTED', acceptedAt: new Date() });
       prisma.user.findUnique.mockResolvedValue({ razorpayKeyId: 'key_123', razorpayKeySecret: 'secret_123' });
 
       const result = await service.acceptBySlug('abc123xy99');
