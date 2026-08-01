@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Plan, SubscriptionStatus } from '@prisma/client';
+import type { RefundResult } from './payment-provider.interface';
 import { PlanResolutionService, type PlanTier } from './plan-resolution.service';
 
 // USD prices (cents) for international billing
@@ -186,5 +187,26 @@ export class StripeService {
       where: { id: userId },
       data: { subscriptionStatus: SubscriptionStatus.CANCELLED, plan: Plan.FREE },
     });
+  }
+
+
+  // ── Refund (KTD4) ──────────────────────────────────────────────────────────
+  // Stripe refunds via stripe.refunds.create({ payment_intent, amount? }).
+  // amount is in cents; omit for a full refund. Stripe is idempotent per
+  // Idempotency-Key header; passing the key prevents duplicate refunds on retry.
+  async refund(paymentIntentId: string, amount?: number, idempotencyKey?: string): Promise<RefundResult> {
+    const refund = await this.client.refunds.create(
+      {
+        payment_intent: paymentIntentId,
+        ...(amount ? { amount } : {}),
+      },
+      ...(idempotencyKey ? [{ idempotencyKey }] : []),
+    );
+    return {
+      refundId: refund.id,
+      paymentId: paymentIntentId,
+      amount: refund.amount ?? undefined,
+      status: refund.status ?? 'unknown',
+    };
   }
 }

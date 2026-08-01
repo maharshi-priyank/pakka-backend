@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { AdminJwtStrategy } from './auth/admin-jwt.strategy';
 import { AdminAuthService } from './auth/admin-auth.service';
 import { AdminAuthController } from './auth/admin-auth.controller';
@@ -10,6 +11,8 @@ import { AuditService } from './audit/audit.service';
 import { AuditController } from './audit/audit.controller';
 import { AdminActionsService } from './actions/admin-actions.service';
 import { AdminActionsController } from './actions/admin-actions.controller';
+import { AdminBillingService } from './billing/admin-billing.service';
+import { AdminBillingController } from './billing/admin-billing.controller';
 import { AdminOversightService } from './oversight/admin-oversight.service';
 import { AdminOversightController } from './oversight/admin-oversight.controller';
 import { AdminUsersService } from './users/admin-users.service';
@@ -32,6 +35,7 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
 @Module({
   imports: [
     PrismaModule,
+    PaymentsModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -48,6 +52,7 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AdminWorkspacesController,
     AuditController,
     AdminActionsController,
+    AdminBillingController,
   ],
   providers: [
     AdminJwtStrategy,
@@ -57,6 +62,7 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AdminUsersService,
     AdminWorkspacesService,
     AdminActionsService,
+    AdminBillingService,
   ],
   exports: [AuditService, AdminAuthService, JwtModule, PassportModule],
 })

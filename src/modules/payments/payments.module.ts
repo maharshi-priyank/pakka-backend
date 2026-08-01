@@ -17,6 +17,6 @@ import { PaymentsController } from './payments.controller';
     { provide: PAYMENT_PROVIDER, useClass: RazorpayProvider },
     RazorpayProvider,
   ],
-  exports: [PaymentsService, StripeService],
+  exports: [PaymentsService, StripeService, PAYMENT_PROVIDER],
 })
 export class PaymentsModule {}
