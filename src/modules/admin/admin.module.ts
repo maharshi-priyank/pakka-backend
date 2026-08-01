@@ -7,6 +7,9 @@ import { AdminJwtStrategy } from './auth/admin-jwt.strategy';
 import { AdminAuthService } from './auth/admin-auth.service';
 import { AdminAuthController } from './auth/admin-auth.controller';
 import { AuditService } from './audit/audit.service';
+import { AuditController } from './audit/audit.controller';
+import { AdminActionsService } from './actions/admin-actions.service';
+import { AdminActionsController } from './actions/admin-actions.controller';
 import { AdminOversightService } from './oversight/admin-oversight.service';
 import { AdminOversightController } from './oversight/admin-oversight.controller';
 import { AdminUsersService } from './users/admin-users.service';
@@ -43,6 +46,8 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AdminOversightController,
     AdminUsersController,
     AdminWorkspacesController,
+    AuditController,
+    AdminActionsController,
   ],
   providers: [
     AdminJwtStrategy,
@@ -51,6 +56,7 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AdminOversightService,
     AdminUsersService,
     AdminWorkspacesService,
+    AdminActionsService,
   ],
   exports: [AuditService, AdminAuthService, JwtModule, PassportModule],
 })
