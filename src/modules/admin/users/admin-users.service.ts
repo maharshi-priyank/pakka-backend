@@ -1,0 +1,82 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+
+/**
+ * Cross-tenant user lookup (R8, R10). Admin endpoints pass an explicit target
+ * userId — never the caller's activeWorkspaceId (KTD2).
+ */
+@Injectable()
+export class AdminUsersService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async search(q: string | undefined, page: number, pageSize: number) {
+    const where = q
+      ? {
+          OR: [
+            { email: { contains: q, mode: 'insensitive' as const } },
+            { name: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: this.listSelect(),
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
+  }
+
+  async detail(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        ...this.listSelect(),
+        planExpiresAt: true,
+        subscriptionStatus: true,
+        stripeSubscriptionId: true,
+        razorpaySubscriptionId: true,
+        billingAnchorDate: true,
+        createdAt: true,
+        onboardingComplete: true,
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const memberships = await this.prisma.workspaceMember.findMany({
+      where: { userId: id },
+      include: {
+        workspace: { select: { id: true, name: true, archivedAt: true } },
+        workspaceRole: { select: { id: true, key: true, name: true } },
+      },
+    });
+
+    return {
+      ...user,
+      workspaces: memberships.map((m) => ({
+        workspaceId: m.workspace.id,
+        workspaceName: m.workspace.name,
+        archived: !!m.workspace.archivedAt,
+        legacyRole: m.role,
+        roleKey: m.workspaceRole.key,
+        roleName: m.workspaceRole.name,
+        joinedAt: m.joinedAt,
+      })),
+    };
+  }
+
+  private listSelect() {
+    return {
+      id: true,
+      email: true,
+      name: true,
+      plan: true,
+      activeWorkspaceId: true,
+      createdAt: true,
+    } as const;
+  }
+}

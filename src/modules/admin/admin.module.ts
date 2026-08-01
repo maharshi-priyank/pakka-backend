@@ -7,6 +7,12 @@ import { AdminJwtStrategy } from './auth/admin-jwt.strategy';
 import { AdminAuthService } from './auth/admin-auth.service';
 import { AdminAuthController } from './auth/admin-auth.controller';
 import { AuditService } from './audit/audit.service';
+import { AdminOversightService } from './oversight/admin-oversight.service';
+import { AdminOversightController } from './oversight/admin-oversight.controller';
+import { AdminUsersService } from './users/admin-users.service';
+import { AdminUsersController } from './users/admin-users.controller';
+import { AdminWorkspacesService } from './workspaces/admin-workspaces.service';
+import { AdminWorkspacesController } from './workspaces/admin-workspaces.controller';
 
 /**
  * Admin module — superadmin-only panel API.
@@ -17,8 +23,8 @@ import { AuditService } from './audit/audit.service';
  * separate from tenant User accounts (AdminUser table + own admin JWT signed
  * with ADMIN_JWT_SECRET).
  *
- * Submodules (oversight, users, workspaces, actions, billing, audit-read,
- * impersonation) register their controllers/providers here as they are built.
+ * Remaining submodules (actions, billing, audit-read, impersonation) register
+ * here as they are built (U4–U6).
  */
 @Module({
   imports: [
@@ -28,14 +34,24 @@ import { AuditService } from './audit/audit.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        // Default secret for JwtService; admin login overrides per-call with the
-        // same secret. Impersonation uses a separate secret (admin.impersonationSecret).
         secret: config.get<string>('admin.jwtSecret') ?? 'dev-admin-secret',
       }),
     }),
   ],
-  controllers: [AdminAuthController],
-  providers: [AdminJwtStrategy, AdminAuthService, AuditService],
+  controllers: [
+    AdminAuthController,
+    AdminOversightController,
+    AdminUsersController,
+    AdminWorkspacesController,
+  ],
+  providers: [
+    AdminJwtStrategy,
+    AdminAuthService,
+    AuditService,
+    AdminOversightService,
+    AdminUsersService,
+    AdminWorkspacesService,
+  ],
   exports: [AuditService, AdminAuthService, JwtModule, PassportModule],
 })
 export class AdminModule {}
