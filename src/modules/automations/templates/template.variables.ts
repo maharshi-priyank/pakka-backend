@@ -15,6 +15,7 @@ export interface ContractTemplateVars {
   businessName:  string
   contractTitle: string
   signLink:      string
+  signingMethod?: 'OTP' | 'OPENSIGN'
 }
 
 export interface ProposalTemplateVars {

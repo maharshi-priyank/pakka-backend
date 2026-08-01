@@ -45,6 +45,14 @@ export const validationSchema = Joi.object({
   STRIPE_SECRET_KEY:     Joi.string().optional(),
   STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
   APP_FRONTEND_URL: Joi.string().default('http://localhost:5173'),
+  OPENSIGN_SERVER_URL:      Joi.string().uri().default('http://localhost:8080/app'),
+  OPENSIGN_WEBHOOK_SECRET:  Joi.string().optional(),
+  OPENSIGN_ENABLED:         Joi.boolean().default(false),
+  OPENSIGN_APP_ID:          Joi.string().default('opensign'),
+  OPENSIGN_MASTER_KEY:      Joi.string().optional(),
+  OPENSIGN_PUBLIC_URL:      Joi.string().uri().default('http://localhost:3002'),
+  OPENSIGN_EMAIL:           Joi.string().optional(),
+  OPENSIGN_PASSWORD:        Joi.string().optional(),
 });
 
 export const configuration = () => ({
@@ -113,5 +121,15 @@ export const configuration = () => ({
   stripe: {
     secretKey:     process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+  opensign: {
+    serverUrl:     process.env.OPENSIGN_SERVER_URL ?? 'http://localhost:8080/app',
+    webhookSecret: process.env.OPENSIGN_WEBHOOK_SECRET,
+    enabled:       process.env.OPENSIGN_ENABLED === 'true',
+    appId:         process.env.OPENSIGN_APP_ID ?? 'opensign',
+    masterKey:     process.env.OPENSIGN_MASTER_KEY,
+    publicUrl:     process.env.OPENSIGN_PUBLIC_URL ?? 'http://localhost:3002',
+    email:         process.env.OPENSIGN_EMAIL,
+    password:      process.env.OPENSIGN_PASSWORD,
   },
 });

@@ -1,0 +1,47 @@
+services:
+  opensign-server:
+    image: opensign/opensignserver:main
+    container_name: OpenSignServer-container
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - opensign-files:/usr/src/app/files
+    env_file:
+      - .env.opensign
+    networks:
+      - opensign-net
+
+  opensign-client:
+    image: opensign/opensign:main
+    container_name: OpenSign-container
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    depends_on:
+      - opensign-server
+    env_file:
+      - .env.opensign
+    environment:
+      - REACT_APP_SERVERURL=http://localhost:8080/app
+    networks:
+      - opensign-net
+
+  opensign-mongo:
+    image: mongo:latest
+    container_name: opensign-mongo
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    volumes:
+      - opensign-mongo-data:/data/db
+    networks:
+      - opensign-net
+
+networks:
+  opensign-net:
+    driver: bridge
+
+volumes:
+  opensign-files:
+  opensign-mongo-data:

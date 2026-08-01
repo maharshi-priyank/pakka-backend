@@ -526,6 +526,12 @@ model Contract {
   archivedAt DateTime?
   invoices   Invoice[]
 
+  // E-signature integration (OpenSign)
+  opensignDocumentId  String?
+  opensignSigningUrl  String?
+  signedPdfUrl        String?
+  signingMethod       String?  @default("OTP")
+
   @@index([workspaceId, status])
   @@index([workspaceId, archivedAt])
   @@index([clientId])

@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, ForbiddenException, BadRequestException,
+  Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -9,6 +9,8 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { effectivePlan } from '../users/effective-plan';
+import { OpenSignService } from '../opensign/opensign.service';
+import { OpenSignPdfGenerator } from '../opensign/opensign.pdf-generator';
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -26,9 +28,13 @@ const INCLUDE_LIST = {
 
 @Injectable()
 export class ContractsService {
+  private readonly logger = new Logger(ContractsService.name);
+
   constructor(
     private readonly prisma:       PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly opensign:     OpenSignService,
+    private readonly pdfGenerator: OpenSignPdfGenerator,
   ) {}
 
   async create(workspaceId: string, dto: CreateContractDto) {
@@ -188,11 +194,21 @@ export class ContractsService {
       throw new ForbiddenException('Contract is already signed');
     }
 
+    const content = contract.content as Record<string, any>;
+
+    if (this.opensign.isEnabled) {
+      return this.sendViaOpenSign(workspaceId, id, contract, content);
+    }
+
+    return this.sendViaOtp(workspaceId, id);
+  }
+
+  private async sendViaOtp(workspaceId: string, id: string) {
     const otp = generateOtp();
 
     const updated = await this.prisma.contract.update({
       where: { id },
-      data:  { status: ContractStatus.SENT, signerOtp: otp, sentAt: new Date() },
+      data:  { status: ContractStatus.SENT, signerOtp: otp, sentAt: new Date(), signingMethod: 'OTP' },
     });
 
     this.eventEmitter.emit('contract.sent', { entityId: id, workspaceId });
@@ -201,6 +217,61 @@ export class ContractsService {
       contract: { ...updated, signerOtp: undefined },
       signUrl:  `${appUrl}/sign/${updated.id}`,
       otp,
+    };
+  }
+
+  private async sendViaOpenSign(workspaceId: string, id: string, contract: any, content: Record<string, any>) {
+    const signerName  = content.signerName  ?? contract.client?.name ?? 'Client';
+    const signerEmail = content.signerEmail ?? contract.client?.email;
+
+    if (!signerEmail) {
+      throw new BadRequestException('Signer email is required for e-signature. Please add it in the contract content.');
+    }
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where:  { id: workspaceId },
+      select: { businessName: true, name: true },
+    });
+
+    const pdfBuffer = await this.pdfGenerator.generate({
+      title:        contract.title,
+      businessName: workspace?.businessName ?? workspace?.name ?? 'Service Provider',
+      clientName:   signerName,
+      content,
+      createdAt:    contract.createdAt,
+    });
+
+    // Backend public URL — strip /api/v1 suffix if present so we get the root
+    const rawBackend = process.env.BACKEND_URL ?? 'http://localhost:3000/api/v1';
+    const backendRoot = rawBackend.replace(/\/api\/v1\/?$/, '');
+    const completionBaseUrl = `${backendRoot}/api/v1/webhooks/opensign/complete`;
+
+    const { documentId, signingUrl } = await this.opensign.createDocument({
+      pdfBuffer,
+      signerEmail,
+      signerName,
+      contractTitle:      contract.title,
+      completionBaseUrl,
+    });
+
+    const updated = await this.prisma.contract.update({
+      where: { id },
+      data: {
+        status:              ContractStatus.SENT,
+        sentAt:              new Date(),
+        signingMethod:       'OPENSIGN',
+        opensignDocumentId:  documentId,
+        opensignSigningUrl:  signingUrl,
+      },
+    });
+
+    this.eventEmitter.emit('contract.sent', { entityId: id, workspaceId });
+
+    this.logger.log(`Contract ${id} sent via OpenSign (documentId=${documentId})`);
+
+    return {
+      contract: { ...updated, signerOtp: undefined },
+      signUrl:  signingUrl,
     };
   }
 

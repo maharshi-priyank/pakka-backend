@@ -16,16 +16,25 @@ interface SubMetadata { userId?: string; tier?: string; window?: string }
 @Injectable()
 export class StripeService {
   private readonly logger = new Logger(StripeService.name);
-  private readonly client: ReturnType<typeof Stripe>;
+  private readonly client: ReturnType<typeof Stripe> | null = null;
 
   constructor(
     private readonly config:         ConfigService,
     private readonly prisma:         PrismaService,
     private readonly planResolution: PlanResolutionService,
   ) {
-    const secretKey = this.config.get<string>('stripe.secretKey') ?? '';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.client = new (Stripe as any)(secretKey) as ReturnType<typeof Stripe>;
+    const secretKey = this.config.get<string>('stripe.secretKey');
+    if (secretKey) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.client = new (Stripe as any)(secretKey) as ReturnType<typeof Stripe>;
+    } else {
+      this.logger.warn('STRIPE_SECRET_KEY not set — Stripe payments disabled');
+    }
+  }
+
+  private get stripe(): ReturnType<typeof Stripe> {
+    if (!this.client) throw new BadRequestException('Stripe is not configured');
+    return this.client;
   }
 
   // ── Checkout Session ───────────────────────────────────────────────────────
@@ -44,7 +53,7 @@ export class StripeService {
 
     let customerId = user.stripeCustomerId ?? undefined;
     if (!customerId) {
-      const customer = await this.client.customers.create({
+      const customer = await this.stripe.customers.create({
         email:    user.email,
         name:     user.name ?? undefined,
         metadata: { userId },
@@ -53,7 +62,7 @@ export class StripeService {
       await this.prisma.user.update({ where: { id: userId }, data: { stripeCustomerId: customerId } });
     }
 
-    const session = await this.client.checkout.sessions.create({
+    const session = await this.stripe.checkout.sessions.create({
       customer:    customerId,
       mode:        'subscription',
       line_items: [{
@@ -83,7 +92,7 @@ export class StripeService {
   verifyAndParseWebhook(rawBody: Buffer, signature: string): { type: string; id: string; data: { object: Record<string, unknown> } } {
     const secret = this.config.get<string>('stripe.webhookSecret') ?? '';
     try {
-      return this.client.webhooks.constructEvent(rawBody, signature, secret) as unknown as { type: string; id: string; data: { object: Record<string, unknown> } };
+      return this.stripe.webhooks.constructEvent(rawBody, signature, secret) as unknown as { type: string; id: string; data: { object: Record<string, unknown> } };
     } catch {
       throw new UnauthorizedException('Invalid Stripe webhook signature');
     }
@@ -148,7 +157,7 @@ export class StripeService {
     const subId = invoice.subscription as string | null;
     if (!subId) return;
 
-    const sub     = await this.client.subscriptions.retrieve(subId);
+    const sub     = await this.stripe.subscriptions.retrieve(subId);
     const metadata = (sub.metadata ?? {}) as SubMetadata;
     const userId  = metadata.userId;
     if (!userId) return;
@@ -166,7 +175,7 @@ export class StripeService {
     const subId = invoice.subscription as string | null;
     if (!subId) return;
 
-    const sub      = await this.client.subscriptions.retrieve(subId);
+    const sub      = await this.stripe.subscriptions.retrieve(subId);
     const metadata  = (sub.metadata ?? {}) as SubMetadata;
     const userId   = metadata.userId;
     if (!userId) return;

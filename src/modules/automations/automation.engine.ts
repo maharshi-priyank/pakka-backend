@@ -197,11 +197,15 @@ export class AutomationEngine {
         return
       }
       to = contractEmail
+      const signLink = contract.signingMethod === 'OPENSIGN' && contract.opensignSigningUrl
+        ? contract.opensignSigningUrl
+        : `${appUrl}/sign/${contract.id}`;
       vars = {
         clientName:    contractName,
         businessName,
         contractTitle: contract.title,
-        signLink:      `${appUrl}/sign/${contract.id}`,
+        signLink,
+        signingMethod: (contract.signingMethod === 'OPENSIGN' ? 'OPENSIGN' : 'OTP') as 'OTP' | 'OPENSIGN',
       } satisfies ContractTemplateVars
 
     } else if (entityType === 'proposal') {

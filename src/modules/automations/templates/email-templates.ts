@@ -440,6 +440,7 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
     },
     html: (v) => {
       const cv = v as ContractTemplateVars
+      const isDocuSeal = cv.signingMethod === 'OPENSIGN'
       return layout(`
         ${subheading('Contract Ready to Sign')}
         ${h1('Your contract is waiting')}
@@ -447,11 +448,14 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         ${infoCard([
           ['Contract', cv.contractTitle],
           ['From',     cv.businessName],
-          ['Method',   'OTP e-signature (IT Act 2000)'],
+          ['Method',   isDocuSeal ? 'Digital e-signature' : 'OTP e-signature (IT Act 2000)'],
         ])}
         ${btn('Review & Sign Contract', cv.signLink, '#4F46E5')}
         ${divider()}
-        ${p('Signing takes less than a minute. You will receive a one-time code to your email to confirm your identity and complete the process securely.', true)}
+        ${isDocuSeal
+          ? p('Clicking the button above will take you to a secure signing page where you can draw or type your signature. The process takes less than a minute.', true)
+          : p('Signing takes less than a minute. You will receive a one-time code to your email to confirm your identity and complete the process securely.', true)
+        }
         ${p('If you need any changes before signing or have questions, simply reply to this email.', true)}
       `, cv.businessName, `Contract "${cv.contractTitle}" from ${cv.businessName} is ready for your signature`)
     },
