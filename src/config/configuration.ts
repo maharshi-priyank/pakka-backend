@@ -44,6 +44,10 @@ export const validationSchema = Joi.object({
   STRIPE_SECRET_KEY: Joi.string().optional(),
   STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
   APP_FRONTEND_URL: Joi.string().default('http://localhost:5173'),
+  ADMIN_JWT_SECRET: Joi.string().optional(),
+  ADMIN_JWT_EXPIRES_IN: Joi.string().default('8h'),
+  ADMIN_IMPERSONATION_SECRET: Joi.string().optional(),
+  ADMIN_IMPERSONATION_EXPIRES_IN: Joi.string().default('15m'),
 });
 
 export const configuration = () => ({
@@ -119,5 +123,11 @@ export const configuration = () => ({
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+  admin: {
+    jwtSecret: process.env.ADMIN_JWT_SECRET,
+    jwtExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN ?? '8h',
+    impersonationSecret: process.env.ADMIN_IMPERSONATION_SECRET,
+    impersonationExpiresIn: process.env.ADMIN_IMPERSONATION_EXPIRES_IN ?? '15m',
   },
 });
