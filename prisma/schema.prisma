@@ -124,6 +124,7 @@ model Workspace {
   taskBoards          TaskBoard[]
   threads             Thread[]
   contacts            Contact[]
+  whatsappConnection  WhatsappConnection?
 
   @@map("workspaces")
 }
@@ -734,6 +735,7 @@ enum ExecutionStatus {
 
 enum CommunicationChannel {
   EMAIL
+  WHATSAPP
 }
 
 model CommunicationLog {
@@ -750,9 +752,11 @@ model CommunicationLog {
   entityType  String?
   status      String
   error       String?
+  waMessageId String?
   sentAt      DateTime             @default(now())
 
   @@index([contactId])
+  @@index([waMessageId])
   @@map("communication_logs")
 }
 
@@ -1330,4 +1334,21 @@ model Message {
 
   @@index([threadId])
   @@map("messages")
+}
+
+// ── WhatsApp Business Integration ─────────────────────────────────────────────
+
+model WhatsappConnection {
+  id                   String    @id @default(cuid())
+  workspaceId          String    @unique
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  phoneNumberId        String
+  businessAccountId    String
+  encryptedAccessToken String
+  displayPhone         String
+  isActive             Boolean   @default(true)
+  connectedAt          DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@map("whatsapp_connections")
 }

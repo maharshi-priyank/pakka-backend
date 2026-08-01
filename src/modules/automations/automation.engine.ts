@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, Optional } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { ModuleRef } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
 import { PrismaService } from '../../prisma/prisma.service'
 import { AutomationsService } from './automations.service'
 import { EmailService } from './email.service'
+import { WhatsappMessageService } from '../whatsapp/whatsapp-message.service'
 
 import { renderTemplate } from './templates/email-templates'
 import { ContractsService } from '../contracts/contracts.service'
@@ -31,6 +32,7 @@ export class AutomationEngine {
     private readonly email:        EmailService,
     private readonly config:       ConfigService,
     private readonly moduleRef:    ModuleRef,
+    @Optional() private readonly whatsappMessage: WhatsappMessageService,
   ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -90,6 +92,11 @@ export class AutomationEngine {
     await this.sendMeetingConfirmation(ev.entityId, ev.workspaceId ?? ev.userId!)
   }
 
+  @OnEvent('project.completed')
+  async onProjectCompleted(ev: AutomationEvent) {
+    await this.fireRulesForEvent('event.project.completed', ev.entityId, 'project', ev.workspaceId ?? ev.userId!)
+  }
+
   // ─── Core: fire all matching active rules ──────────────────────────────────
 
   async fireRulesForEvent(
@@ -132,10 +139,11 @@ export class AutomationEngine {
     workspaceId:  string,
   ) {
     switch (actionType) {
-      case 'send_email.client': return this.sendEmailToClient(actionConfig, entityId, entityType, workspaceId)
-      case 'send_email.user':   return this.sendEmailToUser(actionConfig, workspaceId, entityId, entityType)
-      case 'create.contract':   return this.autoCreateContract(entityId, workspaceId)
-      case 'create.invoice':    return this.autoCreateInvoice(entityId, workspaceId)
+      case 'send_email.client':    return this.sendEmailToClient(actionConfig, entityId, entityType, workspaceId)
+      case 'send_email.user':      return this.sendEmailToUser(actionConfig, workspaceId, entityId, entityType)
+      case 'create.contract':      return this.autoCreateContract(entityId, workspaceId)
+      case 'create.invoice':       return this.autoCreateInvoice(entityId, workspaceId)
+      case 'send_whatsapp.client': return this.sendWhatsappToClient(actionConfig, entityId, entityType, workspaceId)
       default:
         throw new Error(`Unknown action type: ${actionType}`)
     }
@@ -248,6 +256,105 @@ export class AutomationEngine {
 
     const { subject, html } = renderTemplate(templateKey, vars)
     await this.email.send({ workspaceId, to, subject, html, templateKey, entityId, entityType, contactId })
+  }
+
+  // ─── Action: send WhatsApp to client ──────────────────────────────────────
+
+  private async sendWhatsappToClient(
+    config:      Record<string, unknown>,
+    entityId:    string,
+    entityType:  string,
+    workspaceId: string,
+  ) {
+    if (!this.whatsappMessage) return  // WhatsappModule not loaded (should not happen in production)
+
+    const templateKey = config.templateKey as string
+    const appUrl      = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
+    const user        = await this.prisma.user.findUnique({ where: { id: workspaceId } })
+    if (!user) return
+
+    const businessName = user.businessName ?? user.name
+    let phone:     string | null | undefined
+    let contactId: string | undefined
+    let vars:      Record<string, string> = {}
+
+    if (entityType === 'invoice') {
+      const inv = await this.prisma.invoice.findUnique({
+        where:   { id: entityId },
+        include: { client: true, contact: true },
+      })
+      phone     = inv?.contact?.phone ?? inv?.client?.phone ?? null
+      contactId = inv?.contact?.id
+      if (!inv || !phone) {
+        await this.notifySkip(workspaceId, entityId, 'invoice', `Invoice ${inv?.invoiceNumber ?? entityId} has no phone number — WhatsApp notification was skipped.`)
+        return
+      }
+      vars = {
+        clientName:    inv.contact?.name ?? inv.client?.name ?? 'there',
+        businessName,
+        invoiceNumber: inv.invoiceNumber,
+        amount:        `₹${Number(inv.total).toLocaleString('en-IN')}`,
+        dueDate:       inv.dueDate ? inv.dueDate.toLocaleDateString('en-IN') : '—',
+        invoiceLink:   `${appUrl}/invoice/${inv.id}`,
+      }
+
+    } else if (entityType === 'contract') {
+      const contract = await this.prisma.contract.findUnique({
+        where:   { id: entityId },
+        include: { client: true, contact: true },
+      })
+      const content = contract?.content as Record<string, string> | null
+      phone     = contract?.contact?.phone ?? contract?.client?.phone ?? null
+      contactId = contract?.contact?.id
+      if (!contract || !phone) {
+        await this.notifySkip(workspaceId, entityId, 'contract', `Contract "${contract?.title ?? entityId}" has no client phone — WhatsApp notification was skipped.`)
+        return
+      }
+      vars = {
+        clientName:   contract.contact?.name ?? contract.client?.name ?? content?.signerName ?? 'there',
+        businessName,
+        contractLink: `${appUrl}/sign/${contract.id}`,
+      }
+
+    } else if (entityType === 'proposal') {
+      const proposal = await this.prisma.proposal.findUnique({
+        where:   { id: entityId },
+        include: { client: true, lead: true, contact: true },
+      })
+      phone     = proposal?.contact?.phone ?? proposal?.client?.phone ?? null
+      contactId = proposal?.contact?.id
+      if (!proposal || !phone) {
+        await this.notifySkip(workspaceId, entityId, 'proposal', `Proposal "${proposal?.title ?? entityId}" has no client phone — WhatsApp notification was skipped.`)
+        return
+      }
+      vars = {
+        clientName:   proposal.contact?.name ?? proposal.client?.name ?? proposal.lead?.name ?? 'there',
+        businessName,
+        proposalLink: `${appUrl}/p/${proposal.slug}`,
+      }
+
+    } else if (entityType === 'project') {
+      const project = await this.prisma.project.findUnique({
+        where:   { id: entityId },
+        include: { contact: true, client: true },
+      })
+      phone     = project?.contact?.phone ?? (project?.client as { phone?: string } | null)?.phone ?? null
+      contactId = project?.contact?.id
+      if (!project || !phone) {
+        await this.notifySkip(workspaceId, entityId, 'project', `Project "${project?.name ?? entityId}" has no client phone — WhatsApp notification was skipped.`)
+        return
+      }
+      vars = {
+        clientName:  project.contact?.name ?? (project.client as { name?: string } | null)?.name ?? 'there',
+        businessName,
+        projectName: project.name,
+      }
+
+    } else {
+      return
+    }
+
+    await this.whatsappMessage.sendTemplateMessage(workspaceId, phone, templateKey, vars, entityId, entityType, contactId)
   }
 
   // ─── Action: send email to user (owner) ───────────────────────────────────

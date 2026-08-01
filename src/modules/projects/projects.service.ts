@@ -214,11 +214,16 @@ export class ProjectsService {
       },
     });
 
-    // R5/KTD2: emit only on a genuine transition into CANCELLED — never if
-    // the project was already cancelled by either field before this update.
-    const isCancelledNow = updated.status === 'CANCELLED' || updated.projectStage === 'CANCELLED';
+    // Emit only on genuine status transitions (never if already in that state)
+    const isCancelledNow   = updated.status === 'CANCELLED'  || updated.projectStage === 'CANCELLED';
+    const isCompletedNow   = updated.status === 'COMPLETED'  || updated.projectStage === 'COMPLETED';
+    const wasCompletedBefore = before.status === 'COMPLETED' || before.projectStage === 'COMPLETED';
+
     if (!wasCancelledBefore && isCancelledNow) {
       this.eventEmitter.emit('project.cancelled', { entityId: id, workspaceId });
+    }
+    if (!wasCompletedBefore && isCompletedNow) {
+      this.eventEmitter.emit('project.completed', { entityId: id, workspaceId });
     }
 
     return updated;

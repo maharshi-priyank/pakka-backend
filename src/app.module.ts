@@ -55,6 +55,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { LeadsProxyModule } from './modules/leads-proxy/leads-proxy.module';
 import { ContactFormModule } from './modules/contact-form/contact-form.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
+import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WorkspacePermissionGuard } from './common/guards/workspace-permission.guard';
@@ -136,6 +137,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     LeadsProxyModule,
     ContactFormModule,
     ContactsModule,
+    WhatsappModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
