@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -13,6 +14,11 @@ import { AdminActionsService } from './actions/admin-actions.service';
 import { AdminActionsController } from './actions/admin-actions.controller';
 import { AdminBillingService } from './billing/admin-billing.service';
 import { AdminBillingController } from './billing/admin-billing.controller';
+import { AdminImpersonationService } from './impersonation/admin-impersonation.service';
+import { AdminImpersonationController } from './impersonation/admin-impersonation.controller';
+import { ImpersonationVerifier } from './impersonation/impersonation.guard';
+import { ConsumedJtiStore } from './impersonation/consumed-jti.store';
+import { ImpersonationAuditInterceptor } from './impersonation/impersonation-audit.interceptor';
 import { AdminOversightService } from './oversight/admin-oversight.service';
 import { AdminOversightController } from './oversight/admin-oversight.controller';
 import { AdminUsersService } from './users/admin-users.service';
@@ -53,6 +59,7 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AuditController,
     AdminActionsController,
     AdminBillingController,
+    AdminImpersonationController,
   ],
   providers: [
     AdminJwtStrategy,
@@ -63,6 +70,10 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AdminWorkspacesService,
     AdminActionsService,
     AdminBillingService,
+    AdminImpersonationService,
+    ImpersonationVerifier,
+    ConsumedJtiStore,
+    { provide: APP_INTERCEPTOR, useClass: ImpersonationAuditInterceptor },
   ],
   exports: [AuditService, AdminAuthService, JwtModule, PassportModule],
 })
