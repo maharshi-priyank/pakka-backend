@@ -12,8 +12,21 @@ import { QueryContactsDto } from './dto/query-contacts.dto';
 import { QueryContactHistoryDto } from './dto/query-contact-history.dto';
 import { ContactStage } from '@prisma/client';
 import { effectivePlan } from '../users/effective-plan';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { PhoneNumberUtil, PhoneNumberFormat } = require('google-libphonenumber') as typeof import('google-libphonenumber');
+const phoneUtil = PhoneNumberUtil.getInstance();
 
 const ACTIVE_STAGES: ContactStage[] = ['ENQUIRY', 'PROPOSAL_SENT', 'NEGOTIATING']
+
+function normalizePhone(raw: string | null | undefined): string | null | undefined {
+  if (!raw || raw.trim() === '') return raw;
+  try {
+    const parsed = phoneUtil.parseAndKeepRawInput(raw, 'IN');
+    return phoneUtil.format(parsed, PhoneNumberFormat.E164);
+  } catch {
+    throw new BadRequestException('Invalid phone number format. Please use international format e.g. +91 98765 43210');
+  }
+}
 
 @Injectable()
 export class ContactsService {
@@ -45,6 +58,7 @@ export class ContactsService {
       const c = await tx.contact.create({
         data: {
           ...dto,
+          phone:       normalizePhone(dto.phone),
           dealValue:  dto.dealValue  !== undefined ? new Decimal(dto.dealValue) : undefined,
           followUpAt: dto.followUpAt ? new Date(dto.followUpAt)                 : undefined,
           workspaceId,
@@ -239,6 +253,7 @@ export class ContactsService {
       where: { id },
       data:  {
         ...dto,
+        phone:          dto.phone !== undefined ? normalizePhone(dto.phone) : undefined,
         dealValue:      dto.dealValue  !== undefined ? new Decimal(dto.dealValue) : undefined,
         followUpAt:     dto.followUpAt ? new Date(dto.followUpAt)                 : undefined,
         lastActivityAt: new Date(),
