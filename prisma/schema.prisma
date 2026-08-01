@@ -64,6 +64,11 @@ enum Permission {
   MANAGE_INTEGRATIONS
 }
 
+enum AdminRole {
+  SUPERADMIN
+  SUPPORT
+}
+
 model Workspace {
   id                String   @id
   name              String
@@ -92,6 +97,7 @@ model Workspace {
   emailSignature    String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  archivedAt        DateTime?
 
   members     WorkspaceMember[]
   activeUsers User[]           @relation("ActiveWorkspace")
@@ -302,6 +308,37 @@ model BillingEvent {
   processedAt DateTime @default(now())
 
   @@map("billing_events")
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(SUPPORT)
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+
+  @@map("admin_users")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  adminRole  AdminRole
+  targetType String
+  targetId   String?
+  action     String
+  before     Json?
+  after      Json?
+  reason     String?
+  at         DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([action])
+  @@index([at])
+  @@map("audit_logs")
 }
 
 model PromoRedemption {
