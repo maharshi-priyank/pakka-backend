@@ -66,6 +66,12 @@ export class ContactsController {
     return this.contactsService.getCommunicationHistory(resolveWorkspaceId(user), id, query);
   }
 
+  @Get(':id/overview')
+  @ApiOperation({ summary: 'Get a contact\'s hours summary (total hours + last 6 months, by month)' })
+  getOverviewStats(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.contactsService.getOverviewStats(resolveWorkspaceId(user), id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update contact details' })
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateContactDto) {

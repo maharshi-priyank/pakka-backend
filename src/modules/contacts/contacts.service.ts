@@ -147,7 +147,7 @@ export class ContactsService {
         },
         invoices: {
           orderBy: { createdAt: 'desc' },
-          select:  { id: true, invoiceNumber: true, status: true, total: true, dueDate: true, createdAt: true, paidAt: true },
+          select:  { id: true, invoiceNumber: true, status: true, total: true, amountPaid: true, dueDate: true, createdAt: true, paidAt: true },
         },
         projects: {
           orderBy: { updatedAt: 'desc' },
@@ -245,6 +245,37 @@ export class ContactsService {
     const items = all.slice(start, start + limit)
 
     return { items, total, page, limit }
+  }
+
+  async getOverviewStats(workspaceId: string, id: string) {
+    const contact = await this.prisma.contact.findFirst({ where: { id, workspaceId } })
+    if (!contact) throw new NotFoundException('Contact not found')
+
+    const totalHoursResult = await this.prisma.timeEntry.aggregate({
+      where: { workspaceId, contactId: id },
+      _sum:  { durationMins: true },
+    })
+    const totalHours = Number(((totalHoursResult._sum.durationMins ?? 0) / 60).toFixed(1))
+
+    const monthlyHours: { month: string; hours: number }[] = []
+    const now = new Date()
+
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const end   = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59)
+
+      const result = await this.prisma.timeEntry.aggregate({
+        where: { workspaceId, contactId: id, date: { gte: start, lte: end } },
+        _sum:  { durationMins: true },
+      })
+
+      monthlyHours.push({
+        month: start.toLocaleString('en-IN', { month: 'short', year: '2-digit' }),
+        hours: Number(((result._sum.durationMins ?? 0) / 60).toFixed(1)),
+      })
+    }
+
+    return { totalHours, monthlyHours }
   }
 
   async update(workspaceId: string, id: string, dto: UpdateContactDto) {
