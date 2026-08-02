@@ -752,7 +752,7 @@ model CommunicationLog {
   entityType  String?
   status      String
   error       String?
-  waMessageId String?
+  waMessageId String?              @map("wa_message_id")
   sentAt      DateTime             @default(now())
 
   @@index([contactId])
