@@ -1,0 +1,51 @@
+export const PRODUCT_EVENT_NAMES = [
+  'session_started',
+  'onboarding_completed',
+  'lead_created',
+  'lead_converted',
+  'proposal_created',
+  'proposal_sent',
+  'contract_created',
+  'contract_sent',
+  'contract_signed',
+  'invoice_created',
+  'invoice_sent',
+  'invoice_paid',
+  'project_created',
+  'expense_logged',
+  'time_logged',
+  'client_portal_copied',
+  'subscription_activated',
+  'subscription_payment_succeeded',
+  'subscription_payment_failed',
+  'subscription_cancelled',
+  'subscription_paused',
+] as const;
+
+export type ProductEventName = typeof PRODUCT_EVENT_NAMES[number];
+
+export const PRODUCT_EVENT_PROPERTY_KEYS: Record<ProductEventName, readonly string[]> = {
+  session_started: ['surface'],
+  onboarding_completed: [],
+  lead_created: [],
+  lead_converted: ['hasProject'],
+  proposal_created: [],
+  proposal_sent: [],
+  contract_created: [],
+  contract_sent: [],
+  contract_signed: [],
+  invoice_created: [],
+  invoice_sent: [],
+  invoice_paid: [],
+  project_created: [],
+  expense_logged: [],
+  time_logged: ['durationMinutes'],
+  client_portal_copied: [],
+  subscription_activated: [],
+  subscription_payment_succeeded: [],
+  subscription_payment_failed: [],
+  subscription_cancelled: [],
+  subscription_paused: [],
+};
+
+export const PRODUCT_EVENT_COVERAGE_START = '2026-08-03T00:00:00.000Z';

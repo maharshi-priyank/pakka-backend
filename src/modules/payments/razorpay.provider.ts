@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Razorpay from 'razorpay';
-import type { CreateSubscriptionParams, PaymentProvider, SubscriptionState } from './payment-provider.interface';
+import type { CreateSubscriptionParams, PaymentProvider, SubscriptionState, RefundResult } from './payment-provider.interface';
 
 // Razorpay subscriptions require a finite billing-cycle count at creation —
 // there's no "until cancelled" option. 100 monthly cycles (~8 years) stands
@@ -73,6 +73,25 @@ export class RazorpayProvider implements PaymentProvider {
       planId:         sub.plan_id,
       status:         sub.status,
       nextBillingDate: sub.charge_at ? new Date(sub.charge_at * 1000) : undefined,
+    };
+  }
+
+
+  // ── Refund (KTD4) ──────────────────────────────────────────────────────────
+  // Razorpay refunds via client.payments.refund(paymentId, { amount? }). Amount
+  // is in the payment's currency unit; omit for a full refund. Razorpay rejects
+  // a refund on an already-fully-refunded payment, which the admin service
+  // treats as the idempotent short-circuit (KTD4).
+  async refund(paymentId: string, amount?: number, idempotencyKey?: string): Promise<RefundResult> {
+    const refund = await this.client.payments.refund(paymentId, {
+      ...(amount ? { amount: amount * 100 } : {}), // Razorpay expects paise
+      ...(idempotencyKey ? { notes: { idempotencyKey } } : {}),
+    });
+    return {
+      refundId: refund.id,
+      paymentId,
+      amount: refund.amount ? refund.amount / 100 : undefined,
+      status: refund.status,
     };
   }
 }

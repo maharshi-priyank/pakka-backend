@@ -11,6 +11,7 @@ interface NrAgent {
 
 // Loaded at runtime; safe to require because main.ts already conditionally required it first
 const nr: NrAgent | null = (() => {
+  if (process.env.NODE_ENV !== 'production' || !process.env.NEW_RELIC_LICENSE_KEY) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('newrelic') as NrAgent;

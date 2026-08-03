@@ -1,78 +1,117 @@
-import { Injectable, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Plan, SubscriptionStatus } from '@prisma/client';
-import { PlanResolutionService, type PlanTier } from './plan-resolution.service';
+import type { RefundResult } from './payment-provider.interface';
+import type { SubscriptionState } from './payment-provider.interface';
+import {
+  PlanResolutionService,
+  type PlanTier,
+} from './plan-resolution.service';
 
 // USD prices (cents) for international billing
 const USD_PRICES: Record<PlanTier, Record<string, number>> = {
-  SOLO:   { founding: 500,  earlyaccess: 700,  regular: 900  },
+  SOLO: { founding: 500, earlyaccess: 700, regular: 900 },
   STUDIO: { founding: 1200, earlyaccess: 1700, regular: 2200 },
 };
 
-interface SubMetadata { userId?: string; tier?: string; window?: string }
+interface SubMetadata {
+  userId?: string;
+  tier?: string;
+  window?: string;
+}
 
 @Injectable()
 export class StripeService {
   private readonly logger = new Logger(StripeService.name);
-  private readonly client: ReturnType<typeof Stripe>;
+  private readonly client: ReturnType<typeof Stripe> | null;
 
   constructor(
-    private readonly config:         ConfigService,
-    private readonly prisma:         PrismaService,
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
     private readonly planResolution: PlanResolutionService,
   ) {
-    const secretKey = this.config.get<string>('stripe.secretKey') ?? '';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.client = new (Stripe as any)(secretKey) as ReturnType<typeof Stripe>;
+    const secretKey = this.config.get<string>('stripe.secretKey');
+    this.client = secretKey ? new Stripe(secretKey) : null;
+    if (!this.client) {
+      this.logger.warn(
+        'Stripe is not configured; international billing is disabled.',
+      );
+    }
+  }
+
+  private requireClient(): ReturnType<typeof Stripe> {
+    if (!this.client) {
+      throw new ServiceUnavailableException(
+        'Stripe is not configured. Set STRIPE_SECRET_KEY to enable international billing.',
+      );
+    }
+    return this.client;
   }
 
   // ── Checkout Session ───────────────────────────────────────────────────────
 
-  async createCheckoutSession(userId: string, tier: PlanTier): Promise<{ checkoutUrl: string }> {
+  async createCheckoutSession(
+    userId: string,
+    tier: PlanTier,
+  ): Promise<{ checkoutUrl: string }> {
+    const stripe = this.requireClient();
     const user = await this.prisma.user.findUnique({
-      where:  { id: userId },
+      where: { id: userId },
       select: { email: true, name: true, stripeCustomerId: true },
     });
     if (!user) throw new BadRequestException('User not found');
 
-    const resolved    = await this.planResolution.resolve(tier);
-    const frontendUrl = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
-    const apiUrl      = this.config.get<string>('apiUrl')      ?? 'http://localhost:3000/api';
-    const unitAmount  = USD_PRICES[tier][resolved.window];
+    const resolved = await this.planResolution.resolve(tier);
+    const frontendUrl =
+      this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
+    const apiUrl =
+      this.config.get<string>('apiUrl') ?? 'http://localhost:3000/api';
+    const unitAmount = USD_PRICES[tier][resolved.window];
 
     let customerId = user.stripeCustomerId ?? undefined;
     if (!customerId) {
-      const customer = await this.client.customers.create({
-        email:    user.email,
-        name:     user.name ?? undefined,
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: user.name ?? undefined,
         metadata: { userId },
       });
       customerId = customer.id;
-      await this.prisma.user.update({ where: { id: userId }, data: { stripeCustomerId: customerId } });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { stripeCustomerId: customerId },
+      });
     }
 
-    const session = await this.client.checkout.sessions.create({
-      customer:    customerId,
-      mode:        'subscription',
-      line_items: [{
-        price_data: {
-          currency:    'usd',
-          unit_amount: unitAmount,
-          recurring:   { interval: 'month' },
-          product_data: {
-            name:     tier === 'SOLO' ? 'Rupway Solo' : 'Rupway Studio',
-            metadata: { tier, window: resolved.window },
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            unit_amount: unitAmount,
+            recurring: { interval: 'month' },
+            product_data: {
+              name: tier === 'SOLO' ? 'Rupway Solo' : 'Rupway Studio',
+              metadata: { tier, window: resolved.window },
+            },
           },
+          quantity: 1,
         },
-        quantity: 1,
-      }],
+      ],
       subscription_data: {
         metadata: { userId, tier, window: resolved.window },
       },
       success_url: `${apiUrl}/payments/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${frontendUrl}/billing/cancelled`,
+      cancel_url: `${frontendUrl}/billing/cancelled`,
     });
 
     return { checkoutUrl: session.url! };
@@ -80,24 +119,61 @@ export class StripeService {
 
   // ── Webhook ────────────────────────────────────────────────────────────────
 
-  verifyAndParseWebhook(rawBody: Buffer, signature: string): { type: string; id: string; data: { object: Record<string, unknown> } } {
+  async getSubscription(subscriptionId: string): Promise<SubscriptionState> {
+    const stripe = this.requireClient();
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const firstItem = subscription.items.data[0];
+    const periodEnd = (subscription as unknown as { current_period_end?: number }).current_period_end;
+    return {
+      subscriptionId: subscription.id,
+      planId: typeof firstItem?.price?.id === 'string' ? firstItem.price.id : '',
+      status: subscription.status,
+      nextBillingDate: periodEnd
+        ? new Date(periodEnd * 1000)
+        : undefined,
+    };
+  }
+
+  verifyAndParseWebhook(
+    rawBody: Buffer,
+    signature: string,
+  ): { type: string; id: string; data: { object: Record<string, unknown> } } {
+    const stripe = this.requireClient();
     const secret = this.config.get<string>('stripe.webhookSecret') ?? '';
     try {
-      return this.client.webhooks.constructEvent(rawBody, signature, secret) as unknown as { type: string; id: string; data: { object: Record<string, unknown> } };
+      return stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        secret,
+      ) as unknown as {
+        type: string;
+        id: string;
+        data: { object: Record<string, unknown> };
+      };
     } catch {
       throw new UnauthorizedException('Invalid Stripe webhook signature');
     }
   }
 
-  async handleWebhookEvent(event: { type: string; id: string; data: { object: Record<string, unknown> } }): Promise<void> {
-    const existing = await this.prisma.billingEvent.findUnique({ where: { razorpayRef: event.id } });
+  async handleWebhookEvent(event: {
+    type: string;
+    id: string;
+    data: { object: Record<string, unknown> };
+  }): Promise<void> {
+    const existing = await this.prisma.billingEvent.findUnique({
+      where: { razorpayRef: event.id },
+    });
     if (existing) {
       this.logger.debug(`Duplicate Stripe event skipped: ${event.id}`);
       return;
     }
 
     await this.prisma.billingEvent.create({
-      data: { eventType: event.type, razorpayRef: event.id, payload: event as object },
+      data: {
+        eventType: event.type,
+        razorpayRef: event.id,
+        payload: event as object,
+      },
     });
 
     const obj = event.data.object;
@@ -121,54 +197,85 @@ export class StripeService {
     }
   }
 
+  async replayStoredEvent(event: {
+    type: string;
+    id: string;
+    data: { object: Record<string, unknown> };
+  }): Promise<void> {
+    const obj = event.data.object;
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+        await this.onSubscriptionActivated(obj);
+        break;
+      case 'invoice.paid':
+        await this.onInvoicePaid(obj);
+        break;
+      case 'invoice.payment_failed':
+        await this.onInvoicePaymentFailed(obj);
+        break;
+      case 'customer.subscription.deleted':
+        await this.onSubscriptionDeleted(obj);
+        break;
+      default:
+        throw new BadRequestException(`Unsupported Stripe event: ${event.type}`);
+    }
+  }
+
   // ── Event handlers ─────────────────────────────────────────────────────────
 
-  private async onSubscriptionActivated(sub: Record<string, unknown>): Promise<void> {
-    const metadata    = (sub.metadata ?? {}) as SubMetadata;
-    const userId      = metadata.userId;
+  private async onSubscriptionActivated(
+    sub: Record<string, unknown>,
+  ): Promise<void> {
+    const metadata = (sub.metadata ?? {}) as SubMetadata;
+    const userId = metadata.userId;
     if (!userId) return;
 
-    const tier        = ((metadata.tier ?? 'SOLO') as string).toUpperCase() as Plan;
-    const periodEnd   = sub.current_period_end as number | undefined;
+    const tier = ((metadata.tier ?? 'SOLO') as string).toUpperCase() as Plan;
+    const periodEnd = sub.current_period_end as number | undefined;
     const nextBilling = periodEnd ? new Date(periodEnd * 1000) : undefined;
 
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        plan:                 tier,
-        subscriptionStatus:   SubscriptionStatus.ACTIVE,
+        plan: tier,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
         stripeSubscriptionId: sub.id as string,
         ...(nextBilling && { billingAnchorDate: nextBilling }),
-        planExpiresAt:        null,
+        planExpiresAt: null,
       },
     });
   }
 
   private async onInvoicePaid(invoice: Record<string, unknown>): Promise<void> {
+    const stripe = this.requireClient();
     const subId = invoice.subscription as string | null;
     if (!subId) return;
 
-    const sub     = await this.client.subscriptions.retrieve(subId);
+    const sub = await stripe.subscriptions.retrieve(subId);
     const metadata = (sub.metadata ?? {}) as SubMetadata;
-    const userId  = metadata.userId;
+    const userId = metadata.userId;
     if (!userId) return;
 
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         subscriptionStatus: SubscriptionStatus.ACTIVE,
-        billingAnchorDate:  new Date(sub.billing_cycle_anchor * 1000),
+        billingAnchorDate: new Date(sub.billing_cycle_anchor * 1000),
       },
     });
   }
 
-  private async onInvoicePaymentFailed(invoice: Record<string, unknown>): Promise<void> {
+  private async onInvoicePaymentFailed(
+    invoice: Record<string, unknown>,
+  ): Promise<void> {
+    const stripe = this.requireClient();
     const subId = invoice.subscription as string | null;
     if (!subId) return;
 
-    const sub      = await this.client.subscriptions.retrieve(subId);
-    const metadata  = (sub.metadata ?? {}) as SubMetadata;
-    const userId   = metadata.userId;
+    const sub = await stripe.subscriptions.retrieve(subId);
+    const metadata = (sub.metadata ?? {}) as SubMetadata;
+    const userId = metadata.userId;
     if (!userId) return;
 
     await this.prisma.user.update({
@@ -177,14 +284,44 @@ export class StripeService {
     });
   }
 
-  private async onSubscriptionDeleted(sub: Record<string, unknown>): Promise<void> {
+  private async onSubscriptionDeleted(
+    sub: Record<string, unknown>,
+  ): Promise<void> {
     const metadata = (sub.metadata ?? {}) as SubMetadata;
-    const userId   = metadata.userId;
+    const userId = metadata.userId;
     if (!userId) return;
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { subscriptionStatus: SubscriptionStatus.CANCELLED, plan: Plan.FREE },
+      data: {
+        subscriptionStatus: SubscriptionStatus.CANCELLED,
+        plan: Plan.FREE,
+      },
     });
+  }
+
+  // ── Refund (KTD4) ──────────────────────────────────────────────────────────
+  // Stripe refunds via stripe.refunds.create({ payment_intent, amount? }).
+  // amount is in cents; omit for a full refund. Stripe is idempotent per
+  // Idempotency-Key header; passing the key prevents duplicate refunds on retry.
+  async refund(
+    paymentIntentId: string,
+    amount?: number,
+    idempotencyKey?: string,
+  ): Promise<RefundResult> {
+    const stripe = this.requireClient();
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: paymentIntentId,
+        ...(amount ? { amount } : {}),
+      },
+      ...(idempotencyKey ? [{ idempotencyKey }] : []),
+    );
+    return {
+      refundId: refund.id,
+      paymentId: paymentIntentId,
+      amount: refund.amount ?? undefined,
+      status: refund.status ?? 'unknown',
+    };
   }
 }

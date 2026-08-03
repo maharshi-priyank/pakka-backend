@@ -47,13 +47,42 @@ NODE_ENV=development
 npx prisma db push
 ```
 
-### 4. Start the dev server
+### 4. Seed a demo admin
+
+Set the credentials in your local `.env` or shell environment. The password is hashed and never printed:
+
+```env
+ADMIN_SEED_EMAIL=admin@example.com
+ADMIN_SEED_PASSWORD=use-a-local-demo-password
+ADMIN_SEED_NAME=Demo Admin
+ADMIN_SEED_ROLE=SUPERADMIN
+```
+
+After the admin migration has been applied, run:
+
+```bash
+npm run seed:admin
+```
+
+The command is idempotent: rerunning it updates the matching email instead of creating a duplicate admin.
+
+### 5. Start the dev server
 
 ```bash
 npm run start:dev
 ```
 
 API runs at `http://localhost:3000`.
+
+### Growth telemetry and admin intelligence
+
+The product-event migration adds the allowlisted `product_events` ledger, first-touch signup attribution, and the first onboarding completion timestamp. Apply migrations before using `/api/v1/admin/growth/*`:
+
+```bash
+npx prisma migrate deploy
+```
+
+The customer app sends best-effort telemetry to `/api/v1/product-events`; customer workflows do not wait for analytics writes. Growth responses expose the telemetry coverage boundary and keep missing currency or historical retention data unavailable instead of inventing values. Support admins can read aggregate reports and segments; only superadmins can export growth CSVs, and each export is audited.
 
 ---
 
