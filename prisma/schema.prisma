@@ -325,6 +325,11 @@ model IntakeForm {
   token       String                 @unique
   fields         Json
   isActive       Boolean                @default(true)
+  // Set once at creation time, based on where the form was created (the
+  // Website Leads page vs. the generic Forms tab) -- not a per-form toggle
+  // surfaced in the generic builder, since Forms serves many use cases that
+  // have nothing to do with lead capture.
+  capturesLeads  Boolean                @default(false)
   leadFieldMap   Json                   @default("{}")
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt

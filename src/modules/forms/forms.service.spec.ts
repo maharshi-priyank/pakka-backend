@@ -3,12 +3,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { FormsService } from './forms.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
-// U2 (feat/website-lead-capture): submit() now always creates a Lead
-// (never a Contact) tagged with sourceFormId, gated by the same FREE-plan
-// active-lead cap LeadsService.create() enforces for manual creation --
-// but skips silently rather than erroring the anonymous website visitor.
-// Scoped to submit()'s Lead-creation branch only -- no existing spec file
-// for FormsService before this plan.
+// U2 (feat/website-lead-capture): submit() creates a Lead (never a Contact)
+// tagged with sourceFormId, ONLY when the form has capturesLeads: true --
+// scoped this way after realizing forms are used for many non-lead purposes
+// (surveys, feedback) and shouldn't all feed the Leads inbox. Gated by the
+// same FREE-plan active-lead cap LeadsService.create() enforces for manual
+// creation, but skips silently rather than erroring the anonymous website
+// visitor. Scoped to submit()'s Lead-creation branch only -- no existing
+// spec file for FormsService before this plan.
 describe('FormsService.submit', () => {
   let service: FormsService;
   let prisma: {
@@ -25,6 +27,7 @@ describe('FormsService.submit', () => {
     title: 'Contact us',
     token: 'tok',
     isActive: true,
+    capturesLeads: true,
     leadFieldMap: { name: 'f-name', email: 'f-email', budget: 'f-budget' },
   };
 
@@ -88,6 +91,18 @@ describe('FormsService.submit', () => {
     expect(prisma.intakeFormSubmission.create).toHaveBeenCalled();
     expect(prisma.lead.create).not.toHaveBeenCalled();
     expect(emitter.emit).not.toHaveBeenCalledWith('lead.created', expect.anything());
+    expect(result).toEqual({ id: 'sub-1' });
+  });
+
+  it('never creates a Lead for a form that does not capture leads (a generic survey/feedback form)', async () => {
+    prisma.intakeForm.findUnique.mockResolvedValue({ ...baseForm, capturesLeads: false });
+
+    const result = await service.submit('tok', { answers: { 'f-name': 'Jane' } } as any);
+
+    expect(prisma.intakeFormSubmission.create).toHaveBeenCalled();
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+    expect(emitter.emit).not.toHaveBeenCalledWith('lead.created', expect.anything());
+    expect(emitter.emit).toHaveBeenCalledWith('form.submitted', expect.anything());
     expect(result).toEqual({ id: 'sub-1' });
   });
 });

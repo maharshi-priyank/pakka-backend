@@ -18,11 +18,12 @@ export class FormsService {
   async create(workspaceId: string, dto: CreateFormDto) {
     return this.prisma.intakeForm.create({
       data: {
-        title:       dto.title,
-        description: dto.description,
-        fields:      (dto.fields ?? []) as unknown as object[],
+        title:         dto.title,
+        description:   dto.description,
+        fields:        (dto.fields ?? []) as unknown as object[],
+        capturesLeads: dto.capturesLeads ?? false,
         workspaceId,
-        token:       nanoid(21),
+        token:         nanoid(21),
       },
     });
   }
@@ -112,7 +113,9 @@ export class FormsService {
       },
     });
 
-    await this.createLeadFromSubmission(form, dto);
+    if (form.capturesLeads) {
+      await this.createLeadFromSubmission(form, dto);
+    }
 
     this.eventEmitter.emit('form.submitted', {
       entityId:    form.id,
