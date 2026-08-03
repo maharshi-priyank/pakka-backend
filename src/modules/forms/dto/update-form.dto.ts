@@ -12,11 +12,6 @@ export class UpdateFormDto extends PartialType(CreateFormDto) {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsBoolean()
-  autoCreateLead?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
   @Type(() => Object)
   leadFieldMap?: Record<string, string>;
 

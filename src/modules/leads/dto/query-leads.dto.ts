@@ -15,4 +15,10 @@ export class QueryLeadsDto extends PaginationDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   includeArchived?: boolean = false;
+
+  @ApiPropertyOptional({ description: 'true = only website-form-sourced leads; false = exclude them' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true ? true : value === 'false' || value === false ? false : value)
+  @IsBoolean()
+  hasSourceForm?: boolean;
 }
