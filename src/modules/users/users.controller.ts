@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Body, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/upsert-user.dto';
+import { SyncUserDto, UpdateUserDto } from './dto/upsert-user.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayloadOnly } from '../../common/decorators/jwt-payload-only.decorator';
 import type { SupabaseJwtPayload } from '../auth/jwt-payload.strategy';
@@ -26,10 +26,10 @@ export class UsersController {
   @JwtPayloadOnly()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Upsert user on first login' })
-  upsert(@Request() req: { user: SupabaseJwtPayload }) {
+  upsert(@Request() req: { user: SupabaseJwtPayload }, @Body() dto: SyncUserDto) {
     const { sub, email, user_metadata } = req.user;
     const name = user_metadata?.name || email;
-    return this.usersService.upsert({ id: sub, email, name });
+    return this.usersService.upsert({ id: sub, email, name, ...dto });
   }
 
   @Get('me')

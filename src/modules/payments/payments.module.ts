@@ -6,9 +6,10 @@ import { PlanResolutionService } from './plan-resolution.service';
 import { PaymentsService } from './payments.service';
 import { StripeService } from './stripe.service';
 import { PaymentsController } from './payments.controller';
+import { ProductEventsModule } from '../product-events/product-events.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, ProductEventsModule],
   controllers: [PaymentsController],
   providers: [
     PlanResolutionService,
@@ -17,6 +18,6 @@ import { PaymentsController } from './payments.controller';
     { provide: PAYMENT_PROVIDER, useClass: RazorpayProvider },
     RazorpayProvider,
   ],
-  exports: [PaymentsService, StripeService],
+  exports: [PaymentsService, StripeService, PAYMENT_PROVIDER],
 })
 export class PaymentsModule {}
