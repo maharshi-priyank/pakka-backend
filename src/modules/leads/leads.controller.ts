@@ -8,6 +8,7 @@ import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
+import { ConvertLeadToContactDto } from './dto/convert-lead-to-contact.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User, LeadStage } from '@prisma/client';
@@ -67,6 +68,13 @@ export class LeadsController {
   @ApiOperation({ summary: 'Convert a lead to a client and optionally create a project' })
   convertToClient(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ConvertLeadDto) {
     return this.leadsService.convertToClient(resolveWorkspaceId(user), id, dto);
+  }
+
+  @Post(':id/convert-to-contact')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Convert a website-form-sourced lead to a real contact' })
+  convertToContact(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ConvertLeadToContactDto) {
+    return this.leadsService.convertToContact(resolveWorkspaceId(user), id, dto);
   }
 
   @Patch(':id/archive')

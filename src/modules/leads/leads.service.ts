@@ -6,15 +6,18 @@ import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
+import { ConvertLeadToContactDto } from './dto/convert-lead-to-contact.dto';
 import { LeadStage } from '@prisma/client';
 import { effectivePlan } from '../users/effective-plan';
 import Decimal from 'decimal.js';
+import { ContactsService } from '../contacts/contacts.service';
 
 @Injectable()
 export class LeadsService {
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma:         PrismaService,
+    private readonly eventEmitter:   EventEmitter2,
+    private readonly contactsService: ContactsService,
   ) {}
 
   async create(workspaceId: string, dto: CreateLeadDto) {
@@ -38,13 +41,14 @@ export class LeadsService {
   }
 
   async findAll(workspaceId: string, query: QueryLeadsDto) {
-    const { page = 1, limit = 20, search, stage, includeArchived } = query;
+    const { page = 1, limit = 20, search, stage, includeArchived, hasSourceForm } = query;
     const skip = (page - 1) * limit;
 
     const where = {
       workspaceId,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(stage && { stage }),
+      ...(hasSourceForm !== undefined && { sourceFormId: hasSourceForm ? { not: null } : null }),
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' as const } },
@@ -228,6 +232,51 @@ export class LeadsService {
 
     this.eventEmitter.emit('lead.converted', { entityId: leadId, workspaceId, clientId: result.client.id })
     return result;
+  }
+
+  // Isolated from convertToClient above -- no shared code, so this can
+  // never regress the legacy Convert-to-Client flow (KD3). Only reachable
+  // for website-form-sourced leads (the frontend only offers it there);
+  // does not touch lead.stage or lead.clientId, so the old /leads page's
+  // Kanban grouping is unaffected for any lead this path touches.
+  async convertToContact(workspaceId: string, leadId: string, dto?: ConvertLeadToContactDto) {
+    const lead = await this.findOne(workspaceId, leadId);
+
+    if (lead.contactId) {
+      throw new ConflictException('This lead has already been converted to a contact');
+    }
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where:  { id: workspaceId },
+      select: { country: true, currency: true },
+    });
+
+    const country  = dto?.country  ?? workspace?.country  ?? undefined;
+    const currency = dto?.currency ?? workspace?.currency ?? undefined;
+    if (!country || !currency) {
+      throw new BadRequestException('Country and currency are required to convert this lead to a contact');
+    }
+
+    // Reuses ContactsService.create() unchanged -- same Contact + Thread +
+    // default SCOPING Project transaction every other Contact gets, and the
+    // same FREE-plan active-contact cap (a 402 PLAN_LIMIT the frontend
+    // already knows how to surface for AddContactModal).
+    const contact = await this.contactsService.create(workspaceId, {
+      name:    dto?.name    ?? lead.name,
+      email:   dto?.email   ?? lead.email   ?? undefined,
+      phone:   dto?.phone   ?? lead.phone   ?? undefined,
+      company: dto?.company ?? lead.company ?? undefined,
+      country,
+      currency,
+    });
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data:  { contactId: contact.id, lastActivityAt: new Date() },
+    });
+
+    this.eventEmitter.emit('lead.convertedToContact', { entityId: leadId, workspaceId, contactId: contact.id });
+    return { contact };
   }
 
   async getPipelineValue(workspaceId: string) {
