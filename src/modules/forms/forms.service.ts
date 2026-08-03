@@ -18,12 +18,11 @@ export class FormsService {
   async create(workspaceId: string, dto: CreateFormDto) {
     return this.prisma.intakeForm.create({
       data: {
-        title:         dto.title,
-        description:   dto.description,
-        fields:        (dto.fields ?? []) as unknown as object[],
-        capturesLeads: dto.capturesLeads ?? false,
+        title:       dto.title,
+        description: dto.description,
+        fields:      (dto.fields ?? []) as unknown as object[],
         workspaceId,
-        token:         nanoid(21),
+        token:       nanoid(21),
       },
     });
   }
