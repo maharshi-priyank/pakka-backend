@@ -38,6 +38,22 @@ async function bootstrap() {
   app.use(compression());
   app.use(helmet());
 
+  // The lead-capture embed is designed to run inside a third-party site's
+  // iframe -- including sandboxed iframes, which send `Origin: null`. That
+  // can never appear in the authenticated app's origin allowlist below, so
+  // this public, token-gated endpoint gets its own permissive CORS instead
+  // of being folded into the global policy.
+  app.use('/api/v1/forms/fill', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (_req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
+
   app.enableCors({
     origin: corsOrigin,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
