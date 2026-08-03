@@ -1,6 +1,7 @@
 import { Injectable, ExecutionContext, Optional } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
+import { firstValueFrom, isObservable, type Observable } from 'rxjs';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { IS_JWT_PAYLOAD_ONLY_KEY } from '../decorators/jwt-payload-only.decorator';
 import { ImpersonationVerifier } from '../../modules/admin/impersonation/impersonation.guard';
@@ -28,7 +29,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  async canActivate(context: ExecutionContext) {
+  private async resolveActivation(
+    result: boolean | Promise<boolean> | Observable<boolean>,
+  ): Promise<boolean> {
+    if (isObservable(result)) return firstValueFrom(result);
+    return result;
+  }
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -40,12 +48,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (handled) return true; // imp token verified + stamped; skip JWKS
     }
 
-    const isPayloadOnly = this.reflector.getAllAndOverride<boolean>(IS_JWT_PAYLOAD_ONLY_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPayloadOnly) return this.payloadGuard.canActivate(context);
+    const isPayloadOnly = this.reflector.getAllAndOverride<boolean>(
+      IS_JWT_PAYLOAD_ONLY_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (isPayloadOnly) {
+      return this.resolveActivation(this.payloadGuard.canActivate(context));
+    }
 
-    return super.canActivate(context);
+    return this.resolveActivation(super.canActivate(context));
   }
 }

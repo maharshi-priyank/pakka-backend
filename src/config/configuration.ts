@@ -4,7 +4,7 @@ export const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')
     .default('development'),
-  NEW_RELIC_LICENSE_KEY: Joi.string().optional(),
+  NEW_RELIC_LICENSE_KEY: Joi.string().allow('').optional(),
   NEW_RELIC_APP_NAME: Joi.string().default('clearwork-backend'),
   PORT: Joi.number().default(3000),
   DATABASE_URL: Joi.string().required(),
@@ -44,9 +44,9 @@ export const validationSchema = Joi.object({
   STRIPE_SECRET_KEY: Joi.string().optional(),
   STRIPE_WEBHOOK_SECRET: Joi.string().optional(),
   APP_FRONTEND_URL: Joi.string().default('http://localhost:5173'),
-  ADMIN_JWT_SECRET: Joi.string().optional(),
+  ADMIN_JWT_SECRET: Joi.string().allow('').optional(),
   ADMIN_JWT_EXPIRES_IN: Joi.string().default('8h'),
-  ADMIN_IMPERSONATION_SECRET: Joi.string().optional(),
+  ADMIN_IMPERSONATION_SECRET: Joi.string().allow('').optional(),
   ADMIN_IMPERSONATION_EXPIRES_IN: Joi.string().default('15m'),
 });
 
@@ -125,9 +125,13 @@ export const configuration = () => ({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   },
   admin: {
-    jwtSecret: process.env.ADMIN_JWT_SECRET,
+    jwtSecret:
+      process.env.ADMIN_JWT_SECRET ||
+      (process.env.NODE_ENV !== 'production' ? 'dev-admin-secret' : undefined),
     jwtExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN ?? '8h',
-    impersonationSecret: process.env.ADMIN_IMPERSONATION_SECRET,
+    impersonationSecret:
+      process.env.ADMIN_IMPERSONATION_SECRET ||
+      (process.env.NODE_ENV !== 'production' ? 'dev-impersonation-secret' : undefined),
     impersonationExpiresIn: process.env.ADMIN_IMPERSONATION_EXPIRES_IN ?? '15m',
   },
 });

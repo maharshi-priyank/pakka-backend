@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
 import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
+import { ProductEventsService } from '../product-events/product-events.service';
 
 // U4/KTD4: upsert() seeds default Contract/Invoice templates keyed by
 // resolveWorkspaceId(user), not raw user.id -- unlike the pre-existing
@@ -14,21 +15,23 @@ import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.
 describe('UsersService.upsert()', () => {
   let service: UsersService;
   let prisma: {
-    user:            { upsert: jest.Mock; update: jest.Mock };
+    user:            { upsert: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
     workspace:       { upsert: jest.Mock };
     workspaceMember: { upsert: jest.Mock };
   };
   let contractTemplates: { seedDefault: jest.Mock };
   let invoiceTemplates:  { seedDefault: jest.Mock };
+  let productEvents: { recordServerEvent: jest.Mock; logWriteFailure: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
-      user:            { upsert: jest.fn(), update: jest.fn() },
+      user:            { upsert: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
       workspace:       { upsert: jest.fn() },
       workspaceMember: { upsert: jest.fn() },
     };
     contractTemplates = { seedDefault: jest.fn() };
     invoiceTemplates  = { seedDefault: jest.fn() };
+    productEvents = { recordServerEvent: jest.fn().mockResolvedValue(undefined), logWriteFailure: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,6 +40,7 @@ describe('UsersService.upsert()', () => {
         { provide: AutomationsService,       useValue: { seedDefaultRules: jest.fn() } },
         { provide: ContractTemplatesService, useValue: contractTemplates },
         { provide: InvoiceTemplatesService,  useValue: invoiceTemplates },
+        { provide: ProductEventsService,      useValue: productEvents },
       ],
     }).compile();
 
@@ -72,5 +76,36 @@ describe('UsersService.upsert()', () => {
     expect(contractTemplates.seedDefault).toHaveBeenCalledTimes(2);
     expect(contractTemplates.seedDefault).toHaveBeenNthCalledWith(1, 'owner-2');
     expect(contractTemplates.seedDefault).toHaveBeenNthCalledWith(2, 'owner-2');
+  });
+
+  it('stores known first-touch attribution and preserves it on later auth syncs', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce(null);
+    prisma.user.upsert.mockResolvedValue({ id: 'owner-3', activeWorkspaceId: 'owner-3', ownerId: null });
+
+    await service.upsert({ id: 'owner-3', email: 'a@b.com', name: 'Owner', acquisitionSource: 'linkedin', acquisitionCampaign: 'august' });
+    expect(prisma.user.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({ acquisitionSource: 'linkedin', acquisitionCampaign: 'august' }),
+    }));
+
+    prisma.user.findUnique.mockResolvedValueOnce({ acquisitionSource: 'linkedin' });
+    await service.upsert({ id: 'owner-3', email: 'a@b.com', name: 'Owner', acquisitionSource: 'google' });
+    expect(prisma.user.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ update: { email: 'a@b.com', name: 'Owner' } }));
+  });
+
+  it('sets onboarding completion time only on the first false-to-true transition', async () => {
+    prisma.user.findUnique.mockResolvedValue({ onboardingComplete: false, onboardingCompletedAt: null });
+    prisma.user.update.mockResolvedValue({ id: 'user-1', activeWorkspaceId: 'workspace-1' });
+
+    await service.update('user-1', { onboardingComplete: true });
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ onboardingComplete: true, onboardingCompletedAt: expect.any(Date) }),
+    }));
+    expect(productEvents.recordServerEvent).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1', workspaceId: 'workspace-1', eventName: 'onboarding_completed',
+    }));
+
+    prisma.user.findUnique.mockResolvedValue({ onboardingComplete: true, onboardingCompletedAt: new Date('2026-08-03T10:00:00Z') });
+    await service.update('user-1', { onboardingComplete: true });
+    expect(prisma.user.update).toHaveBeenLastCalledWith({ where: { id: 'user-1' }, data: { onboardingComplete: true } });
   });
 });

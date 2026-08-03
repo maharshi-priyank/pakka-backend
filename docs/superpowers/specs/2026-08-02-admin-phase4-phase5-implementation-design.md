@@ -50,7 +50,7 @@ Add the following Prisma models/enums:
 - `AdminCustomerTask`: target type/id, title, body, owner, status, due/completion timestamps.
 - `AdminCustomerTag`: target type/id, tag, creator, timestamps, unique target/tag pair.
 
-The migration is additive and indexes list/filter paths. Existing applied migrations are not rewritten. The known historical failed migration `20260709_003_enforce_contactid_notnull` remains untouched because the live database contains nullable rows.
+The migration is additive and indexes list/filter paths. Existing applied migrations are not rewritten. The historical failed migration `20260709_003_enforce_contactid_notnull` is handled by a compatibility repair that preserves live nullable rows and adds only its safe thread lookup index; it is not treated as applied until that repair is deployed.
 
 ## API conventions
 

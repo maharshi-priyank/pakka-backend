@@ -14,6 +14,8 @@ import {
   type RefundResult,
 } from '../../../modules/payments/payment-provider.interface';
 import { StripeService } from '../../../modules/payments/stripe.service';
+import { PaymentsService } from '../../../modules/payments/payments.service';
+import type { RazorpayWebhookEvent } from '../../../modules/payments/dto/webhook-event.dto';
 import type { RefundDto, SyncSubscriptionDto, ReplayEventDto } from './dto/admin-billing.dto';
 
 /**
@@ -31,6 +33,7 @@ export class AdminBillingService {
     private readonly audit: AuditService,
     @Inject(PAYMENT_PROVIDER) private readonly razorpay: PaymentProvider,
     private readonly stripe: StripeService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async refund(
@@ -101,7 +104,10 @@ export class AdminBillingService {
     });
     if (!user) throw new NotFoundException('No user owns that subscription id.');
 
-    const state = await this.razorpay.getSubscription(dto.subscriptionId);
+    const provider = dto.provider ?? (dto.subscriptionId.startsWith('sub_') ? 'stripe' : 'razorpay');
+    const state = provider === 'stripe'
+      ? await this.stripe.getSubscription(dto.subscriptionId)
+      : await this.razorpay.getSubscription(dto.subscriptionId);
     const before = { subscriptionStatus: user.subscriptionStatus };
     // Reconcile: map provider status to SubscriptionStatus conservatively.
     // (Exact mapping per provider is an implementation detail; we record before/after.)
@@ -135,9 +141,21 @@ export class AdminBillingService {
     });
     if (!event) throw new NotFoundException('Billing event not found.');
 
-    // Re-processing the webhook payload is provider/handler-specific; we record
-    // the replay intent and the event reference. Full replay wiring is an
-    // implementation detail (see Outstanding Questions).
+    const payload = event.payload as Record<string, unknown> | null;
+    const provider = event.eventType.startsWith('customer.')
+      || event.eventType.startsWith('invoice.')
+      || typeof payload?.type === 'string'
+      ? 'stripe'
+      : 'razorpay';
+    if (provider === 'stripe') {
+      await this.stripe.replayStoredEvent(event.payload as unknown as {
+        type: string;
+        id: string;
+        data: { object: Record<string, unknown> };
+      });
+    } else {
+      await this.payments.replayStoredEvent(event.payload as unknown as RazorpayWebhookEvent);
+    }
     await this.audit.log({
       adminId,
       adminRole,
@@ -145,7 +163,7 @@ export class AdminBillingService {
       targetId: dto.billingEventId,
       action: 'admin.billing.replay_event',
       before: { eventType: event.eventType, processedAt: event.processedAt },
-      after: { replayed: true },
+      after: { replayed: true, provider },
       reason: dto.reason ?? null,
     });
     return { replayed: true, billingEventId: dto.billingEventId };

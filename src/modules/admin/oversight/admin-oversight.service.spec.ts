@@ -61,10 +61,11 @@ describe('AdminOversightService', () => {
     expect(m.planDistribution).toContainEqual({ plan: Plan.SOLO, count: 2 });
   });
 
-  it('sums revenue from BillingEvent payloads (mrr, arr)', async () => {
+  it('does not label collection sums as MRR when recurring currency is unavailable', async () => {
     const m = await service.metrics();
-    expect(m.revenue.mrr).toBe(1400);
-    expect(m.revenue.arr).toBe(16800);
+    expect(m.revenue.mrr).toBeNull();
+    expect(m.revenue.arr).toBeNull();
+    expect(m.revenue.collectionsByCurrency).toEqual([]);
     expect(m.churn.cancelledInLast30d).toBe(1);
   });
 

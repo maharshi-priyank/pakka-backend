@@ -3,11 +3,13 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AdminUserStatus } from '@prisma/client';
 
 export interface AdminJwtPayload {
   sub: string; // AdminUser id
   email: string;
   role: string; // AdminRole
+  jti: string;
 }
 
 /**
@@ -44,7 +46,15 @@ export class AdminJwtStrategy extends PassportStrategy(
     if (!admin) {
       throw new UnauthorizedException('Admin account not found.');
     }
+    if (admin.status !== AdminUserStatus.ACTIVE) {
+      throw new UnauthorizedException('Admin account is not active.');
+    }
+    const session = await this.prisma.adminSession.findUnique({ where: { jti: payload.jti } });
+    if (!session || session.adminId !== admin.id || session.revokedAt || session.expiresAt <= new Date()) {
+      throw new UnauthorizedException('Admin session is no longer valid.');
+    }
+    await this.prisma.adminSession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
     // Stamp on request.admin (distinct from request.user, which holds tenant users).
-    return admin;
+    return { ...admin, sessionJti: payload.jti };
   }
 }

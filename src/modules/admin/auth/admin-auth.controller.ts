@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../../common/decorators/public.decorator';
 import { AdminGuard } from '../../../common/guards/admin.guard';
@@ -15,18 +16,31 @@ export class AdminAuthController {
   @Public()
   @Post('login')
   @ApiOperation({ summary: 'Admin login — mints a separate admin JWT' })
-  login(@Body() dto: AdminLoginDto) {
-    return this.auth.login(dto.email, dto.password);
+  login(@Body() dto: AdminLoginDto, @Req() request: Request) {
+    return this.auth.login(dto.email, dto.password, {
+      ipAddress: request.ip,
+      userAgent: request.get('user-agent') ?? undefined,
+    });
   }
 
-  @Public()
   @UseGuards(AdminGuard)
   @RequireAdmin('support')
+  @Public()
   @ApiBearerAuth()
   @Get('me')
   @ApiOperation({ summary: 'Resolve the current admin from the admin JWT' })
   me(@CurrentAdmin() admin: { id: string; email: string; role: string }) {
     // Strip passwordHash; return identity + role for the panel.
     return { id: admin.id, email: admin.email, role: admin.role };
+  }
+
+  @UseGuards(AdminGuard)
+  @RequireAdmin('support')
+  @Public()
+  @ApiBearerAuth()
+  @Post('logout')
+  @ApiOperation({ summary: 'Revoke the current admin session' })
+  logout(@CurrentAdmin() admin: { id: string; sessionJti?: string }) {
+    return this.auth.logout(admin.id, admin.sessionJti);
   }
 }

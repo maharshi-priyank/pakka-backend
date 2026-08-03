@@ -17,6 +17,7 @@ export class RefundDto {
 export class SyncSubscriptionDto {
   @ApiProperty() @IsString() subscriptionId!: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() userId?: string;
+  @ApiProperty({ required: false, enum: ['razorpay', 'stripe'] }) @IsOptional() @IsIn(['razorpay', 'stripe']) provider?: 'razorpay' | 'stripe';
   @ApiProperty({ required: false }) @IsOptional() @IsString() reason?: string;
 }
 

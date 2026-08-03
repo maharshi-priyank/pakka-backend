@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AdminSupportNotesService } from '../support/admin-support-notes.service';
+import { AdminTimelineService } from '../timeline/admin-timeline.service';
 
 /**
  * Cross-tenant user lookup (R8, R10). Admin endpoints pass an explicit target
@@ -7,7 +9,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
  */
 @Injectable()
 export class AdminUsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly timeline: AdminTimelineService,
+    private readonly supportNotes: AdminSupportNotesService,
+  ) {}
 
   async search(q: string | undefined, page: number, pageSize: number) {
     const where = q
@@ -67,6 +73,15 @@ export class AdminUsersService {
         joinedAt: m.joinedAt,
       })),
     };
+  }
+
+  async detail360(id: string) {
+    const [user, timeline, notes] = await Promise.all([
+      this.detail(id),
+      this.timeline.get('user', id),
+      this.supportNotes.list({ targetType: 'user', targetId: id }),
+    ]);
+    return { ...user, timeline, notes };
   }
 
   private listSelect() {

@@ -8,7 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ConsumedJtiStore } from './consumed-jti.store';
-import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
+import { IS_PUBLIC_KEY } from '../../../common/decorators/public.decorator';
 import { Reflector } from '@nestjs/core';
 
 /**
@@ -65,23 +65,39 @@ export class ImpersonationVerifier {
     ]);
     const path: string = request.url ?? '';
     if (isPublic || path.startsWith('/api/admin') || path.includes('/admin/')) {
-      throw new UnauthorizedException('Impersonation tokens are not honored on admin routes.');
+      throw new UnauthorizedException(
+        'Impersonation tokens are not honored on admin routes.',
+      );
     }
 
     // Verify with the impersonation secret (symmetric), enforce expiry.
     let payload: { sub: string; imp: string; jti: string; exp?: number };
     try {
-      payload = (await this.jwt.verifyAsync(token, { secret: this.secret })) as typeof payload;
+      payload = (await this.jwt.verifyAsync(token, {
+        secret: this.secret,
+      })) as typeof payload;
     } catch {
-      throw new UnauthorizedException('Invalid or expired impersonation token.');
+      throw new UnauthorizedException(
+        'Invalid or expired impersonation token.',
+      );
     }
 
     // Replay guard: consume jti once.
-    if (!payload.jti || !this.jtiStore.consume(payload.jti, payload.exp ? payload.exp * 1000 : undefined)) {
-      throw new UnauthorizedException('Impersonation token already used or replayed.');
+    if (
+      !payload.jti ||
+      !this.jtiStore.consume(
+        payload.jti,
+        payload.exp ? payload.exp * 1000 : undefined,
+      )
+    ) {
+      throw new UnauthorizedException(
+        'Impersonation token already used or replayed.',
+      );
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
     if (!user) throw new UnauthorizedException('Impersonated user not found.');
 
     request.user = user; // tenant user, as if they logged in

@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
-import { ApiProperty, Type } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class AdminUserSearchDto {
   @ApiProperty({ required: false })

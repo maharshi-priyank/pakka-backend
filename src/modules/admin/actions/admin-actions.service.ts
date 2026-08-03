@@ -76,21 +76,26 @@ export class AdminActionsService {
     });
     if (!ws) throw new NotFoundException('Workspace not found');
 
-    // Feature flags are persisted as a workspace setting; the exact store is an
-    // implementation detail. We record the intent in the audit log and return the
-    // intended state so the panel can reflect it. (See Outstanding Questions for
-    // per-entity feature-flag storage.)
+    const before = await this.prisma.adminWorkspaceFeatureFlag.findUnique({
+      where: { workspaceId_flag: { workspaceId, flag: dto.flag } },
+    });
+    const after = await this.prisma.adminWorkspaceFeatureFlag.upsert({
+      where: { workspaceId_flag: { workspaceId, flag: dto.flag } },
+      create: { workspaceId, flag: dto.flag, enabled: dto.enabled, updatedBy: adminId },
+      update: { enabled: dto.enabled, updatedBy: adminId },
+      select: { id: true, workspaceId: true, flag: true, enabled: true, updatedBy: true, createdAt: true, updatedAt: true },
+    });
     await this.audit.log({
       adminId,
       adminRole,
       targetType: 'workspace',
       targetId: workspaceId,
       action: 'admin.feature_flag.toggle',
-      before: { flag: dto.flag, enabled: !dto.enabled },
-      after: { flag: dto.flag, enabled: dto.enabled },
+      before: before ? { flag: dto.flag, enabled: before.enabled } : { flag: dto.flag, exists: false, enabled: false },
+      after: { flag: dto.flag, enabled: after.enabled },
       reason: dto.reason ?? null,
     });
-    return { flag: dto.flag, enabled: dto.enabled };
+    return after;
   }
 
   /** R15: manually verify a stuck contract/invoice (soft, recoverable). */
@@ -159,6 +164,7 @@ export class AdminActionsService {
     adminId: string,
     adminRole: AdminRole,
     workspaceId: string,
+    reason?: string,
   ) {
     const ws = await this.prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -179,6 +185,7 @@ export class AdminActionsService {
       action: 'admin.workspace.restore',
       before: { archivedAt: ws.archivedAt },
       after: { archivedAt: null },
+      reason: reason ?? null,
     });
     return { archivedAt: null };
   }

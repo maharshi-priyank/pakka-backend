@@ -5,6 +5,7 @@ import { ContractTemplatesService } from '../contract-templates/contract-templat
 import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
 import { resolveWorkspaceId } from './resolve-workspace-id';
 import { UpsertUserDto, UpdateUserDto } from './dto/upsert-user.dto';
+import { ProductEventsService } from '../product-events/product-events.service';
 
 @Injectable()
 export class UsersService {
@@ -13,13 +14,29 @@ export class UsersService {
     private readonly automations:       AutomationsService,
     private readonly contractTemplates: ContractTemplatesService,
     private readonly invoiceTemplates:  InvoiceTemplatesService,
+    private readonly productEvents:      ProductEventsService,
   ) {}
 
   async upsert(dto: UpsertUserDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: dto.id },
+      select: { acquisitionSource: true },
+    });
+    const attribution = this.normalizeAttribution(dto);
+    const firstTouchAttribution = !existingUser || existingUser.acquisitionSource === 'unknown'
+      ? attribution
+      : {};
     const user = await this.prisma.user.upsert({
       where:  { id: dto.id },
-      update: { email: dto.email, name: dto.name },
-      create: { id: dto.id, email: dto.email, name: dto.name, plan: 'STUDIO', subscriptionStatus: 'ACTIVE' },
+      update: { email: dto.email, name: dto.name, ...firstTouchAttribution },
+      create: {
+        id: dto.id,
+        email: dto.email,
+        name: dto.name,
+        plan: 'STUDIO',
+        subscriptionStatus: 'ACTIVE',
+        ...attribution,
+      },
     });
 
     // Ensure a workspace exists for this owner (idempotent)
@@ -73,8 +90,31 @@ export class UsersService {
   }
 
   async update(id: string, data: UpdateUserDto) {
-    const user = await this.prisma.user.update({ where: { id }, data });
+    const transitioningToComplete = data.onboardingComplete === true;
+    const existing = transitioningToComplete
+      ? await this.prisma.user.findUnique({
+          where: { id },
+          select: { onboardingComplete: true, onboardingCompletedAt: true },
+        })
+      : null;
+    const firstCompletion = transitioningToComplete && existing && !existing.onboardingComplete && !existing.onboardingCompletedAt;
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...data,
+        ...(firstCompletion ? { onboardingCompletedAt: new Date() } : {}),
+      },
+    });
     const workspaceId = user.activeWorkspaceId ?? id;
+
+    if (firstCompletion) {
+      void this.productEvents.recordServerEvent({
+        userId: id,
+        workspaceId,
+        eventName: 'onboarding_completed',
+        idempotencyKey: `onboarding-completed:${id}`,
+      }).catch(error => this.productEvents.logWriteFailure(error, 'onboarding_completed'));
+    }
 
     // Keep active workspace logo in sync when profile logo changes
     if ('logoUrl' in data && data.logoUrl !== undefined) {
@@ -98,6 +138,21 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  private normalizeAttribution(dto: UpsertUserDto) {
+    const clean = (value: string | undefined, maxLength: number) => {
+      if (!value) return undefined;
+      const normalized = value.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, maxLength);
+      return normalized || undefined;
+    };
+    return {
+      acquisitionSource: clean(dto.acquisitionSource, 80) ?? 'unknown',
+      acquisitionMedium: clean(dto.acquisitionMedium, 80),
+      acquisitionCampaign: clean(dto.acquisitionCampaign, 120),
+      acquisitionContent: clean(dto.acquisitionContent, 120),
+      acquisitionTerm: clean(dto.acquisitionTerm, 120),
+    };
   }
 
   async saveGoogleTokens(userId: string, tokens: { accessToken: string; refreshToken: string; expiresAt: Date }) {

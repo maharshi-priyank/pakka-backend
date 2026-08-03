@@ -25,6 +25,44 @@ import { AdminUsersService } from './users/admin-users.service';
 import { AdminUsersController } from './users/admin-users.controller';
 import { AdminWorkspacesService } from './workspaces/admin-workspaces.service';
 import { AdminWorkspacesController } from './workspaces/admin-workspaces.controller';
+import { AdminAnalyticsService } from './analytics/admin-analytics.service';
+import { AdminAnalyticsController } from './analytics/admin-analytics.controller';
+import { AdminSupportNotesService } from './support/admin-support-notes.service';
+import { AdminSupportNotesController } from './support/admin-support-notes.controller';
+import { AdminTimelineService } from './timeline/admin-timeline.service';
+import { AdminSearchService } from './search/admin-search.service';
+import { AdminSearchController } from './search/admin-search.controller';
+import { AdminBillingOperationsService } from './billing-operations/admin-billing-operations.service';
+import { AdminBillingOperationsController } from './billing-operations/admin-billing-operations.controller';
+import { AdminWorkspaceAdministrationService } from './workspace-administration/admin-workspace-administration.service';
+import { AdminWorkspaceAdministrationController } from './workspace-administration/admin-workspace-administration.controller';
+import { AdminSupportReportingService } from './support-reporting/admin-support-reporting.service';
+import { AdminSupportReportingController } from './support-reporting/admin-support-reporting.controller';
+import { AdminSecurityService } from './security/admin-security.service';
+import { AdminSecurityController } from './security/admin-security.controller';
+import { AdminSavedViewsService } from './saved-views/admin-saved-views.service';
+import { AdminSavedViewsController } from './saved-views/admin-saved-views.controller';
+import { AdminAlertsService } from './alerts/admin-alerts.service';
+import { AdminAlertsController } from './alerts/admin-alerts.controller';
+import { AdminBulkOperationsService } from './bulk-operations/admin-bulk-operations.service';
+import { AdminBulkOperationsController } from './bulk-operations/admin-bulk-operations.controller';
+import { AdminTemplateConfigurationService } from './configuration/templates/admin-template-configuration.service';
+import { AdminTemplateConfigurationController } from './configuration/templates/admin-template-configuration.controller';
+import { AdminAutomationConfigurationService } from './configuration/automation/admin-automation-configuration.service';
+import { AdminAutomationConfigurationController } from './configuration/automation/admin-automation-configuration.controller';
+import { AdminIntegrationHealthService } from './configuration/integrations/admin-integration-health.service';
+import { AdminIntegrationHealthController } from './configuration/integrations/admin-integration-health.controller';
+import { AdminBusinessIntelligenceService } from './business-intelligence/admin-business-intelligence.service';
+import { AdminBusinessIntelligenceController } from './business-intelligence/admin-business-intelligence.controller';
+import { AdminTeamService } from './team/admin-team.service';
+import { AdminTeamController } from './team/admin-team.controller';
+import { AdminOperationsService } from './operations/admin-operations.service';
+import { AdminOperationsController } from './operations/admin-operations.controller';
+import { AdminCustomersService } from './customers/admin-customers.service';
+import { AdminCustomersController } from './customers/admin-customers.controller';
+import { AdminCommandCenterService } from './command-center/admin-command-center.service';
+import { AdminCommandCenterController } from './command-center/admin-command-center.controller';
+import { AdminGrowthModule } from './growth/admin-growth.module';
 
 /**
  * Admin module — superadmin-only panel API.
@@ -50,12 +88,31 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
         secret: config.get<string>('admin.jwtSecret') ?? 'dev-admin-secret',
       }),
     }),
+    AdminGrowthModule,
   ],
   controllers: [
     AdminAuthController,
     AdminOversightController,
     AdminUsersController,
     AdminWorkspacesController,
+    AdminAnalyticsController,
+    AdminSupportNotesController,
+    AdminSearchController,
+    AdminBillingOperationsController,
+    AdminWorkspaceAdministrationController,
+    AdminSupportReportingController,
+    AdminSecurityController,
+    AdminSavedViewsController,
+    AdminAlertsController,
+    AdminBulkOperationsController,
+    AdminTemplateConfigurationController,
+    AdminAutomationConfigurationController,
+    AdminIntegrationHealthController,
+    AdminBusinessIntelligenceController,
+    AdminTeamController,
+    AdminOperationsController,
+    AdminCustomersController,
+    AdminCommandCenterController,
     AuditController,
     AdminActionsController,
     AdminBillingController,
@@ -68,6 +125,25 @@ import { AdminWorkspacesController } from './workspaces/admin-workspaces.control
     AdminOversightService,
     AdminUsersService,
     AdminWorkspacesService,
+    AdminAnalyticsService,
+    AdminSupportNotesService,
+    AdminTimelineService,
+    AdminSearchService,
+    AdminBillingOperationsService,
+    AdminWorkspaceAdministrationService,
+    AdminSupportReportingService,
+    AdminSecurityService,
+    AdminSavedViewsService,
+    AdminAlertsService,
+    AdminBulkOperationsService,
+    AdminTemplateConfigurationService,
+    AdminAutomationConfigurationService,
+    AdminIntegrationHealthService,
+    AdminBusinessIntelligenceService,
+    AdminTeamService,
+    AdminOperationsService,
+    AdminCustomersService,
+    AdminCommandCenterService,
     AdminActionsService,
     AdminBillingService,
     AdminImpersonationService,

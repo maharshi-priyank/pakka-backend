@@ -467,10 +467,11 @@ available. Existing tenant template and automation services remain the source
 of truth for business invariants; admin services call or reproduce those
 invariants explicitly rather than weakening them.
 
-The Phase 3 migration must be applied independently of the pre-existing failed
-`20260709_003_enforce_contactid_notnull` migration. That migration must not be
-marked applied until nullable `contactId` records are backfilled and the
-constraint can be safely enforced.
+The historical `20260709_003_enforce_contactid_notnull` migration must not
+invent contacts, delete unassociated records, or be marked applied while the
+live database contains nullable `contactId` rows. The compatibility repair
+keeps those columns nullable and adds only the safe thread lookup index;
+future NOT NULL enforcement requires a separate, verified data-backfill plan.
 
 ## Verification and rollout
 

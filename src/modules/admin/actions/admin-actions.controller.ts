@@ -31,6 +31,7 @@ export class AdminActionsController {
   }
 
   @Post('workspaces/:id/feature-flag')
+  @RequireAdmin('superadmin')
   @ApiOperation({ summary: 'Toggle a workspace feature flag (R15)' })
   toggleFeatureFlag(
     @CurrentAdmin() admin: { id: string; role: any },
@@ -66,7 +67,8 @@ export class AdminActionsController {
   restoreWorkspace(
     @CurrentAdmin() admin: { id: string; role: any },
     @Param('id') workspaceId: string,
+    @Body() body: { reason?: string },
   ) {
-    return this.actions.restoreWorkspace(admin.id, admin.role, workspaceId);
+    return this.actions.restoreWorkspace(admin.id, admin.role, workspaceId, body.reason);
   }
 }

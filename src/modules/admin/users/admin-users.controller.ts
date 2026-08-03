@@ -26,4 +26,10 @@ export class AdminUsersController {
   detail(@Param('id') id: string) {
     return this.users.detail(id);
   }
+
+  @Get(':id/360')
+  @ApiOperation({ summary: 'User 360 view with timeline and support notes' })
+  detail360(@Param('id') id: string) {
+    return this.users.detail360(id);
+  }
 }

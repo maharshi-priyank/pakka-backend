@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsDateString, IsInt, Min, Max } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsInt, Min, Max, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
 
@@ -14,6 +14,12 @@ export class AuditQueryDto {
 
   @ApiProperty({ required: false })
   @IsOptional() @IsString() action?: string;
+
+  @ApiProperty({ required: false, enum: ['SUPPORT', 'SUPERADMIN'] })
+  @IsOptional() @IsIn(['SUPPORT', 'SUPERADMIN']) role?: 'SUPPORT' | 'SUPERADMIN';
+
+  @ApiProperty({ required: false, description: 'Search action, target, reason, or target id.' })
+  @IsOptional() @IsString() q?: string;
 
   @ApiProperty({ required: false })
   @IsOptional() @IsDateString() from?: string;

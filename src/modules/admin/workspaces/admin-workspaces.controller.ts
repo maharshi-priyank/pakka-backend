@@ -26,4 +26,10 @@ export class AdminWorkspacesController {
   detail(@Param('id') id: string) {
     return this.workspaces.detail(id);
   }
+
+  @Get(':id/360')
+  @ApiOperation({ summary: 'Workspace 360 view with timeline and support notes' })
+  detail360(@Param('id') id: string) {
+    return this.workspaces.detail360(id);
+  }
 }

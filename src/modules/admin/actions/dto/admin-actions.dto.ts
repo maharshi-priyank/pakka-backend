@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsBoolean, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsBoolean, IsEnum, Matches, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Plan, SubscriptionStatus } from '@prisma/client';
 
@@ -17,7 +17,7 @@ export class PlanOverrideDto {
 }
 
 export class FeatureFlagToggleDto {
-  @ApiProperty() @IsString() flag!: string;
+  @ApiProperty() @IsString() @MaxLength(64) @Matches(/^[a-z][a-z0-9_.-]{1,63}$/) flag!: string;
   @ApiProperty() @IsBoolean() enabled!: boolean;
   @ApiProperty({ required: false }) @IsOptional() @IsString() reason?: string;
 }

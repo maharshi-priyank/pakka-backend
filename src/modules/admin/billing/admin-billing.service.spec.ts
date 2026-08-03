@@ -6,13 +6,15 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PAYMENT_PROVIDER } from '../../../modules/payments/payment-provider.interface';
 import { StripeService } from '../../../modules/payments/stripe.service';
+import { PaymentsService } from '../../../modules/payments/payments.service';
 
 describe('AdminBillingService', () => {
   let service: AdminBillingService;
   let prisma: any;
   let audit: { log: jest.Mock };
   let razorpay: { refund: jest.Mock; getSubscription: jest.Mock };
-  let stripe: { refund: jest.Mock };
+  let stripe: { refund: jest.Mock; getSubscription: jest.Mock; replayStoredEvent: jest.Mock };
+  let payments: { replayStoredEvent: jest.Mock };
 
   beforeEach(async () => {
     audit = { log: jest.fn().mockResolvedValue(undefined) };
@@ -20,14 +22,19 @@ describe('AdminBillingService', () => {
       refund: jest.fn().mockResolvedValue({ refundId: 'rp_r1', paymentId: 'pay_1', amount: 500, status: 'processed' }),
       getSubscription: jest.fn().mockResolvedValue({ subscriptionId: 'sub_1', planId: 'p', status: 'active', nextBillingDate: undefined }),
     };
-    stripe = { refund: jest.fn().mockResolvedValue({ refundId: 're_1', paymentId: 'pi_1', amount: 500, status: 'succeeded' }) };
+    stripe = {
+      refund: jest.fn().mockResolvedValue({ refundId: 're_1', paymentId: 'pi_1', amount: 500, status: 'succeeded' }),
+      getSubscription: jest.fn().mockResolvedValue({ subscriptionId: 'sub_1', planId: 'price_1', status: 'active' }),
+      replayStoredEvent: jest.fn().mockResolvedValue(undefined),
+    };
+    payments = { replayStoredEvent: jest.fn().mockResolvedValue(undefined) };
     prisma = {
       auditLog: { findFirst: jest.fn().mockResolvedValue(null) },
       user: {
         findFirst: jest.fn().mockResolvedValue({ id: 'u1', subscriptionStatus: 'NONE', razorpaySubscriptionId: 'sub_1', stripeSubscriptionId: null }),
         update: jest.fn().mockResolvedValue(undefined),
       },
-      billingEvent: { findUnique: jest.fn().mockResolvedValue({ id: 'be1', eventType: 'SUBSCRIPTION_PAYMENT_SUCCESS', processedAt: new Date() }) },
+      billingEvent: { findUnique: jest.fn().mockResolvedValue({ id: 'be1', eventType: 'subscription.charged', processedAt: new Date(), payload: { event: 'subscription.charged', payload: {} } }) },
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -36,6 +43,7 @@ describe('AdminBillingService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: PAYMENT_PROVIDER, useValue: razorpay },
         { provide: StripeService, useValue: stripe },
+        { provide: PaymentsService, useValue: payments },
       ],
     }).compile();
     service = module.get(AdminBillingService);
@@ -82,6 +90,7 @@ describe('AdminBillingService', () => {
   it('replay-event audits the replay intent', async () => {
     const res = await service.replayEvent('admin-1', AdminRole.SUPERADMIN, { billingEventId: 'be1' });
     expect(res.replayed).toBe(true);
+    expect(payments.replayStoredEvent).toHaveBeenCalled();
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'admin.billing.replay_event', targetId: 'be1' }));
   });
 });
