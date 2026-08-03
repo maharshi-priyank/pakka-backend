@@ -325,12 +325,12 @@ model IntakeForm {
   token       String                 @unique
   fields         Json
   isActive       Boolean                @default(true)
-  autoCreateLead Boolean                @default(false)
   leadFieldMap   Json                   @default("{}")
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   archivedAt     DateTime?
   submissions    IntakeFormSubmission[]
+  leads          Lead[]
 
   @@map("intake_forms")
 }
@@ -415,6 +415,10 @@ model Lead {
   workspace      Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   clientId       String?
   client         Client?    @relation(fields: [clientId], references: [id])
+  sourceFormId   String?
+  sourceForm     IntakeForm? @relation(fields: [sourceFormId], references: [id], onDelete: SetNull)
+  contactId      String?
+  contact        Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
   name           String
   email          String?
   phone          String?
@@ -437,6 +441,8 @@ model Lead {
   @@index([workspaceId, archivedAt, stage])
   @@index([workspaceId, followUpAt])
   @@index([clientId])
+  @@index([sourceFormId])
+  @@index([contactId])
   @@map("leads")
 }
 
@@ -496,6 +502,7 @@ model Contact {
   notesList   ClientNote[]
   threads     Thread[]
   communicationLogs CommunicationLog[]
+  convertedFromLeads Lead[]
 
   @@unique([workspaceId, clickupMemberId])
   @@index([workspaceId])

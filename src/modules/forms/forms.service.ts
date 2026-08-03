@@ -5,6 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
 import { SubmitFormDto } from './dto/submit-form.dto';
+import { effectivePlan } from '../users/effective-plan';
+import Decimal from 'decimal.js';
 
 @Injectable()
 export class FormsService {
@@ -110,9 +112,7 @@ export class FormsService {
       },
     });
 
-    if (form.autoCreateLead) {
-      await this.createContactFromSubmission(form, dto);
-    }
+    await this.createLeadFromSubmission(form, dto);
 
     this.eventEmitter.emit('form.submitted', {
       entityId:    form.id,
@@ -123,10 +123,28 @@ export class FormsService {
     return submission;
   }
 
-  private async createContactFromSubmission(
+  private async createLeadFromSubmission(
     form: { id: string; workspaceId: string; title: string; leadFieldMap: unknown },
     dto:  SubmitFormDto,
   ) {
+    // Public, unauthenticated endpoint -- the FREE-plan active-lead cap must
+    // still apply here (LeadsService.create() enforces the same check for
+    // manual creation), or a workspace could accumulate unlimited leads
+    // through its own public form. Unlike the authenticated create path,
+    // hitting the cap here does not error back to the anonymous visitor --
+    // the IntakeFormSubmission above is already recorded either way; only
+    // the Lead (and its notification) is skipped.
+    const user = await this.prisma.user.findUnique({
+      where:  { id: form.workspaceId },
+      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
+    });
+    if (user && effectivePlan(user) === 'FREE') {
+      const count = await this.prisma.lead.count({
+        where: { workspaceId: form.workspaceId, archivedAt: null, stage: { notIn: ['WON', 'LOST'] } },
+      });
+      if (count >= 3) return;
+    }
+
     const fieldMap = (form.leadFieldMap ?? {}) as Record<string, string>;
     const answers  = (dto.answers ?? {}) as Record<string, string | string[]>;
 
@@ -141,31 +159,26 @@ export class FormsService {
     const name = get('name') || dto.respondentName || dto.respondentEmail || 'Unknown';
 
     const rawBudget = get('budget');
-    let dealValue: string | undefined;
+    let budget: Decimal | undefined;
     if (rawBudget) {
       const n = parseFloat(rawBudget.replace(/[^0-9.]/g, ''));
-      if (!isNaN(n)) dealValue = String(n);
+      if (!isNaN(n)) budget = new Decimal(n);
     }
 
-    const { nanoid } = await import('nanoid');
-    const contact = await this.prisma.contact.create({
+    const lead = await this.prisma.lead.create({
       data: {
         workspaceId:  form.workspaceId,
+        sourceFormId: form.id,
         name,
-        email:      get('email')   || dto.respondentEmail || undefined,
-        phone:      get('phone')   || undefined,
-        company:    get('company') || undefined,
-        service:    get('service') || undefined,
-        dealValue:  dealValue as any,
-        source:     `Form: ${form.title}`,
-        stage:      'ENQUIRY',
-        portalToken: nanoid(21),
+        email:   get('email')   || dto.respondentEmail || undefined,
+        phone:   get('phone')   || undefined,
+        company: get('company') || undefined,
+        service: get('service') || undefined,
+        budget,
+        source:  `Form: ${form.title}`,
       },
     });
 
-    // Create messaging thread so workspace can reply to the contact
-    await this.prisma.thread.create({
-      data: { workspaceId: form.workspaceId, contactId: contact.id },
-    });
+    this.eventEmitter.emit('lead.created', { entityId: lead.id, workspaceId: form.workspaceId });
   }
 }
