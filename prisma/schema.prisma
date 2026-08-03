@@ -326,10 +326,14 @@ model IntakeForm {
   fields         Json
   isActive       Boolean                @default(true)
   // Set once at creation time, based on where the form was created (the
-  // Website Leads page vs. the generic Forms tab) -- not a per-form toggle
+  // Lead Capture tab vs. the generic Forms tab) -- not a per-form toggle
   // surfaced in the generic builder, since Forms serves many use cases that
   // have nothing to do with lead capture.
   capturesLeads  Boolean                @default(false)
+  // Nullable, unique per workspace -- mirrors ContractTemplate.key. Lets the
+  // one seeded lead-capture form be found deterministically (key:
+  // 'lead-capture-default'); null for every other form.
+  key            String?
   leadFieldMap   Json                   @default("{}")
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
@@ -337,6 +341,7 @@ model IntakeForm {
   submissions    IntakeFormSubmission[]
   leads          Lead[]
 
+  @@unique([workspaceId, key])
   @@map("intake_forms")
 }
 
