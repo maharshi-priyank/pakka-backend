@@ -10,6 +10,7 @@ import { UpdateFormDto } from './dto/update-form.dto';
 import { SubmitFormDto } from './dto/submit-form.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 
 @ApiTags('forms')
 @Controller('forms')
@@ -47,6 +48,16 @@ export class FormsController {
   @ApiOperation({ summary: 'List all intake forms' })
   findAll(@CurrentUser() user: User, @Query('includeArchived') includeArchived?: string) {
     return this.formsService.findAll(user.id, includeArchived === 'true');
+  }
+
+  // Must be declared before @Get(':id') below -- Nest matches routes in
+  // declaration order, so appending this after :id would make every request
+  // here get swallowed by findOne('lead-capture') and 404.
+  @ApiBearerAuth()
+  @Get('lead-capture')
+  @ApiOperation({ summary: 'Get the workspace\'s one auto-provisioned lead-capture form' })
+  getLeadCaptureForm(@CurrentUser() user: User) {
+    return this.formsService.getLeadCaptureForm(resolveWorkspaceId(user));
   }
 
   @ApiBearerAuth()

@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
 import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
+import { FormsService } from '../forms/forms.service';
 
 // U4/KTD4: upsert() seeds default Contract/Invoice templates keyed by
 // resolveWorkspaceId(user), not raw user.id -- unlike the pre-existing
@@ -20,6 +21,7 @@ describe('UsersService.upsert()', () => {
   };
   let contractTemplates: { seedDefault: jest.Mock };
   let invoiceTemplates:  { seedDefault: jest.Mock };
+  let forms:             { seedLeadCaptureForm: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -29,6 +31,7 @@ describe('UsersService.upsert()', () => {
     };
     contractTemplates = { seedDefault: jest.fn() };
     invoiceTemplates  = { seedDefault: jest.fn() };
+    forms             = { seedLeadCaptureForm: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,6 +40,7 @@ describe('UsersService.upsert()', () => {
         { provide: AutomationsService,       useValue: { seedDefaultRules: jest.fn() } },
         { provide: ContractTemplatesService, useValue: contractTemplates },
         { provide: InvoiceTemplatesService,  useValue: invoiceTemplates },
+        { provide: FormsService,             useValue: forms },
       ],
     }).compile();
 
@@ -50,6 +54,7 @@ describe('UsersService.upsert()', () => {
 
     expect(contractTemplates.seedDefault).toHaveBeenCalledWith('owner-1');
     expect(invoiceTemplates.seedDefault).toHaveBeenCalledWith('owner-1');
+    expect(forms.seedLeadCaptureForm).toHaveBeenCalledWith('owner-1');
   });
 
   it('seeds both default templates under the shared workspace for a team member (activeWorkspaceId differs from own id)', async () => {
@@ -59,8 +64,10 @@ describe('UsersService.upsert()', () => {
 
     expect(contractTemplates.seedDefault).toHaveBeenCalledWith('owner-1');
     expect(invoiceTemplates.seedDefault).toHaveBeenCalledWith('owner-1');
+    expect(forms.seedLeadCaptureForm).toHaveBeenCalledWith('owner-1');
     expect(contractTemplates.seedDefault).not.toHaveBeenCalledWith('member-1');
     expect(invoiceTemplates.seedDefault).not.toHaveBeenCalledWith('member-1');
+    expect(forms.seedLeadCaptureForm).not.toHaveBeenCalledWith('member-1');
   });
 
   it('backfills an existing workspace that has no seeded template yet (R10) — seedDefault is idempotent, so a repeat login is a no-op on the DB side but still called', async () => {

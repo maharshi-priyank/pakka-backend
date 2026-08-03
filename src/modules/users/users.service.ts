@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
 import { InvoiceTemplatesService } from '../invoice-templates/invoice-templates.service';
+import { FormsService } from '../forms/forms.service';
 import { resolveWorkspaceId } from './resolve-workspace-id';
 import { UpsertUserDto, UpdateUserDto } from './dto/upsert-user.dto';
 
@@ -13,6 +14,7 @@ export class UsersService {
     private readonly automations:       AutomationsService,
     private readonly contractTemplates: ContractTemplatesService,
     private readonly invoiceTemplates:  InvoiceTemplatesService,
+    private readonly forms:             FormsService,
   ) {}
 
   async upsert(dto: UpsertUserDto) {
@@ -56,6 +58,7 @@ export class UsersService {
     const workspaceId = resolveWorkspaceId(user);
     await this.contractTemplates.seedDefault(workspaceId);
     await this.invoiceTemplates.seedDefault(workspaceId);
+    await this.forms.seedLeadCaptureForm(workspaceId);
 
     return user;
   }

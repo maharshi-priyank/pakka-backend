@@ -30,9 +30,45 @@ export class FormsService {
 
   async findAll(workspaceId: string, includeArchived = false) {
     return this.prisma.intakeForm.findMany({
-      where:   { workspaceId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where:   { workspaceId, capturesLeads: false, ...(includeArchived ? {} : { archivedAt: null }) },
       include: { _count: { select: { submissions: true } } },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  private static readonly LEAD_CAPTURE_KEY = 'lead-capture-default';
+
+  // Idempotent -- safe to call on every login (mirrors
+  // ContractTemplatesService.seedDefault()/InvoiceTemplatesService.seedDefault()).
+  // Keyed by the (workspaceId, key) unique constraint so concurrent logins
+  // never create two lead-capture forms for the same workspace.
+  async seedLeadCaptureForm(workspaceId: string) {
+    await this.prisma.intakeForm.upsert({
+      where:  { workspaceId_key: { workspaceId, key: FormsService.LEAD_CAPTURE_KEY } },
+      update: {},
+      create: {
+        workspaceId,
+        key:           FormsService.LEAD_CAPTURE_KEY,
+        capturesLeads: true,
+        title:         'Lead Capture Form',
+        token:         nanoid(21),
+        fields: [
+          { id: 'name',  type: 'text', label: 'Name',  required: true },
+          { id: 'email', type: 'text', label: 'Email', required: false },
+          { id: 'phone', type: 'text', label: 'Phone',  required: false },
+        ],
+        leadFieldMap: { name: 'name', email: 'email', phone: 'phone' },
+      },
+    });
+  }
+
+  // Belt-and-suspenders: seeds first (idempotent), then fetches -- so the
+  // Lead Capture tab always has a form to render even for a workspace whose
+  // login happened before this feature was deployed.
+  async getLeadCaptureForm(workspaceId: string) {
+    await this.seedLeadCaptureForm(workspaceId);
+    return this.prisma.intakeForm.findFirst({
+      where: { workspaceId, key: FormsService.LEAD_CAPTURE_KEY },
     });
   }
 

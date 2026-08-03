@@ -106,3 +106,66 @@ describe('FormsService.submit', () => {
     expect(result).toEqual({ id: 'sub-1' });
   });
 });
+
+// U2 (feat/predefined-lead-capture-form): seedLeadCaptureForm()/getLeadCaptureForm()
+// -- the idempotent per-workspace seed, mirroring
+// ContractTemplatesService.seedDefault()/getDefault() -- and findAll()'s
+// capturesLeads:false exclusion so the generic Forms tab never lists the
+// seeded form.
+describe('FormsService seeding', () => {
+  let service: FormsService;
+  let prisma: {
+    intakeForm: { upsert: jest.Mock; findFirst: jest.Mock; findMany: jest.Mock };
+  };
+
+  beforeEach(async () => {
+    prisma = {
+      intakeForm: {
+        upsert:    jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn().mockResolvedValue({ id: 'lcf-1', capturesLeads: true, key: 'lead-capture-default' }),
+        findMany:  jest.fn().mockResolvedValue([]),
+      },
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        FormsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get<FormsService>(FormsService);
+  });
+
+  it('seedLeadCaptureForm upserts keyed by (workspaceId, "lead-capture-default"), creating with the default fields', async () => {
+    await service.seedLeadCaptureForm('ws-1');
+
+    expect(prisma.intakeForm.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where:  { workspaceId_key: { workspaceId: 'ws-1', key: 'lead-capture-default' } },
+      update: {},
+      create: expect.objectContaining({
+        workspaceId:   'ws-1',
+        key:           'lead-capture-default',
+        capturesLeads: true,
+        leadFieldMap:  { name: 'name', email: 'email', phone: 'phone' },
+      }),
+    }));
+  });
+
+  it('getLeadCaptureForm seeds first, then fetches by the same key (belt-and-suspenders)', async () => {
+    const result = await service.getLeadCaptureForm('ws-1');
+
+    expect(prisma.intakeForm.upsert).toHaveBeenCalled();
+    expect(prisma.intakeForm.findFirst).toHaveBeenCalledWith({ where: { workspaceId: 'ws-1', key: 'lead-capture-default' } });
+    expect(result).toEqual({ id: 'lcf-1', capturesLeads: true, key: 'lead-capture-default' });
+  });
+
+  it('findAll excludes capturesLeads:true forms from the generic Forms list', async () => {
+    await service.findAll('ws-1');
+
+    expect(prisma.intakeForm.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ workspaceId: 'ws-1', capturesLeads: false }),
+    }));
+  });
+});
