@@ -6,6 +6,7 @@ import { Plan, SubscriptionStatus } from '@prisma/client';
 import { PAYMENT_PROVIDER, type PaymentProvider } from './payment-provider.interface';
 import { PlanResolutionService, type PlanTier } from './plan-resolution.service';
 import type { RazorpayWebhookEvent } from './dto/webhook-event.dto';
+import { ProductEventsService } from '../product-events/product-events.service';
 
 type WebhookHandler = (event: RazorpayWebhookEvent) => Promise<void>;
 
@@ -18,6 +19,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly planResolution: PlanResolutionService,
+    private readonly productEvents: ProductEventsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {
     this.handlers = {
@@ -167,12 +169,36 @@ export class PaymentsService {
       },
     });
 
+    const productEventName = {
+      'subscription.activated': 'subscription_activated',
+      'subscription.charged': 'subscription_payment_succeeded',
+      'subscription.halted': 'subscription_payment_failed',
+      'subscription.cancelled': 'subscription_cancelled',
+      'subscription.completed': 'subscription_cancelled',
+      'subscription.paused': 'subscription_paused',
+    }[event.event] as Parameters<ProductEventsService['recordServerEvent']>[0]['eventName'] | undefined;
+    const userId = event.payload.subscription?.entity.notes?.userId as string | undefined;
+    if (productEventName && userId) {
+      void this.productEvents.recordServerEvent({
+        userId,
+        workspaceId: userId,
+        eventName: productEventName,
+        idempotencyKey: `billing:${razorpayRef}:${event.event}`,
+      }).catch(error => this.productEvents.logWriteFailure(error, productEventName));
+    }
+
     const handler = this.handlers[event.event];
     if (handler) {
       await handler(event);
     } else {
       this.logger.debug(`Unhandled webhook event type: ${event.event}`);
     }
+  }
+
+  async replayStoredEvent(event: RazorpayWebhookEvent): Promise<void> {
+    const handler = this.handlers[event.event];
+    if (!handler) throw new ConflictException(`Unsupported Razorpay event: ${event.event}`);
+    await handler(event);
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
