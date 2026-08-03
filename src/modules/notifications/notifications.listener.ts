@@ -170,9 +170,9 @@ export class NotificationsListener {
       title:      'New enquiry',
       body:       parts.join(' · ') + suffix,
       entityId,
-      // Website-form-sourced leads open the new Website Leads review page;
+      // Website-form-sourced leads open the Lead Capture review page;
       // manual/AI-discovered leads keep opening the old /leads page.
-      entityType: lead?.sourceFormId ? 'website-lead' : 'lead',
+      entityType: lead?.sourceFormId ? 'lead-capture' : 'lead',
     })
   }
 
