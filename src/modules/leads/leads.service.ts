@@ -64,7 +64,7 @@ export class LeadsService {
         skip,
         take: limit,
         orderBy: { lastActivityAt: 'desc' },
-        include: { client: true, proposals: { select: { id: true, status: true } } },
+        include: { client: true, sourceForm: { select: { title: true } }, proposals: { select: { id: true, status: true } } },
       }),
       this.prisma.lead.count({ where }),
       this.prisma.lead.aggregate({
