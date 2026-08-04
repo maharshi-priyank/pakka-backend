@@ -100,7 +100,9 @@ export class TimeEntriesService {
     const clientIds = [...new Set(entries.map(e => e.clientId))];
     if (clientIds.length > 1) throw new BadRequestException('All entries must be for the same client');
 
-    const clientId = clientIds[0] ?? undefined;
+    const clientId   = clientIds[0] ?? undefined;
+    const contactId  = entries[0]?.contactId  ?? undefined;
+    const projectId  = entries[0]?.projectId  ?? undefined;
     const lineItems = entries.map(e => {
       const hours = Number((e.durationMins / 60).toFixed(2));
       const rate  = e.hourlyRate != null ? Number(e.hourlyRate) * hours : 0;
@@ -114,6 +116,8 @@ export class TimeEntriesService {
 
     const invoice = await this.invoices.create(workspaceId, {
       clientId,
+      contactId,
+      projectId,
       lineItems,
       gstType: GstType.IGST,
     } as any);

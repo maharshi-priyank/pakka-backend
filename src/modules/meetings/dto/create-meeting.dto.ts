@@ -29,6 +29,10 @@ export class CreateMeetingDto {
   @IsOptional()
   clientId?: string;
 
+  @IsString()
+  @IsOptional()
+  projectId?: string;
+
   @IsArray()
   @IsEmail({}, { each: true })
   @IsOptional()
