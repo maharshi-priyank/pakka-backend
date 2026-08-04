@@ -34,6 +34,12 @@ export class PublicProfilesController {
   // ── Public (no auth) ───────────────────────────────────────────────────────
 
   @Public()
+  @Get('stats')
+  getPlatformStats() {
+    return this.service.getPlatformStats();
+  }
+
+  @Public()
   @Get(':username')
   getPublicProfile(@Param('username') username: string) {
     return this.service.getPublicProfile(username);

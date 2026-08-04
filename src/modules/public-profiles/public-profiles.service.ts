@@ -225,4 +225,9 @@ export class PublicProfilesService {
       },
     });
   }
+
+  async getPlatformStats() {
+    const count = await this.prisma.user.count();
+    return { userCount: count };
+  }
 }
