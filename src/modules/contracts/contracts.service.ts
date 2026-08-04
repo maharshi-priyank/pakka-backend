@@ -176,6 +176,7 @@ export class ContractsService {
         proposalId: proposal.id,
         clientId,
         contactId:  proposal.contactId ?? undefined,
+        projectId:  proposal.projectId ?? undefined,
         title:      `Contract — ${proposal.title}`,
         content:    content as object,
         // KTD6 (mirrored for the Proposal->Contract hop): carries the source

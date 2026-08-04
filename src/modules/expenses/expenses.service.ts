@@ -195,7 +195,9 @@ export class ExpensesService {
     const contactIds = [...new Set(expenses.map(e => e.contactId ?? e.clientId))];
     if (contactIds.length > 1) throw new BadRequestException('All expenses must be for the same contact');
 
-    const clientId = expenses[0]?.clientId ?? undefined;
+    const clientId  = expenses[0]?.clientId             ?? undefined;
+    const contactId = expenses[0]?.contact?.id           ?? expenses[0]?.contactId ?? undefined;
+    const projectId = expenses[0]?.projectId             ?? undefined;
     const lineItems = expenses.map(e => ({
       description: `${e.category}: ${e.description}`,
       qty:         1,
@@ -205,6 +207,8 @@ export class ExpensesService {
 
     const invoice = await this.invoices.create(workspaceId, {
       clientId,
+      contactId,
+      projectId,
       lineItems,
       gstType: GstType.EXEMPT,
     } as any);
