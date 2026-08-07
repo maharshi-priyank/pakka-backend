@@ -683,6 +683,40 @@ export const EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
     },
   },
 
+  // ── Messages ──────────────────────────────────────────────────────────────
+
+  message_received: {
+    subject: (v) => {
+      const dv = v as unknown as Record<string, string>
+      return `New message from ${dv['businessName'] ?? 'your service provider'}`
+    },
+    html: (v) => {
+      const dv = v as unknown as Record<string, string>
+      return layout(`
+        ${h1(`Hi ${dv['clientName'] ?? 'there'},`)}
+        ${p(`You have a new message from <strong>${dv['businessName'] ?? 'your service provider'}</strong>:`)}
+        ${alert(dv['messageBody'] ?? '', 'info')}
+        ${dv['portalUrl'] ? btn('View in Portal', dv['portalUrl']) : ''}
+      `, dv['businessName'] ?? '', 'New message')
+    },
+  },
+
+  client_message_received: {
+    subject: (v) => {
+      const dv = v as unknown as Record<string, string>
+      return `${dv['clientName'] ?? 'A client'} replied to your message`
+    },
+    html: (v) => {
+      const dv = v as unknown as Record<string, string>
+      return layout(`
+        ${h1(`${dv['clientName'] ?? 'Your client'} replied`)}
+        ${p(`<strong>${dv['clientName'] ?? 'Your client'}</strong> replied to your message:`)}
+        ${alert(dv['messageBody'] ?? '', 'info')}
+        ${dv['inboxUrl'] ? btn('View in Inbox', dv['inboxUrl']) : ''}
+      `, '', 'Client replied')
+    },
+  },
+
 }
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────

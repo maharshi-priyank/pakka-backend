@@ -259,7 +259,7 @@ export class AutomationScheduler {
         where: {
           workspaceId: rule.workspaceId,
           status:    'SENT',          // still SENT = never opened (would be OPENED)
-          updatedAt: { gte: from, lte: to },
+          sentAt:    { gte: from, lte: to },
         },
       })
       for (const p of proposals) {
@@ -285,7 +285,7 @@ export class AutomationScheduler {
         where: {
           workspaceId: rule.workspaceId,
           status:    'OPENED',
-          updatedAt: { gte: from, lte: to },
+          sentAt:    { gte: from, lte: to },
         },
       })
       for (const p of proposals) {

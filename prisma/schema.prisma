@@ -865,6 +865,7 @@ model Proposal {
   depositPaid       Boolean        @default(false)
   depositPaidAt     DateTime?
   // R7/R8/R10/R12: opt-in OTP gate on the public view, set only via send() (KTD5).
+  sentAt            DateTime?
   otpGated          Boolean        @default(false)
   viewOtp           String?
   otpFailedAttempts Int            @default(0)

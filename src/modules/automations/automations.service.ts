@@ -24,12 +24,10 @@ AVAILABLE TRIGGER TYPES (use exactly these strings):
 - meeting.scheduled — when a meeting is scheduled
 
 AVAILABLE ACTION TYPES (use exactly these strings):
-- send_email.client — send an email to the client (actionConfig: { subject: string, body: string })
-- send_email.me — send a notification email to the workspace owner (actionConfig: { subject: string, body: string })
+- send_email.client — send an email to the client (actionConfig: { templateKey: string })
+- send_email.user — send a notification email to the workspace owner (actionConfig: { templateKey: string })
 - create.invoice — automatically create an invoice draft (actionConfig: {})
 - create.contract — automatically create a contract draft (actionConfig: {})
-- change_lead_stage — change lead stage (actionConfig: { stage: "WON" | "PROPOSAL_SENT" | "NEGOTIATING" | "LOST" })
-- add_note — add a note to the entity (actionConfig: { note: string })
 
 Each workflow has ONE trigger and ONE primary action step. You can output up to 3 workflows if the user's request implies multiple distinct automations.
 
@@ -45,7 +43,7 @@ JSON schema for each workflow:
   "triggerType": string,    // from AVAILABLE TRIGGER TYPES above
   "triggerConfig": object,  // {} or { toStage: "..." } etc.
   "actionType": string,     // from AVAILABLE ACTION TYPES above
-  "actionConfig": object,   // { subject, body } or {} etc.
+  "actionConfig": object,   // { templateKey: "invoice_client_link" } for email actions, or {} for create actions
   "delayValue": number,     // 0 for immediate, or N for delayed
   "delayUnit": string       // "minutes" | "hours" | "days"
 }`
@@ -176,25 +174,20 @@ export class AutomationsService {
 
   async createFromAI(workspaceId: string, rules: GeneratedRule[]) {
     const created = await Promise.all(
-      rules.map((rule) =>
-        this.prisma.automationWorkflow.create({
+      rules.map((rule, i) =>
+        this.prisma.automationRule.create({
           data: {
             workspaceId,
-            name:        rule.name,
-            description: rule.description,
-            isActive:    false,
-            trigger: {
-              type:   rule.triggerType,
-              config: rule.triggerConfig ?? {},
-            } as Prisma.InputJsonValue,
-            steps: [
-              {
-                id:     `step_${Date.now()}`,
-                type:   'action',
-                delay:  { value: rule.delayValue ?? 0, unit: rule.delayUnit ?? 'minutes' },
-                action: { type: rule.actionType, config: rule.actionConfig ?? {} },
-              },
-            ] as unknown as Prisma.InputJsonValue,
+            key:          `ai_${Date.now()}_${i}`,
+            name:         rule.name,
+            description:  rule.description,
+            category:     rule.category,
+            triggerEvent: rule.triggerType,
+            triggerConfig: rule.triggerConfig as Prisma.InputJsonValue ?? {},
+            actionType:   rule.actionType,
+            actionConfig: rule.actionConfig  as Prisma.InputJsonValue ?? {},
+            isActive:     false,
+            isSystem:     false,
           },
         })
       )

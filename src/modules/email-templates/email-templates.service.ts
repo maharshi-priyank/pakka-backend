@@ -125,7 +125,7 @@ export class EmailTemplatesService {
     } else {
       const sampleVars = this.buildSampleVars(templateKey)
       const rendered = renderTemplate(templateKey, sampleVars as any)
-      subject = `[TEST] ${rendered.subject}`
+      subject = rendered.subject
       html    = rendered.html
     }
 

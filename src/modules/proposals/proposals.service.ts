@@ -265,6 +265,7 @@ export class ProposalsService {
       where: { id },
       data:  {
         status: ProposalStatus.SENT,
+        sentAt: new Date(),
         otpGated,
         viewOtp,
         otpFailedAttempts: 0,

@@ -7,7 +7,7 @@ import { AutomationsService } from './automations.service'
 import { EmailService } from './email.service'
 import { WhatsappMessageService } from '../whatsapp/whatsapp-message.service'
 
-import { renderTemplate } from './templates/email-templates'
+import { renderTemplate, renderCustomTemplate } from './templates/email-templates'
 import { ContractsService } from '../contracts/contracts.service'
 import { InvoicesService } from '../invoices/invoices.service'
 import type {
@@ -48,6 +48,28 @@ export class AutomationEngine {
         entityType,
       },
     })
+  }
+
+  // ─── Template resolution: DB override → system default ───────────────────
+
+  private async resolveTemplate(
+    workspaceId: string,
+    templateKey: string,
+    vars: Record<string, unknown>,
+    businessName: string,
+  ): Promise<{ subject: string; html: string }> {
+    const override = await this.prisma.emailTemplate.findUnique({
+      where: { workspaceId_templateKey: { workspaceId, templateKey } },
+      select: { subject: true, bodyHtml: true },
+    })
+    if (override) {
+      const flatVars: Record<string, string> = {}
+      for (const [k, v] of Object.entries(vars)) {
+        flatVars[k] = v != null ? String(v) : ''
+      }
+      return renderCustomTemplate(override.subject, override.bodyHtml, flatVars, businessName)
+    }
+    return renderTemplate(templateKey, vars as any)
   }
 
   // ─── Event listeners ───────────────────────────────────────────────────────
@@ -254,7 +276,7 @@ export class AutomationEngine {
       return
     }
 
-    const { subject, html } = renderTemplate(templateKey, vars)
+    const { subject, html } = await this.resolveTemplate(workspaceId, templateKey, vars as unknown as Record<string, unknown>, businessName)
     await this.email.send({ workspaceId, to, subject, html, templateKey, entityId, entityType, contactId })
   }
 
@@ -385,10 +407,10 @@ export class AutomationEngine {
 
     } else if (entityType === 'proposal') {
       const appUrl   = this.config.get<string>('appUrl') ?? 'http://localhost:5173'
-      const proposal = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true } })
+      const proposal = await this.prisma.proposal.findUnique({ where: { id: entityId }, include: { client: true, lead: true, contact: true } })
       if (!proposal) return
       vars = {
-        clientName:    proposal.client?.name ?? proposal.lead?.name ?? '—',
+        clientName:    proposal.contact?.name ?? proposal.client?.name ?? proposal.lead?.name ?? '—',
         businessName,
         proposalTitle: proposal.title,
         proposalLink:  `${appUrl}/p/${proposal.slug}`,
@@ -400,7 +422,7 @@ export class AutomationEngine {
       return
     }
 
-    const { subject, html } = renderTemplate(templateKey, vars)
+    const { subject, html } = await this.resolveTemplate(workspaceId, templateKey, vars as unknown as Record<string, unknown>, businessName)
     await this.email.send({ workspaceId, to: user.email, subject, html, templateKey, entityId, entityType })
   }
 
@@ -475,7 +497,7 @@ export class AutomationEngine {
         agenda:        meeting.agenda,
         portalLink:    recipient.portalLink ?? null,
       }
-      const { subject, html } = renderTemplate('meeting_scheduled_client', vars)
+      const { subject, html } = await this.resolveTemplate(workspaceId, 'meeting_scheduled_client', vars as unknown as Record<string, unknown>, businessName)
 
       if (outlookCal) {
         const sent = await outlookCal.sendEmail(workspaceId, { to: recipient.email, subject, html })
@@ -524,7 +546,7 @@ export class AutomationEngine {
       followUpsCount: followUps,
     }
 
-    const { subject, html } = renderTemplate(templateKey, vars)
+    const { subject, html } = await this.resolveTemplate(workspaceId, templateKey, vars, businessName)
     await this.email.send({ workspaceId, to: user.email, subject, html, templateKey, entityId: workspaceId, entityType: 'user' })
   }
 
