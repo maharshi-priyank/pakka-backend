@@ -9,6 +9,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { ConvertLeadToContactDto } from './dto/convert-lead-to-contact.dto';
+import { CreateLeadActivityDto } from './dto/create-lead-activity.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User, LeadStage } from '@prisma/client';
@@ -94,5 +95,18 @@ export class LeadsController {
   @ApiOperation({ summary: 'Permanently delete a lead (no linked records)' })
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.leadsService.remove(resolveWorkspaceId(user), id);
+  }
+
+  @Get(':id/activities')
+  @ApiOperation({ summary: 'List activity log entries for a lead' })
+  getActivities(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.leadsService.getActivities(resolveWorkspaceId(user), id);
+  }
+
+  @Post(':id/activities')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Log a note, call, email, or meeting on a lead' })
+  createActivity(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: CreateLeadActivityDto) {
+    return this.leadsService.createActivity(resolveWorkspaceId(user), id, dto);
   }
 }

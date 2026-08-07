@@ -13,6 +13,14 @@ class CreateNoteDto {
   @IsString() @MinLength(1) content: string;
 }
 
+class AddMemberDto {
+  @IsString() @MinLength(1) userId: string;
+}
+
+class CreateUpdateDto {
+  @IsString() @MinLength(1) content: string;
+}
+
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
@@ -118,5 +126,41 @@ export class ProjectsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteNote(@CurrentUser() user: User, @Param('id') id: string, @Param('noteId') noteId: string) {
     return this.projectsService.deleteNote(resolveWorkspaceId(user), id, noteId);
+  }
+
+  // ── Updates ────────────────────────────────────────────────────────────────
+
+  @Get(':id/updates')
+  listUpdates(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.projectsService.listUpdates(resolveWorkspaceId(user), id);
+  }
+
+  @Post(':id/updates')
+  createUpdate(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: CreateUpdateDto) {
+    return this.projectsService.createUpdate(resolveWorkspaceId(user), id, user.id, dto.content);
+  }
+
+  @Delete(':id/updates/:updateId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteUpdate(@CurrentUser() user: User, @Param('id') id: string, @Param('updateId') updateId: string) {
+    return this.projectsService.deleteUpdate(resolveWorkspaceId(user), id, updateId);
+  }
+
+  // ── Members ────────────────────────────────────────────────────────────────
+
+  @Get(':id/members')
+  listMembers(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.projectsService.getProjectMembers(resolveWorkspaceId(user), id);
+  }
+
+  @Post(':id/members')
+  addMember(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: AddMemberDto) {
+    return this.projectsService.addProjectMember(resolveWorkspaceId(user), id, dto.userId);
+  }
+
+  @Delete(':id/members/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeMember(@CurrentUser() user: User, @Param('id') id: string, @Param('userId') userId: string) {
+    return this.projectsService.removeProjectMember(resolveWorkspaceId(user), id, userId);
   }
 }

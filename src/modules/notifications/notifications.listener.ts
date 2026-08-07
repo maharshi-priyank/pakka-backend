@@ -137,6 +137,28 @@ export class NotificationsListener {
     })
   }
 
+  @OnEvent('contract.auto_created')
+  async onContractAutoCreated({ entityId, workspaceId, proposalId }: EventPayload & { proposalId: string }) {
+    const contract = await this.prisma.contract.findUnique({
+      where:   { id: entityId },
+      include: { contact: true, client: true },
+    })
+    const proposal = proposalId
+      ? await this.prisma.proposal.findUnique({ where: { id: proposalId }, select: { title: true } })
+      : null
+    const clientName    = contract?.contact?.name ?? contract?.client?.name ?? 'your client'
+    const proposalTitle = proposal?.title ?? 'the proposal'
+
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'contract.auto_created',
+      title:      'Contract draft ready',
+      body:       `A contract was created from "${proposalTitle}" — send it to ${clientName} for signing`,
+      entityId,
+      entityType: 'contract',
+    })
+  }
+
   @OnEvent('invoice.overdue')
   async onInvoiceOverdue({ entityId, workspaceId }: EventPayload) {
     const inv = await this.prisma.invoice.findUnique({

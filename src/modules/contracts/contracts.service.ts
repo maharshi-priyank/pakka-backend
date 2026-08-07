@@ -170,7 +170,7 @@ export class ContractsService {
       ],
     };
 
-    return this.prisma.contract.create({
+    const contract = await this.prisma.contract.create({
       data: {
         workspaceId,
         proposalId: proposal.id,
@@ -188,6 +188,14 @@ export class ContractsService {
       },
       include: INCLUDE_FULL,
     });
+
+    this.eventEmitter.emit('contract.auto_created', {
+      entityId:   contract.id,
+      workspaceId,
+      proposalId: proposal.id,
+    });
+
+    return contract;
   }
 
   // U7/KTD7/KTD8: lets a member swap the boilerplate template on an

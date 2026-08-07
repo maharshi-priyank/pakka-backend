@@ -7,7 +7,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { ConvertLeadToContactDto } from './dto/convert-lead-to-contact.dto';
-import { LeadStage } from '@prisma/client';
+import { LeadStage, ContactStage, LeadActivityType } from '@prisma/client';
 import { effectivePlan } from '../users/effective-plan';
 import Decimal from 'decimal.js';
 import { ContactsService } from '../contacts/contacts.service';
@@ -64,7 +64,7 @@ export class LeadsService {
         skip,
         take: limit,
         orderBy: { lastActivityAt: 'desc' },
-        include: { client: true, sourceForm: { select: { title: true } }, proposals: { select: { id: true, status: true } } },
+        include: { client: true, contact: { select: { id: true, name: true, company: true } }, sourceForm: { select: { title: true } }, proposals: { select: { id: true, status: true } } },
       }),
       this.prisma.lead.count({ where }),
       this.prisma.lead.aggregate({
@@ -86,7 +86,8 @@ export class LeadsService {
     const lead = await this.prisma.lead.findFirst({
       where: { id, workspaceId },
       include: {
-        client: true,
+        client:   true,
+        contact:  { select: { id: true, name: true, company: true } },
         proposals: { orderBy: { createdAt: 'desc' } },
       },
     });
@@ -155,28 +156,36 @@ export class LeadsService {
   async convertToClient(workspaceId: string, leadId: string, dto?: ConvertLeadDto) {
     const lead = await this.findOne(workspaceId, leadId);
 
-    if (lead.clientId) {
-      throw new ConflictException('This lead is already linked to a client');
+    if (lead.contactId) {
+      throw new ConflictException('This lead has already been converted to a contact');
     }
 
+    const workspace = await this.prisma.workspace.findUnique({
+      where:  { id: workspaceId },
+      select: { country: true, currency: true },
+    });
+
     const result = await this.prisma.$transaction(async (tx) => {
-      const newClient = await tx.client.create({
+      const newContact = await tx.contact.create({
         data: {
           workspaceId,
           name:        dto?.name    ?? lead.name,
           email:       dto?.email   ?? lead.email   ?? undefined,
           phone:       dto?.phone   ?? lead.phone   ?? undefined,
           company:     dto?.company ?? lead.company ?? undefined,
+          stage:       ContactStage.CLIENT,
+          country:     workspace?.country ?? undefined,
+          currency:    workspace?.currency ?? undefined,
           portalToken: nanoid(21),
         },
       });
 
       await tx.lead.update({
         where: { id: leadId },
-        data:  { clientId: newClient.id, stage: LeadStage.WON, lastActivityAt: new Date() },
+        data:  { contactId: newContact.id, stage: LeadStage.WON, lastActivityAt: new Date() },
       });
 
-      // Backfill clientId on all proposals made for this lead
+      // Backfill contactId on all proposals made for this lead
       const proposals = await tx.proposal.findMany({
         where: { leadId },
         select: { id: true },
@@ -186,10 +195,10 @@ export class LeadsService {
       if (proposalIds.length > 0) {
         await tx.proposal.updateMany({
           where: { id: { in: proposalIds } },
-          data:  { clientId: newClient.id },
+          data:  { contactId: newContact.id },
         });
 
-        // Backfill clientId on contracts linked to those proposals
+        // Backfill contactId on contracts linked to those proposals
         const contracts = await tx.contract.findMany({
           where: { proposalId: { in: proposalIds } },
           select: { id: true },
@@ -199,26 +208,26 @@ export class LeadsService {
         if (contractIds.length > 0) {
           await tx.contract.updateMany({
             where: { id: { in: contractIds } },
-            data:  { clientId: newClient.id },
+            data:  { contactId: newContact.id },
           });
 
-          // Backfill clientId on invoices linked to those contracts
+          // Backfill contactId on invoices linked to those contracts
           await tx.invoice.updateMany({
             where: { contractId: { in: contractIds } },
-            data:  { clientId: newClient.id },
+            data:  { contactId: newContact.id },
           });
         }
       }
 
-      // Optionally create a project linked to the new client
+      // Optionally create a project linked to the new contact
       let newProject: { id: string; name: string } | null = null;
       if (dto?.createProject && dto?.projectName) {
         newProject = await tx.project.create({
           data: {
             workspaceId,
-            name:      dto.projectName,
-            clientId:  newClient.id,
-            status:    'ACTIVE',
+            name:        dto.projectName,
+            contactId:   newContact.id,
+            status:      'ACTIVE',
             ...(dto.projectBudget    && { budget:    dto.projectBudget }),
             ...(dto.projectStartDate && { startDate: new Date(dto.projectStartDate) }),
             ...(dto.projectEndDate   && { endDate:   new Date(dto.projectEndDate) }),
@@ -227,10 +236,10 @@ export class LeadsService {
         });
       }
 
-      return { client: newClient, project: newProject };
+      return { contact: newContact, project: newProject };
     });
 
-    this.eventEmitter.emit('lead.converted', { entityId: leadId, workspaceId, clientId: result.client.id })
+    this.eventEmitter.emit('lead.converted', { entityId: leadId, workspaceId, contactId: result.contact.id })
     return result;
   }
 
@@ -277,6 +286,28 @@ export class LeadsService {
 
     this.eventEmitter.emit('lead.convertedToContact', { entityId: leadId, workspaceId, contactId: contact.id });
     return { contact };
+  }
+
+  async createActivity(workspaceId: string, leadId: string, dto: { type: LeadActivityType; content: string; metadata?: object }) {
+    await this.findOne(workspaceId, leadId);
+    const [activity] = await this.prisma.$transaction([
+      this.prisma.leadActivity.create({
+        data: { workspaceId, leadId, type: dto.type, content: dto.content, metadata: dto.metadata ?? undefined },
+      }),
+      this.prisma.lead.update({
+        where: { id: leadId },
+        data:  { lastActivityAt: new Date() },
+      }),
+    ]);
+    return activity;
+  }
+
+  async getActivities(workspaceId: string, leadId: string) {
+    await this.findOne(workspaceId, leadId);
+    return this.prisma.leadActivity.findMany({
+      where:   { leadId, workspaceId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async getPipelineValue(workspaceId: string) {

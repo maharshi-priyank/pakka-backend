@@ -149,6 +149,10 @@ export class ProjectsService {
           select:  { id: true, description: true, category: true, amount: true, date: true, isBillable: true, isBilled: true },
         },
         _count: { select: { proposals: true, contracts: true, invoices: true, timeEntries: true, expenses: true } },
+        members: {
+          include: { user: { select: { id: true, name: true, email: true } } },
+          orderBy: { joinedAt: 'asc' },
+        },
       },
     });
 
@@ -291,6 +295,50 @@ export class ProjectsService {
       throw new BadRequestException(`Cannot delete: this project has ${parts}. Archive instead.`);
     }
     await this.prisma.project.delete({ where: { id } });
+  }
+
+  async listUpdates(workspaceId: string, projectId: string) {
+    await this.findOne(workspaceId, projectId);
+    return this.prisma.projectUpdate.findMany({
+      where: { projectId, workspaceId },
+      include: { author: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createUpdate(workspaceId: string, projectId: string, authorId: string, content: string) {
+    await this.findOne(workspaceId, projectId);
+    return this.prisma.projectUpdate.create({
+      data: { workspaceId, projectId, authorId, content },
+      include: { author: { select: { id: true, name: true, email: true } } },
+    });
+  }
+
+  async deleteUpdate(workspaceId: string, projectId: string, updateId: string) {
+    await this.findOne(workspaceId, projectId);
+    await this.prisma.projectUpdate.deleteMany({ where: { id: updateId, workspaceId, projectId } });
+  }
+
+  async getProjectMembers(workspaceId: string, projectId: string) {
+    await this.findOne(workspaceId, projectId);
+    return this.prisma.projectMember.findMany({
+      where: { projectId, workspaceId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { joinedAt: 'asc' },
+    });
+  }
+
+  async addProjectMember(workspaceId: string, projectId: string, userId: string) {
+    await this.findOne(workspaceId, projectId);
+    return this.prisma.projectMember.create({
+      data: { workspaceId, projectId, userId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+  }
+
+  async removeProjectMember(workspaceId: string, projectId: string, userId: string) {
+    await this.findOne(workspaceId, projectId);
+    await this.prisma.projectMember.deleteMany({ where: { projectId, userId, workspaceId } });
   }
 
   async getProjectPl(

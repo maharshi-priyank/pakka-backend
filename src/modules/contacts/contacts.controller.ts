@@ -2,8 +2,8 @@ import {
   Controller, Get, Post, Patch, Delete,
   Param, Body, Query, HttpCode, HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiProperty } from '@nestjs/swagger';
-import { IsString, MinLength, IsEnum } from 'class-validator';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
 import { ContactsService } from './contacts.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
@@ -17,6 +17,11 @@ class UpdateStageDto {
   @ApiProperty({ enum: ContactStage })
   @IsEnum(ContactStage)
   stage: ContactStage;
+
+  @ApiPropertyOptional({ description: 'Reason the deal was lost (required when stage is LOST)' })
+  @IsOptional()
+  @IsString()
+  lostReason?: string;
 }
 
 class CreateNoteDto {
@@ -81,7 +86,7 @@ export class ContactsController {
   @Patch(':id/stage')
   @ApiOperation({ summary: 'Move contact to a different stage' })
   updateStage(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateStageDto) {
-    return this.contactsService.updateStage(resolveWorkspaceId(user), id, dto.stage);
+    return this.contactsService.updateStage(resolveWorkspaceId(user), id, dto.stage, dto.lostReason);
   }
 
   @Patch(':id/archive')

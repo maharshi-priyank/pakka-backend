@@ -146,6 +146,7 @@ model Workspace {
   activeUsers User[]            @relation("ActiveWorkspace")
 
   leads               Lead[]
+  leadActivities      LeadActivity[]
   clients             Client[]
   proposals           Proposal[]
   contracts           Contract[]
@@ -177,6 +178,8 @@ model Workspace {
   featureFlags        AdminWorkspaceFeatureFlag[]
   incidents           AdminIncident[]
   productEvents       ProductEvent[]
+  projectMembers      ProjectMember[]
+  projectUpdates      ProjectUpdate[]
 
   @@map("workspaces")
 }
@@ -321,7 +324,9 @@ model User {
   activeWorkspace         Workspace?         @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
   workspaceMemberships    WorkspaceMember[]
 
-  assignedTasks    Task[]            @relation("TaskAssignee")
+  assignedTasks      Task[]            @relation("TaskAssignee")
+  projectMemberships ProjectMember[]
+  projectUpdates     ProjectUpdate[]
   emailSignature   String?
   leadProviderKeys LeadProviderKey[]
   leadCampaigns    LeadCampaign[]
@@ -760,6 +765,7 @@ model Lead {
   updatedAt      DateTime   @updatedAt
   proposals      Proposal[]
   meetings       Meeting[]
+  activities     LeadActivity[]
 
   @@index([workspaceId])
   @@index([workspaceId, archivedAt, stage])
@@ -768,6 +774,29 @@ model Lead {
   @@index([sourceFormId])
   @@index([contactId])
   @@map("leads")
+}
+
+enum LeadActivityType {
+  NOTE
+  CALL
+  EMAIL
+  MEETING
+}
+
+model LeadActivity {
+  id          String           @id @default(cuid())
+  workspaceId String
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leadId      String
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type        LeadActivityType
+  content     String
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+
+  @@index([leadId])
+  @@index([workspaceId])
+  @@map("lead_activities")
 }
 
 enum LeadStage {
@@ -810,6 +839,7 @@ model Contact {
   followUpAt      DateTime?
   lastActivityAt  DateTime     @default(now())
   stage           ContactStage @default(ENQUIRY)
+  lostReason      String?
   notes           String?
   archivedAt      DateTime?
   createdAt       DateTime     @default(now())
@@ -1342,6 +1372,8 @@ model Project {
   notes               ProjectNote[]
   tasks               Task[]
   taskBoards          TaskBoard[]
+  members             ProjectMember[]
+  updates             ProjectUpdate[]
 
   @@index([workspaceId, status])
   @@index([workspaceId, archivedAt])
@@ -1364,6 +1396,22 @@ enum ProjectStage {
   COMPLETED
   ON_HOLD
   CANCELLED
+}
+
+model ProjectMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt    DateTime  @default(now())
+
+  @@unique([projectId, userId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("project_members")
 }
 
 enum TaskStatus {
@@ -1474,6 +1522,23 @@ model ProjectNote {
 
   @@index([workspaceId, projectId])
   @@map("project_notes")
+}
+
+model ProjectUpdate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId, projectId])
+  @@index([projectId])
+  @@map("project_updates")
 }
 
 model Attachment {

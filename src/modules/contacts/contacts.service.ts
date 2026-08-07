@@ -292,11 +292,15 @@ export class ContactsService {
     })
   }
 
-  async updateStage(workspaceId: string, id: string, stage: ContactStage) {
+  async updateStage(workspaceId: string, id: string, stage: ContactStage, lostReason?: string) {
     await this.findOne(workspaceId, id)
     const contact = await this.prisma.contact.update({
       where: { id },
-      data:  { stage, lastActivityAt: new Date() },
+      data:  {
+        stage,
+        lastActivityAt: new Date(),
+        ...(stage === ContactStage.LOST ? { lostReason: lostReason ?? null } : { lostReason: null }),
+      },
     })
     this.eventEmitter.emit('contact.stage_changed', { entityId: id, workspaceId, stage })
     return contact

@@ -54,20 +54,20 @@ export class PortalService {
         select: {
           id: true, title: true, status: true, slug: true,
           totalAmount: true, gstAmount: true, validUntil: true,
-          acceptedAt: true, createdAt: true,
+          acceptedAt: true, createdAt: true, projectId: true,
         },
       }),
       this.prisma.contract.findMany({
         where: { contactId: contact!.id, status: { not: 'DRAFT' } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, status: true, signedAt: true, createdAt: true },
+        select: { id: true, title: true, status: true, signedAt: true, createdAt: true, projectId: true },
       }),
       this.prisma.invoice.findMany({
         where: { contactId: contact!.id, status: { not: 'DRAFT' } },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, invoiceNumber: true, status: true,
-          total: true, dueDate: true, paidAt: true, createdAt: true,
+          total: true, dueDate: true, paidAt: true, createdAt: true, projectId: true,
         },
       }),
       this.prisma.meeting.findMany({
@@ -92,6 +92,10 @@ export class PortalService {
             where:   { isBillable: true },
             orderBy: { date: 'desc' },
             select: { id: true, description: true, category: true, amount: true, date: true, isBilled: true },
+          },
+          updates: {
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true } } },
           },
         },
       }),
@@ -133,20 +137,20 @@ export class PortalService {
         select: {
           id: true, title: true, status: true, slug: true,
           totalAmount: true, gstAmount: true, validUntil: true,
-          acceptedAt: true, createdAt: true,
+          acceptedAt: true, createdAt: true, projectId: true,
         },
       }),
       this.prisma.contract.findMany({
         where: { clientId: client!.id, status: { not: 'DRAFT' } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, status: true, signedAt: true, createdAt: true },
+        select: { id: true, title: true, status: true, signedAt: true, createdAt: true, projectId: true },
       }),
       this.prisma.invoice.findMany({
         where: { clientId: client!.id, status: { not: 'DRAFT' } },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, invoiceNumber: true, status: true,
-          total: true, dueDate: true, paidAt: true, createdAt: true,
+          total: true, dueDate: true, paidAt: true, createdAt: true, projectId: true,
         },
       }),
       this.prisma.meeting.findMany({
@@ -171,6 +175,10 @@ export class PortalService {
             where:   { isBillable: true },
             orderBy: { date: 'desc' },
             select: { id: true, description: true, category: true, amount: true, date: true, isBilled: true },
+          },
+          updates: {
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true } } },
           },
         },
       }),
