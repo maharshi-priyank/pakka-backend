@@ -180,6 +180,8 @@ model Workspace {
   productEvents       ProductEvent[]
   projectMembers      ProjectMember[]
   projectUpdates      ProjectUpdate[]
+  changeRequests      ChangeRequest[]
+  approvalRequests    ApprovalRequest[]
 
   @@map("workspaces")
 }
@@ -956,7 +958,12 @@ model Contract {
   currency    String?
   sentAt      DateTime?
   signedAt    DateTime?
-  signerOtp   String?
+  signerOtp      String?
+  otpHash        String?
+  otpExpiresAt   DateTime?
+  otpEmailSent   Boolean    @default(false)
+  otpLastSentAt  DateTime?
+  otpFailedCount Int        @default(0)
   auditLog    Json?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -1021,6 +1028,7 @@ model Invoice {
   childInvoices      Invoice[]     @relation("InvoiceRecurrence")
   attachments        Attachment[]  @relation("InvoiceAttachments")
   gatedAttachments   Attachment[]  @relation("InvoiceGate")
+  approvalRequests   ApprovalRequest[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -1048,6 +1056,27 @@ enum GstType {
   CGST_SGST
   IGST
   EXEMPT
+}
+
+enum ChangeRequestStatus {
+  PENDING_REVIEW
+  RESOLVED_IN_SCOPE
+  NOT_FEASIBLE
+  ADDITIONAL_COST_PENDING
+  APPROVED_INVOICE_SENT
+  REJECTED
+}
+
+enum ApprovalRequestKind {
+  CHANGE_REQUEST_COST
+  PROJECT_SIGNOFF
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
 }
 
 model AutomationRule {
@@ -1374,6 +1403,8 @@ model Project {
   taskBoards          TaskBoard[]
   members             ProjectMember[]
   updates             ProjectUpdate[]
+  changeRequests      ChangeRequest[]
+  approvalRequests    ApprovalRequest[]
 
   @@index([workspaceId, status])
   @@index([workspaceId, archivedAt])
@@ -1546,11 +1577,12 @@ model Attachment {
   workspaceId String
 
   // Polymorphic parent — exactly one of these should be set
-  projectId  String?
-  proposalId String?
-  invoiceId  String?
-  clientId   String?
-  contactId  String?
+  projectId       String?
+  proposalId      String?
+  invoiceId       String?
+  clientId        String?
+  contactId       String?
+  changeRequestId String?
 
   // Optional payment gate — null = freely downloadable
   gateInvoiceId String?
@@ -1567,7 +1599,9 @@ model Attachment {
   invoice     Invoice?  @relation("InvoiceAttachments", fields: [invoiceId], references: [id], onDelete: Cascade)
   client      Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  gateInvoice Invoice?  @relation("InvoiceGate", fields: [gateInvoiceId], references: [id])
+  gateInvoice              Invoice?        @relation("InvoiceGate", fields: [gateInvoiceId], references: [id])
+  changeRequest            ChangeRequest?  @relation("CrAttachments", fields: [changeRequestId], references: [id], onDelete: SetNull)
+  primaryForChangeRequests ChangeRequest[] @relation("CrPrimaryAttachment")
 
   @@index([workspaceId])
   @@index([clientId])
@@ -1575,6 +1609,7 @@ model Attachment {
   @@index([projectId])
   @@index([invoiceId])
   @@index([proposalId])
+  @@index([changeRequestId])
   @@map("attachments")
 }
 
@@ -1748,4 +1783,62 @@ model WhatsappConnection {
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@map("whatsapp_connections")
+}
+
+model ChangeRequest {
+  id              String              @id @default(cuid())
+  projectId       String
+  project         Project             @relation(fields: [projectId], references: [id])
+  workspaceId     String
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id])
+  raisedByEmail   String
+  description     String
+  attachmentId     String?
+  attachment       Attachment?         @relation("CrPrimaryAttachment", fields: [attachmentId], references: [id])
+  status           ChangeRequestStatus @default(PENDING_REVIEW)
+  freelancerNote   String?
+  approvalRequests ApprovalRequest[]
+  attachments      Attachment[]        @relation("CrAttachments")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@map("change_requests")
+}
+
+model ApprovalRequest {
+  id               String                @id @default(cuid())
+  kind             ApprovalRequestKind
+  requiresOtp      Boolean
+  projectId        String
+  project          Project               @relation(fields: [projectId], references: [id])
+  workspaceId      String
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id])
+  changeRequestId  String?
+  changeRequest    ChangeRequest?        @relation(fields: [changeRequestId], references: [id])
+  // Cost-approval fields
+  amount           Decimal?              @db.Decimal(12, 2)
+  description      String?
+  invoiceId        String?
+  invoice          Invoice?              @relation(fields: [invoiceId], references: [id])
+  // OTP fields (kind=PROJECT_SIGNOFF)
+  otpHash          String?
+  otpExpiresAt     DateTime?
+  otpEmailSent     Boolean               @default(false)
+  otpLastSentAt    DateTime?
+  otpFailedCount   Int                   @default(0)
+  // Decision
+  status           ApprovalRequestStatus @default(PENDING)
+  decisionNote     String?
+  decidedAt        DateTime?
+  auditLog         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@index([changeRequestId])
+  @@index([invoiceId])
+  @@map("approval_requests")
 }
