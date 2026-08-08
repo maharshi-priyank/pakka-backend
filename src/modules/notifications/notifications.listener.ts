@@ -8,6 +8,12 @@ interface EventPayload {
   workspaceId: string
 }
 
+interface ReminderPayload {
+  approvalRequestId: string
+  projectId:         string
+  workspaceId:       string
+}
+
 function rupees(val: unknown): string {
   return `₹${Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 }
@@ -232,6 +238,106 @@ export class NotificationsListener {
       body:       `"${meeting.title}" on ${date}`,
       entityId,
       entityType: 'meeting',
+    })
+  }
+
+  // ─── Change-request events ────────────────────────────────────────────────
+
+  @OnEvent('changeRequest.raised')
+  async onChangeRequestRaised({ entityId, workspaceId, raisedByEmail, description }: EventPayload & { raisedByEmail: string; description: string }) {
+    const shortDesc = description ? ` — "${description.slice(0, 80)}${description.length > 80 ? '…' : ''}"` : ''
+
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'changeRequest.raised',
+      title:      'New change request',
+      body:       `New change request raised by ${raisedByEmail}${shortDesc}`,
+      entityId,
+      entityType: 'change-request',
+    })
+  }
+
+  @OnEvent('changeRequest.responded')
+  async onChangeRequestResponded({ entityId, workspaceId }: EventPayload) {
+    // NOTE: the plan requests a client-facing notification here, but the notifications
+    // system targets workspace owners (userId = workspaceId). A client-facing email
+    // should be sent via EmailService if needed in a future iteration.
+    const cr = await this.prisma.changeRequest.findUnique({ where: { id: entityId } })
+    const desc = cr?.description ? ` — "${cr.description.slice(0, 60)}${cr.description.length > 60 ? '…' : ''}"` : ''
+
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'changeRequest.responded',
+      title:      'Change request responded',
+      body:       `You responded to a change request${desc}`,
+      entityId,
+      entityType: 'change-request',
+    })
+  }
+
+  // ─── Approval-request events ──────────────────────────────────────────────
+
+  @OnEvent('approvalRequest.approved')
+  async onApprovalRequestApproved({ entityId, workspaceId, kind }: EventPayload & { kind: string }) {
+    const kindLabel = kind === 'PROJECT_SIGNOFF' ? 'project sign-off' : 'cost approval'
+
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'approvalRequest.approved',
+      title:      'Approval received',
+      body:       `Client approved ${kindLabel}`,
+      entityId,
+      entityType: 'approval-request',
+    })
+  }
+
+  @OnEvent('approvalRequest.rejected')
+  async onApprovalRequestRejected({ entityId, workspaceId }: EventPayload) {
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'approvalRequest.rejected',
+      title:      'Cost approval rejected',
+      body:       'Client rejected the cost approval',
+      entityId,
+      entityType: 'approval-request',
+    })
+  }
+
+  @OnEvent('approvalRequest.revisionRequested')
+  async onApprovalRequestRevisionRequested({ entityId, workspaceId }: EventPayload) {
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'approvalRequest.revisionRequested',
+      title:      'Revision requested',
+      body:       'Client requested revision for sign-off',
+      entityId,
+      entityType: 'approval-request',
+    })
+  }
+
+  // ─── Scheduled reminder events (fired by AutomationScheduler) ────────────
+
+  @OnEvent('approvalRequest.reminderDue')
+  async onApprovalRequestReminderDue({ approvalRequestId, workspaceId }: ReminderPayload) {
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'approvalRequest.reminderDue',
+      title:      'Sign-off reminder',
+      body:       'A project sign-off has been pending for over 14 days — follow up with your client',
+      entityId:   approvalRequestId,
+      entityType: 'approval-request',
+    })
+  }
+
+  @OnEvent('approvalRequest.costReminderDue')
+  async onApprovalRequestCostReminderDue({ approvalRequestId, workspaceId }: ReminderPayload) {
+    await this.notifications.create({
+      userId:     workspaceId,
+      type:       'approvalRequest.costReminderDue',
+      title:      'Cost approval reminder',
+      body:       'A cost approval request has been pending for over 30 days — follow up with your client',
+      entityId:   approvalRequestId,
+      entityType: 'approval-request',
     })
   }
 }
