@@ -28,6 +28,30 @@ export class ChangeRequestsService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
+  async create(data: {
+    projectId:      string
+    workspaceId:    string
+    raisedByEmail:  string
+    description:    string
+  }) {
+    // Verify project belongs to workspace (IDOR guard)
+    const project = await this.prisma.project.findFirst({
+      where:  { id: data.projectId, workspaceId: data.workspaceId },
+      select: { id: true },
+    })
+    if (!project) throw new NotFoundException('Project not found')
+
+    return this.prisma.changeRequest.create({
+      data: {
+        projectId:     data.projectId,
+        workspaceId:   data.workspaceId,
+        raisedByEmail: data.raisedByEmail,
+        description:   data.description,
+        status:        'PENDING_REVIEW',
+      },
+    })
+  }
+
   async listForProject(workspaceId: string, projectId: string) {
     // Verify project belongs to workspace
     const project = await this.prisma.project.findFirst({
