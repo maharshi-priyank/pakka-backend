@@ -410,6 +410,22 @@ export class ContractsService {
     return { ...signed, signerOtp: undefined };
   }
 
+  async resendOtp(workspaceId: string, contractId: string): Promise<{ otpEmailSent: boolean }> {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { client: true, contact: true },
+    })
+    if (!contract || contract.workspaceId !== workspaceId) {
+      throw new NotFoundException('Contract not found')
+    }
+    // Resolve recipient email (contact takes priority over client)
+    const email = (contract as any).contact?.email ?? (contract as any).client?.email
+    const name  = (contract as any).contact?.name  ?? (contract as any).client?.name ?? 'Client'
+    if (!email) throw new BadRequestException('No client email on record')
+
+    return this.otpService.resend('contract', contractId, { email, name, workspaceId })
+  }
+
   async archive(workspaceId: string, id: string) {
     const contract = await this.findOne(workspaceId, id);
     if (contract.status === ContractStatus.SIGNED) {
