@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import type { User } from '@prisma/client';
 
 @ApiTags('dashboard')
@@ -12,21 +13,21 @@ export class DashboardController {
 
   @Get('stats')
   getStats(@CurrentUser() user: User) {
-    return this.dashboardService.getStats(user.id);
+    return this.dashboardService.getStats(resolveWorkspaceId(user));
   }
 
   @Get('recent-activity')
   getRecentActivity(@CurrentUser() user: User) {
-    return this.dashboardService.getRecentActivity(user.id);
+    return this.dashboardService.getRecentActivity(resolveWorkspaceId(user));
   }
 
   @Get('upcoming-followups')
   getUpcomingFollowUps(@CurrentUser() user: User) {
-    return this.dashboardService.getUpcomingFollowUps(user.id);
+    return this.dashboardService.getUpcomingFollowUps(resolveWorkspaceId(user));
   }
 
   @Get('revenue-chart')
   getRevenueChart(@CurrentUser() user: User) {
-    return this.dashboardService.getRevenueChart(user.id);
+    return this.dashboardService.getRevenueChart(resolveWorkspaceId(user));
   }
 }

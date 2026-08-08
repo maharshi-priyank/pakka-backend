@@ -26,6 +26,12 @@ export class DashboardService {
       activeContacts,
       openProposals,
       pipelineContacts,
+      workspace,
+      unreadClientMessages,
+      totalContacts,
+      totalProposals,
+      totalInvoices,
+      totalContracts,
     ] = await Promise.all([
       // Revenue this month (paid invoices)
       this.prisma.invoice.aggregate({
@@ -56,6 +62,20 @@ export class DashboardService {
         where: { workspaceId, archivedAt: null, stage: { in: ACTIVE_STAGES } },
         _sum: { dealValue: true },
       }),
+      // Workspace record — for the monthly revenue goal
+      this.prisma.workspace.findUnique({
+        where:  { id: workspaceId },
+        select: { monthlyRevenueGoal: true },
+      }),
+      // Unread messages sent by clients on the portal, across the whole workspace
+      this.prisma.message.count({
+        where: { senderType: 'CLIENT', readAt: null, thread: { workspaceId } },
+      }),
+      // All-time counts — used to detect a brand-new, empty workspace
+      this.prisma.contact.count({ where: { workspaceId } }),
+      this.prisma.proposal.count({ where: { workspaceId } }),
+      this.prisma.invoice.count({ where: { workspaceId } }),
+      this.prisma.contract.count({ where: { workspaceId } }),
     ]);
 
     const thisMonth = Number(revenueThisMonth._sum.total ?? 0);
@@ -73,6 +93,9 @@ export class DashboardService {
       pipelineValue:     Number(pipelineContacts._sum.dealValue ?? 0),
       activeContacts,
       openProposals,
+      monthlyRevenueGoal:   workspace?.monthlyRevenueGoal != null ? Number(workspace.monthlyRevenueGoal) : null,
+      unreadClientMessages,
+      hasAnyActivity: totalContacts > 0 || totalProposals > 0 || totalInvoices > 0 || totalContracts > 0,
     };
   }
 

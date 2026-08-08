@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator'
+import { IsString, IsOptional, IsNumber, Min } from 'class-validator'
 import { ApiPropertyOptional } from '@nestjs/swagger'
 
 export class UpdateWorkspaceDto {
@@ -26,4 +26,5 @@ export class UpdateWorkspaceDto {
   @ApiPropertyOptional() @IsOptional() @IsString() razorpayKeyId?:     string
   @ApiPropertyOptional() @IsOptional() @IsString() razorpayKeySecret?: string
   @ApiPropertyOptional() @IsOptional() @IsString() razorpayAccountId?: string
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) monthlyRevenueGoal?: number
 }
