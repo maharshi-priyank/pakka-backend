@@ -41,6 +41,15 @@ export class ApprovalRequestsService {
     try {
       approvalRequest = await this.prisma.$transaction(
         async (tx) => {
+          // Guard: no unpaid invoices
+          const unpaidInvoice = await tx.invoice.findFirst({
+            where: { projectId, status: { in: ['SENT', 'VIEWED', 'PARTIAL', 'OVERDUE'] } },
+            select: { id: true },
+          })
+          if (unpaidInvoice) {
+            throw new HttpException('Settle all outstanding invoices before requesting sign-off', HttpStatus.CONFLICT)
+          }
+
           // Guard: no pending cost approvals
           const pendingCost = await tx.approvalRequest.findFirst({
             where: { projectId, kind: 'CHANGE_REQUEST_COST', status: 'PENDING' },
@@ -223,22 +232,8 @@ export class ApprovalRequestsService {
           data:  { status: 'REVISION_REQUESTED', decisionNote: decisionNote ?? null, decidedAt: new Date() },
         })
 
-        // Create a fresh pending sign-off so the agency can address feedback
-        const newAr = await this.prisma.approvalRequest.create({
-          data: {
-            kind:        'PROJECT_SIGNOFF',
-            requiresOtp: true,
-            projectId:   ar.projectId,
-            workspaceId,
-            status:      'PENDING',
-          },
-        })
-
-        await this.otpService.generate('approvalRequest', newAr.id, { email, name, workspaceId })
-
         this.eventEmitter.emit('approvalRequest.revisionRequested', {
-          entityId:            approvalRequestId,
-          newApprovalRequestId: newAr.id,
+          entityId:   approvalRequestId,
           workspaceId,
         })
         return updated
