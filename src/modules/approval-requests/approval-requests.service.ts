@@ -9,14 +9,18 @@ import { EventEmitter2 } from '@nestjs/event-emitter'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '../../prisma/prisma.service'
 import { OtpService } from '../shared/otp.service'
+import { InvoicesService } from '../invoices/invoices.service'
+import { ProjectsService } from '../projects/projects.service'
 import { DecideApprovalRequestDto } from './dto/decide-approval-request.dto'
 
 @Injectable()
 export class ApprovalRequestsService {
   constructor(
-    private readonly prisma:        PrismaService,
-    private readonly eventEmitter:  EventEmitter2,
-    private readonly otpService:    OtpService,
+    private readonly prisma:           PrismaService,
+    private readonly eventEmitter:     EventEmitter2,
+    private readonly otpService:       OtpService,
+    private readonly invoicesService:  InvoicesService,
+    private readonly projectsService:  ProjectsService,
   ) {}
 
   // ─── Agency: request sign-off ────────────────────────────────────────────────
@@ -137,7 +141,6 @@ export class ApprovalRequestsService {
               where: { id: approvalRequestId },
               data:  { status: 'APPROVED', decidedAt: new Date() },
             })
-            // TODO (U5): call invoicesService.createFromApprovalRequest(workspaceId, approvalRequestId)
             if (ar.changeRequestId) {
               await tx.changeRequest.update({
                 where: { id: ar.changeRequestId },
@@ -148,6 +151,7 @@ export class ApprovalRequestsService {
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         )
+        await this.invoicesService.createFromApprovalRequest(workspaceId, approvalRequestId)
         this.eventEmitter.emit('approvalRequest.approved', {
           entityId:   approvalRequestId,
           workspaceId,
@@ -209,12 +213,7 @@ export class ApprovalRequestsService {
           workspaceId,
           kind:       'PROJECT_SIGNOFF',
         })
-        // TODO (U5): call projectsService.completeWithSignoff(ar.projectId, approvalRequestId)
-        this.eventEmitter.emit('project.completed', {
-          projectId:         ar.projectId,
-          workspaceId,
-          approvalRequestId,
-        })
+        await this.projectsService.completeWithSignoff(ar.projectId, approvalRequestId)
         return updated
       }
 

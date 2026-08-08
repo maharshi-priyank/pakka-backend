@@ -212,6 +212,33 @@ export class InvoicesService {
     })
   }
 
+  async createFromApprovalRequest(workspaceId: string, approvalRequestId: string) {
+    const ar = await this.prisma.approvalRequest.findUnique({
+      where:   { id: approvalRequestId },
+      include: { changeRequest: true, project: true },
+    })
+    if (!ar || !ar.changeRequest) throw new NotFoundException('ApprovalRequest not found')
+    if (ar.workspaceId !== workspaceId) throw new ForbiddenException()
+
+    const project = ar.project
+    if (!project) throw new NotFoundException('Project not found')
+
+    return this.create(workspaceId, {
+      projectId: project.id,
+      clientId:  project.clientId  ?? undefined,
+      contactId: project.contactId ?? undefined,
+      currency:  'INR',
+      gstType:   GstType.EXEMPT,
+      lineItems: [{
+        description: ar.changeRequest.description,
+        qty:         1,
+        rate:        Number(ar.amount ?? 0),
+        gstRate:     0,
+      }],
+      notes: `Auto-generated from change request #${ar.changeRequestId}`,
+    })
+  }
+
   async createFromContract(workspaceId: string, contractId: string) {
     const contract = await this.prisma.contract.findFirst({
       where: { id: contractId, workspaceId },
