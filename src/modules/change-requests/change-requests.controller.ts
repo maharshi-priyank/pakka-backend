@@ -51,4 +51,13 @@ export class ChangeRequestsController {
   ) {
     return this.changeRequestsService.respond(resolveWorkspaceId(user), id, dto);
   }
+
+  @Post('projects/:projectId/change-requests/:id/respond')
+  respondScoped(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: RespondChangeRequestDto,
+  ) {
+    return this.changeRequestsService.respond(resolveWorkspaceId(user), id, dto);
+  }
 }
