@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import Razorpay from 'razorpay';
@@ -17,6 +17,47 @@ export class PortalService {
       throw new BadRequestException('Connect your Razorpay account in Settings to enable online payments')
     }
     return new Razorpay({ key_id: keyId, key_secret: keySecret })
+  }
+
+  /**
+   * Resolve a portal token to its workspace context.
+   * Tries Contact.portalToken first (Phase C), then legacy Client.portalToken.
+   * Returns { workspaceId, email, name }.
+   */
+  async resolveToken(token: string): Promise<{ workspaceId: string; email: string; name: string }> {
+    const contact = await this.prisma.contact.findFirst({
+      where:  { portalToken: token },
+      select: { workspaceId: true, email: true, name: true },
+    })
+    if (contact) {
+      return { workspaceId: contact.workspaceId, email: contact.email ?? '', name: contact.name }
+    }
+
+    const client = await this.prisma.client.findUnique({
+      where:  { portalToken: token },
+      select: { workspaceId: true, email: true, name: true },
+    })
+    if (!client) throw new NotFoundException('Portal link is invalid or has expired')
+    return { workspaceId: client.workspaceId, email: client.email ?? '', name: client.name }
+  }
+
+  /**
+   * Resolve a portal token AND verify the requested projectId belongs to that workspace.
+   * Throws ForbiddenException if the project is not in the resolved workspace.
+   */
+  async resolveTokenForProject(
+    token:     string,
+    projectId: string,
+  ): Promise<{ workspaceId: string; email: string; name: string }> {
+    const resolved = await this.resolveToken(token)
+
+    const project = await this.prisma.project.findFirst({
+      where:  { id: projectId, workspaceId: resolved.workspaceId },
+      select: { id: true },
+    })
+    if (!project) throw new ForbiddenException()
+
+    return resolved
   }
 
   async getPortalData(token: string) {
@@ -96,6 +137,45 @@ export class PortalService {
           updates: {
             orderBy: { createdAt: 'desc' },
             select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true } } },
+          },
+          changeRequests: {
+            select: {
+              id: true,
+              description: true,
+              status: true,
+              raisedByEmail: true,
+              freelancerNote: true,
+              createdAt: true,
+              updatedAt: true,
+              approvalRequests: {
+                select: {
+                  id: true,
+                  kind: true,
+                  status: true,
+                  requiresOtp: true,
+                  decisionNote: true,
+                  decidedAt: true,
+                  otpEmailSent: true,
+                  createdAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+          approvalRequests: {
+            where: { kind: 'PROJECT_SIGNOFF' },
+            select: {
+              id: true,
+              kind: true,
+              status: true,
+              requiresOtp: true,
+              decisionNote: true,
+              decidedAt: true,
+              otpEmailSent: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
           },
         },
       }),
@@ -179,6 +259,45 @@ export class PortalService {
           updates: {
             orderBy: { createdAt: 'desc' },
             select: { id: true, content: true, createdAt: true, author: { select: { id: true, name: true } } },
+          },
+          changeRequests: {
+            select: {
+              id: true,
+              description: true,
+              status: true,
+              raisedByEmail: true,
+              freelancerNote: true,
+              createdAt: true,
+              updatedAt: true,
+              approvalRequests: {
+                select: {
+                  id: true,
+                  kind: true,
+                  status: true,
+                  requiresOtp: true,
+                  decisionNote: true,
+                  decidedAt: true,
+                  otpEmailSent: true,
+                  createdAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+          approvalRequests: {
+            where: { kind: 'PROJECT_SIGNOFF' },
+            select: {
+              id: true,
+              kind: true,
+              status: true,
+              requiresOtp: true,
+              decisionNote: true,
+              decidedAt: true,
+              otpEmailSent: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
           },
         },
       }),

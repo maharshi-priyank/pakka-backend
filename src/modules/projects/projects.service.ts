@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ProjectStatus, ProjectStage, ContactStage, InvoiceStatus } from '@prisma/client';
+import { ProjectStatus, ProjectStage, ContactStage, InvoiceStatus, TaskStatus } from '@prisma/client';
 
 export interface CreateProjectDto {
   name:                string;
@@ -389,5 +389,36 @@ export class ProjectsService {
       budgetSpent,
       budgetRemaining,
     };
+  }
+
+  async completeWithSignoff(projectId: string, approvalRequestId: string): Promise<void> {
+    // Mark all TODO tasks as COMPLETED
+    const todoTasks = await this.prisma.task.findMany({
+      where:  { projectId, status: TaskStatus.TODO },
+      select: { id: true },
+    })
+    const taskIds = todoTasks.map(t => t.id)
+
+    if (taskIds.length > 0) {
+      await this.prisma.task.updateMany({
+        where: { id: { in: taskIds }, projectId },
+        data:  { status: TaskStatus.COMPLETED },
+      })
+    }
+
+    // Mark project COMPLETED and capture workspaceId for the event
+    const project = await this.prisma.project.update({
+      where:  { id: projectId },
+      data:   { status: 'COMPLETED' },
+      select: { workspaceId: true },
+    })
+
+    this.eventEmitter.emit('project.completed', {
+      entityId:         projectId,
+      projectId,
+      workspaceId:      project.workspaceId,
+      approvalRequestId,
+      completedTaskIds: taskIds,
+    })
   }
 }

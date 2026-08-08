@@ -4,6 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ContractsService } from './contracts.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
+import { OtpService } from '../shared/otp.service';
 
 // U6/KTD1/KTD4/KTD6: create()/update() resolve currency via the shared
 // resolveDocumentCurrency() helper and enforce EXEMPT gstType for non-INR
@@ -80,9 +81,15 @@ describe('ContractsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ContractsService,
-        { provide: PrismaService, useValue: prisma },
-        { provide: EventEmitter2, useValue: emitter },
+        { provide: PrismaService,            useValue: prisma },
+        { provide: EventEmitter2,            useValue: emitter },
         { provide: ContractTemplatesService, useValue: contractTemplates },
+        // OtpService is injected by ContractsService but not exercised by
+        // the currency/GST tests in this file — a minimal stub is sufficient.
+        {
+          provide:  OtpService,
+          useValue: { generate: jest.fn(), verify: jest.fn(), resend: jest.fn() },
+        },
       ],
     }).compile();
 

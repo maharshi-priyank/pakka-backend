@@ -65,6 +65,13 @@ export class ContractsController {
     return this.svc.send(resolveWorkspaceId(user), id);
   }
 
+  @Post(':id/resend-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend OTP to the client (rate-limited to once per 60 seconds)' })
+  resendOtp(@CurrentUser() user: User, @Param('id') id: string): Promise<{ otpEmailSent: boolean }> {
+    return this.svc.resendOtp(resolveWorkspaceId(user), id);
+  }
+
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive a contract (unsigned only)' })
   archive(@CurrentUser() user: User, @Param('id') id: string) {

@@ -12,10 +12,7 @@ import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { effectivePlan } from '../users/effective-plan';
 import { resolveDocumentCurrency } from '../shared/resolve-document-currency';
 import { ContractTemplatesService } from '../contract-templates/contract-templates.service';
-
-function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
+import { OtpService } from '../shared/otp.service';
 
 const INCLUDE_FULL = {
   proposal: { select: { id: true, title: true, slug: true } },
@@ -35,6 +32,7 @@ export class ContractsService {
     private readonly prisma:            PrismaService,
     private readonly eventEmitter:      EventEmitter2,
     private readonly contractTemplates: ContractTemplatesService,
+    private readonly otpService:        OtpService,
   ) {}
 
   async create(workspaceId: string, dto: CreateContractDto) {
@@ -353,11 +351,20 @@ export class ContractsService {
       throw new ForbiddenException('Contract is already signed');
     }
 
-    const otp = generateOtp();
-
     const updated = await this.prisma.contract.update({
       where: { id },
-      data:  { status: ContractStatus.SENT, signerOtp: otp, sentAt: new Date() },
+      data:  { status: ContractStatus.SENT, signerOtp: null, sentAt: new Date() },
+    });
+
+    // Generate a hashed OTP and email it to the client. OtpService persists
+    // otpHash + otpExpiresAt on the Contract row and sends the plaintext code
+    // directly to the client's inbox — the code is never returned to the caller.
+    const clientEmail = (contract as any).client?.email ?? '';
+    const clientName  = (contract as any).client?.name  ?? 'there';
+    const { otpEmailSent } = await this.otpService.generate('contract', id, {
+      email:       clientEmail,
+      name:        clientName,
+      workspaceId,
     });
 
     this.eventEmitter.emit('contract.sent', { entityId: id, workspaceId });
@@ -365,7 +372,7 @@ export class ContractsService {
     return {
       contract: { ...updated, signerOtp: undefined },
       signUrl:  `${appUrl}/sign/${updated.id}`,
-      otp,
+      otpEmailSent,
     };
   }
 
@@ -378,9 +385,9 @@ export class ContractsService {
     if (contract.status !== ContractStatus.SENT) {
       throw new ForbiddenException('Contract has not been sent for signing');
     }
-    if (!contract.signerOtp || contract.signerOtp !== dto.otp) {
-      throw new BadRequestException('Invalid OTP');
-    }
+    // OtpService.verify() checks the bcrypt hash, 10-min expiry, and failed-attempt
+    // lockout. It throws an HttpException on any failure — let it propagate.
+    await this.otpService.verify('contract', id, dto.otp);
 
     const auditLog = {
       signedAt:   new Date().toISOString(),
@@ -401,6 +408,22 @@ export class ContractsService {
 
     this.eventEmitter.emit('contract.signed', { entityId: id, workspaceId: contract.workspaceId });
     return { ...signed, signerOtp: undefined };
+  }
+
+  async resendOtp(workspaceId: string, contractId: string): Promise<{ otpEmailSent: boolean }> {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { client: true, contact: true },
+    })
+    if (!contract || contract.workspaceId !== workspaceId) {
+      throw new NotFoundException('Contract not found')
+    }
+    // Resolve recipient email (contact takes priority over client)
+    const email = (contract as any).contact?.email ?? (contract as any).client?.email
+    const name  = (contract as any).contact?.name  ?? (contract as any).client?.name ?? 'Client'
+    if (!email) throw new BadRequestException('No client email on record')
+
+    return this.otpService.resend('contract', contractId, { email, name, workspaceId })
   }
 
   async archive(workspaceId: string, id: string) {

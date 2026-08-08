@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PrismaService } from '../../prisma/prisma.service'
 import { AutomationEngine } from './automation.engine'
 import { AutomationsService } from './automations.service'
@@ -12,11 +13,12 @@ export class AutomationScheduler {
   private readonly logger = new Logger(AutomationScheduler.name)
 
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly engine:       AutomationEngine,
-    private readonly automations:  AutomationsService,
-    private readonly email:        EmailService,
-    private readonly invoices:     InvoicesService,
+    private readonly prisma:        PrismaService,
+    private readonly engine:        AutomationEngine,
+    private readonly automations:   AutomationsService,
+    private readonly email:         EmailService,
+    private readonly invoices:      InvoicesService,
+    private readonly eventEmitter:  EventEmitter2,
   ) {}
 
   // ─── Hourly — meeting reminders ───────────────────────────────────────────
@@ -368,6 +370,52 @@ export class AutomationScheduler {
         })
         await this.automations.recordExecution({ ruleId: rule.id, entityId: l.id, entityType: 'lead', status: 'SUCCESS' })
       }
+    }
+  }
+
+  // ─── 14-day sign-off reminder ─────────────────────────────────────────────
+  // Runs daily at 9:01am — finds PROJECT_SIGNOFF approvals pending > 14 days.
+
+  @Cron('1 9 * * *')
+  async remindPendingSignoffs() {
+    this.logger.log('[scheduler] checking stale sign-off approvals')
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    const stale  = await this.prisma.approvalRequest.findMany({
+      where: {
+        kind:      'PROJECT_SIGNOFF',
+        status:    'PENDING',
+        createdAt: { lt: cutoff },
+      },
+    })
+    for (const ar of stale) {
+      this.eventEmitter.emit('approvalRequest.reminderDue', {
+        approvalRequestId: ar.id,
+        projectId:         ar.projectId,
+        workspaceId:       ar.workspaceId,
+      })
+    }
+  }
+
+  // ─── 30-day cost-invoice reminder ─────────────────────────────────────────
+  // Runs daily at 9:02am — finds CHANGE_REQUEST_COST approvals pending > 30 days.
+
+  @Cron('2 9 * * *')
+  async remindPendingCostApprovals() {
+    this.logger.log('[scheduler] checking stale cost-approval requests')
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const stale  = await this.prisma.approvalRequest.findMany({
+      where: {
+        kind:      'CHANGE_REQUEST_COST',
+        status:    'PENDING',
+        createdAt: { lt: cutoff },
+      },
+    })
+    for (const ar of stale) {
+      this.eventEmitter.emit('approvalRequest.costReminderDue', {
+        approvalRequestId: ar.id,
+        projectId:         ar.projectId,
+        workspaceId:       ar.workspaceId,
+      })
     }
   }
 
