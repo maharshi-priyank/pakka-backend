@@ -111,6 +111,7 @@ export class PublicProfilesService {
     const user = await this.prisma.user.findFirst({
       where: { publicUsername: username, publicProfileEnabled: true },
       select: {
+        id: true,
         name: true,
         businessName: true,
         logoUrl: true,
@@ -132,7 +133,40 @@ export class PublicProfilesService {
       },
     });
     if (!user) throw new NotFoundException('Profile not found');
-    return { username, ...user };
+
+    // Workspace ID equals user ID (personal workspace pattern used throughout this codebase)
+    const workspaceId = user.id;
+
+    const [reviews, agg] = await Promise.all([
+      this.prisma.review.findMany({
+        where: { workspaceId, status: 'SUBMITTED', isPublic: true, rating: { not: null } },
+        select: {
+          id: true,
+          authorName: true,
+          rating: true,
+          body: true,
+          submittedAt: true,
+          project: { select: { name: true } },
+        },
+        orderBy: { submittedAt: 'desc' },
+        take: 20,
+      }),
+      this.prisma.review.aggregate({
+        where: { workspaceId, status: 'SUBMITTED', rating: { not: null } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+    ]);
+
+    const { id: _id, ...userWithoutId } = user;
+
+    return {
+      username,
+      ...userWithoutId,
+      reviews,
+      averageRating: agg._avg.rating ? Math.round(agg._avg.rating * 10) / 10 : null,
+      reviewCount: agg._count.rating,
+    };
   }
 
   async submitEnquiry(username: string, dto: SubmitEnquiryDto) {
