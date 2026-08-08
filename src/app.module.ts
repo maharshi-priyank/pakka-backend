@@ -58,6 +58,7 @@ import { ContactsModule } from './modules/contacts/contacts.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ProductEventsModule } from './modules/product-events/product-events.module';
+import { ChangeRequestsModule } from './modules/change-requests/change-requests.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WorkspacePermissionGuard } from './common/guards/workspace-permission.guard';
@@ -142,6 +143,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     WhatsappModule,
     AdminModule,
     ProductEventsModule,
+    ChangeRequestsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
