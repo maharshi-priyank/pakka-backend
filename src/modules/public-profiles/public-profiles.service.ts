@@ -195,8 +195,7 @@ export class PublicProfilesService {
     const [
       projectsCompleted,
       totalEarned,
-      allClients,
-      repeatClients,
+      completedProjectClients,
       totalProposals,
       acceptedProposals,
       respondedLeads,
@@ -206,16 +205,11 @@ export class PublicProfilesService {
         where: { workspaceId: userId, status: 'PAID' },
         _sum: { total: true },
       }),
-      this.prisma.project.groupBy({
-        by: ['clientId'],
-        where: { workspaceId: userId, status: 'COMPLETED', clientId: { not: null } },
-        _count: true,
-      }),
-      this.prisma.project.groupBy({
-        by: ['clientId'],
-        where: { workspaceId: userId, status: 'COMPLETED', clientId: { not: null } },
-        _count: { _all: true },
-        having: { clientId: { _count: { gte: 2 } } },
+      // Fetch clientId + contactId for all completed projects to compute repeat rate
+      // across both legacy (clientId) and new contact-based (contactId) flows
+      this.prisma.project.findMany({
+        where:  { workspaceId: userId, status: 'COMPLETED' },
+        select: { clientId: true, contactId: true },
       }),
       this.prisma.proposal.count({
         where: { workspaceId: userId, status: { in: ['SENT', 'OPENED', 'ACCEPTED', 'DECLINED', 'EXPIRED'] } },
@@ -229,8 +223,15 @@ export class PublicProfilesService {
       }),
     ]);
 
-    const totalClientsWithProject = allClients.length;
-    const repeatClientCount = repeatClients.length;
+    // Count projects per unique client entity (contactId takes priority over clientId)
+    const clientProjectCount = new Map<string, number>();
+    for (const p of completedProjectClients) {
+      const key = p.contactId ?? p.clientId;
+      if (!key) continue;
+      clientProjectCount.set(key, (clientProjectCount.get(key) ?? 0) + 1);
+    }
+    const totalClientsWithProject = clientProjectCount.size;
+    const repeatClientCount = [...clientProjectCount.values()].filter(c => c >= 2).length;
     const repeatPct =
       totalClientsWithProject > 0
         ? Math.round((repeatClientCount / totalClientsWithProject) * 100)

@@ -8,9 +8,10 @@ import { NotificationsListener } from './notifications.listener'
 import { PrismaModule } from '../../prisma/prisma.module'
 import { InvoicesModule } from '../invoices/invoices.module'
 import { WhatsappModule } from '../whatsapp/whatsapp.module'
+import { PublicProfilesModule } from '../public-profiles/public-profiles.module'
 
 @Module({
-  imports:     [PrismaModule, InvoicesModule, forwardRef(() => WhatsappModule)],
+  imports:     [PrismaModule, InvoicesModule, forwardRef(() => WhatsappModule), PublicProfilesModule],
   controllers: [AutomationsController],
   providers:   [AutomationsService, AutomationEngine, AutomationScheduler, EmailService, NotificationsListener],
   exports:     [AutomationsService, AutomationEngine, EmailService],

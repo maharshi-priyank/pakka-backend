@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { PrismaService } from '../../prisma/prisma.service'
 import { EmailService } from './email.service'
+import { PublicProfilesService } from '../public-profiles/public-profiles.service'
 
 @Injectable()
 export class NotificationsListener {
   constructor(
-    private readonly prisma:       PrismaService,
-    private readonly emailService: EmailService,
+    private readonly prisma:              PrismaService,
+    private readonly emailService:        EmailService,
+    private readonly publicProfilesSvc:   PublicProfilesService,
   ) {}
 
   @OnEvent('project.completed')
@@ -71,6 +73,13 @@ export class NotificationsListener {
     } catch (err) {
       // Never throw — notification failures must not affect the project completion
       console.error('Failed to create review request', err)
+    }
+
+    // Recalculate verified stats so the public profile reflects the newly completed project
+    try {
+      await this.publicProfilesSvc.recalculateUserStats(event.workspaceId)
+    } catch (err) {
+      console.error('Failed to recalculate stats on project completion', err)
     }
   }
 }
