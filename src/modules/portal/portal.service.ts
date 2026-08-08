@@ -177,6 +177,11 @@ export class PortalService {
             },
             orderBy: { createdAt: 'desc' },
           },
+          reviews: {
+            select: { token: true, status: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
       }),
     ]);
@@ -298,6 +303,11 @@ export class PortalService {
               createdAt: true,
             },
             orderBy: { createdAt: 'desc' },
+          },
+          reviews: {
+            select: { token: true, status: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
           },
         },
       }),
