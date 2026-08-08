@@ -96,6 +96,12 @@ export class DashboardService {
       monthlyRevenueGoal:   workspace?.monthlyRevenueGoal != null ? Number(workspace.monthlyRevenueGoal) : null,
       unreadClientMessages,
       hasAnyActivity: totalContacts > 0 || totalProposals > 0 || totalInvoices > 0 || totalContracts > 0,
+      onboarding: {
+        hasContact:  totalContacts > 0,
+        hasProposal: totalProposals > 0,
+        hasContract: totalContracts > 0,
+        hasInvoice:  totalInvoices > 0,
+      },
     };
   }
 
