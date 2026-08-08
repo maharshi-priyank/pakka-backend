@@ -8,5 +8,6 @@ import { PublicProfilesScheduler } from './public-profiles.scheduler';
   imports: [PrismaModule],
   controllers: [PublicProfilesController],
   providers: [PublicProfilesService, PublicProfilesScheduler],
+  exports:  [PublicProfilesService],
 })
 export class PublicProfilesModule {}
