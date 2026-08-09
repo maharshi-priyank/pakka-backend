@@ -7,7 +7,7 @@ Status: Approved scope; awaiting written-spec review before implementation.
 ## Context
 
 Phase 1 added cross-tenant analytics, global admin search, Customer 360 views,
-activity timelines, and append-only support notes to `pakka-admin`. The backend
+activity timelines, and append-only support notes to `clearwork-admin`. The backend
 already has audited admin actions for plan overrides, refunds, subscription
 sync, billing-event replay intent, workspace archive/restore, impersonation,
 and feature-flag intent. Phase 2 turns those isolated capabilities into an
@@ -198,7 +198,7 @@ because `PaymentProvider` has no portable retry operation.
 ### Billing UI
 
 Add an `Operations` or `Billing` navigation item and a page under
-`pakka-admin/src/features/admin/billing/` with:
+`clearwork-admin/src/features/admin/billing/` with:
 
 1. Summary cards for subscription states and recent payment outcomes.
 2. Alert list with links to the affected user/workspace Customer 360 page.
@@ -363,7 +363,7 @@ for triage.
 ### Support UI
 
 Add a `Support` navigation item and a page under
-`pakka-admin/src/features/admin/support-reporting/` with:
+`clearwork-admin/src/features/admin/support-reporting/` with:
 
 1. KPI cards for onboarding, activation, billing attention, inactivity, and
    support notes.

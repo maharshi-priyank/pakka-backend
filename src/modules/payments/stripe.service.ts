@@ -17,7 +17,7 @@ import {
 } from './plan-resolution.service';
 
 // USD prices (cents) for international billing
-const USD_PRICES: Record<PlanTier, Record<string, number>> = {
+const USD_PRICES: Record<string, Record<string, number>> = {
   SOLO: { founding: 500, earlyaccess: 700, regular: 900 },
   STUDIO: { founding: 1200, earlyaccess: 1700, regular: 2200 },
 };

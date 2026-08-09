@@ -2,14 +2,25 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { PrismaService } from '../../prisma/prisma.service'
 import { CreateAttachmentDto } from './dto/create-attachment.dto'
 import type { Attachment } from '@prisma/client'
+import { EntitlementsService } from '../entitlements/entitlements.service'
 
 type AttachmentWithGate = Attachment & { gateInvoice?: { status: string } | null }
 
 @Injectable()
 export class AttachmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly entitlements: EntitlementsService) {}
 
   async create(workspaceId: string, dto: CreateAttachmentDto) {
+    let authoritativeSize = dto.fileSize ?? 0
+    try {
+      const response = await fetch(dto.fileUrl, { method: 'HEAD' })
+      const contentLength = response.headers.get('content-length')
+      if (contentLength && Number.isFinite(Number(contentLength))) authoritativeSize = Number(contentLength)
+    } catch {
+      // Keep the request usable for storage providers that do not support HEAD;
+      // the provider-reported size is still preferred whenever available.
+    }
+    await this.entitlements.assertWithinLimit(workspaceId, 'storageBytes', authoritativeSize)
     return this.prisma.attachment.create({
       data: {
         workspaceId,
@@ -20,7 +31,7 @@ export class AttachmentsService {
         gateInvoiceId: dto.gateInvoiceId,
         fileName:  dto.fileName,
         fileUrl:   dto.fileUrl,
-        fileSize:  dto.fileSize,
+        fileSize:  authoritativeSize,
         mimeType:  dto.mimeType,
       },
     })
@@ -58,16 +69,43 @@ export class AttachmentsService {
   }
 
   async listPublicForPortal(portalToken: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { portalToken },
+      select: {
+        id: true,
+        workspaceId: true,
+        projects: { select: { id: true } },
+        proposals: { select: { id: true } },
+        invoices: { select: { id: true } },
+      },
+    })
+    if (contact) {
+      await this.entitlements.assertPortalAccess(contact.workspaceId)
+      return this.prisma.attachment.findMany({
+        where: {
+          OR: [
+            { contactId: contact.id },
+            { projectId: { in: contact.projects.map(p => p.id) } },
+            { proposalId: { in: contact.proposals.map(p => p.id) } },
+            { invoiceId: { in: contact.invoices.map(i => i.id) } },
+          ],
+        },
+        include: { gateInvoice: { select: { status: true } } },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
     const client = await this.prisma.client.findUnique({
       where: { portalToken },
       select: {
         id: true,
+        workspaceId: true,
         proposals: { select: { id: true, title: true } },
         invoices:  { select: { id: true, invoiceNumber: true, status: true } },
         projects:  { select: { id: true, name: true } },
       },
     })
     if (!client) throw new NotFoundException('Portal not found')
+    await this.entitlements.assertPortalAccess(client.workspaceId)
 
     const proposalIds = client.proposals.map((p: { id: string }) => p.id)
     const invoiceIds  = client.invoices.map((i: { id: string }) => i.id)

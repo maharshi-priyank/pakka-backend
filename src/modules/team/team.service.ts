@@ -1,12 +1,11 @@
-import { Injectable, HttpException, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { nanoid } from 'nanoid'
 import { PrismaService } from '../../prisma/prisma.service'
 import { effectivePlan } from '../users/effective-plan'
 import { EmailService } from '../automations/email.service'
 import { User } from '@prisma/client'
-
-const TEAM_SEAT_LIMIT = { STUDIO: 1 } // max 1 team member on Studio
+import { EntitlementsService } from '../entitlements/entitlements.service'
 
 @Injectable()
 export class TeamService {
@@ -14,14 +13,16 @@ export class TeamService {
     private readonly prisma: PrismaService,
     private readonly config:  ConfigService,
     private readonly email:   EmailService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   async getTeam(owner: User) {
-    if (effectivePlan(owner) !== 'STUDIO') return { members: [], invites: [] }
+    if (effectivePlan(owner) === 'FREE') return { members: [], invites: [] }
+    const workspaceIds = await this.entitlements.getAccountWorkspaceIds(owner.id)
 
     const [memberRows, invites] = await Promise.all([
       this.prisma.workspaceMember.findMany({
-        where: { workspaceId: owner.id },
+        where: { workspaceId: { in: workspaceIds } },
         include: {
           user:          { select: { id: true, name: true, email: true, createdAt: true } },
           workspaceRole: { select: { id: true, name: true, key: true } },
@@ -50,14 +51,8 @@ export class TeamService {
   }
 
   async invite(owner: User, email: string, roleId?: string) {
-    if (effectivePlan(owner) !== 'STUDIO') {
-      throw new HttpException({ message: 'Team members are a Studio plan feature.', code: 'PLAN_LIMIT' }, 402)
-    }
-
-    const memberCount = await this.prisma.user.count({ where: { ownerId: owner.id } })
-    if (memberCount >= TEAM_SEAT_LIMIT.STUDIO) {
-      throw new BadRequestException('Studio plan includes 1 team member seat. Remove the current member to invite a new one.')
-    }
+    const workspaceId = owner.activeWorkspaceId ?? owner.id
+    await this.entitlements.assertWithinLimit(workspaceId, 'teamMembers')
 
     // Check not inviting themselves or an existing member
     if (email.toLowerCase() === owner.email.toLowerCase()) {

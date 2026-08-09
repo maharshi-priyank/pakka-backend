@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ContactsService } from './contacts.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 // U1 (feat/contact-overview-tab): getOverviewStats() aggregates TimeEntry
 // durationMins into a total-hours figure plus a 6-month bucketed series,
@@ -29,6 +30,10 @@ describe('ContactsService.getOverviewStats', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: EntitlementsService,
+          useValue: { assertWithinLimit: jest.fn() },
+        },
       ],
     }).compile();
 

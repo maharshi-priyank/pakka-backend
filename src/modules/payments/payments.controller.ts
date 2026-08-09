@@ -49,6 +49,12 @@ export class PaymentsController {
     return this.payments.currentPricing();
   }
 
+  @Get('usage')
+  @UseGuards(JwtAuthGuard)
+  usage(@CurrentUser() user: User) {
+    return this.payments.getUsage(user.id);
+  }
+
   @Post('razorpay/verify')
   @UseGuards(JwtAuthGuard)
   verifySubscriptionPayment(@Body() dto: VerifySubscriptionPaymentDto) {

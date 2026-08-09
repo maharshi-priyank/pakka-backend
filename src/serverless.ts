@@ -6,13 +6,14 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { Express } from 'express';
+import * as express from 'express';
 
 let cachedHandler: Express | null = null;
 
 async function bootstrap(): Promise<Express> {
   if (cachedHandler) return cachedHandler;
 
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule, { logger: false, bodyParser: false });
   const configService = app.get(ConfigService);
 
   const corsOriginRaw = configService.get<string>('corsOrigin') ?? '';
@@ -20,6 +21,8 @@ async function bootstrap(): Promise<Express> {
   const corsOrigin = allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
 
   app.use(helmet());
+  app.use(express.json({ limit: '10mb', verify: (req: any, _res, buf) => { req.rawBody = buf; } }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.enableCors({
     origin: corsOrigin,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],

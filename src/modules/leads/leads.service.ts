@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, HttpException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,7 +8,7 @@ import { QueryLeadsDto } from './dto/query-leads.dto';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { ConvertLeadToContactDto } from './dto/convert-lead-to-contact.dto';
 import { LeadStage, ContactStage, LeadActivityType } from '@prisma/client';
-import { effectivePlan } from '../users/effective-plan';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 import Decimal from 'decimal.js';
 import { ContactsService } from '../contacts/contacts.service';
 
@@ -18,14 +18,11 @@ export class LeadsService {
     private readonly prisma:         PrismaService,
     private readonly eventEmitter:   EventEmitter2,
     private readonly contactsService: ContactsService,
+    @Optional() private readonly entitlements?: EntitlementsService,
   ) {}
 
   async create(workspaceId: string, dto: CreateLeadDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: workspaceId }, select: { plan: true, planExpiresAt: true, subscriptionStatus: true } });
-    if (effectivePlan(user!) === 'FREE') {
-      const count = await this.prisma.lead.count({ where: { workspaceId, archivedAt: null, stage: { notIn: ['WON', 'LOST'] } } });
-      if (count >= 3) throw new HttpException({ message: 'Free plan: 3 active leads limit reached.', code: 'PLAN_LIMIT' }, 402);
-    }
+    if (this.entitlements) await this.entitlements.assertWithinLimit(workspaceId, 'activeLeads')
 
     const lead = await this.prisma.lead.create({
       data: {

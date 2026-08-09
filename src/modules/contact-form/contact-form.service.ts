@@ -1,4 +1,4 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common'
+import { Injectable, Logger, InternalServerErrorException, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import * as nodemailer from 'nodemailer'
 import { ContactFormDto } from './contact-form.dto'
@@ -25,7 +25,7 @@ export class ContactFormService {
   }
 
   async send(dto: ContactFormDto): Promise<void> {
-    const to = 'hello@getclearwork.in'
+    const to = this.config.get<string>('email.support') ?? 'hello@getclearwork.in'
     const from = this.config.get<string>('email.from') ?? 'ClearWork <noreply@getclearwork.in>'
     const subject = `[ClearWork Contact] ${dto.category} — ${dto.name}`
     const text = [
@@ -39,7 +39,7 @@ export class ContactFormService {
 
     if (!this.transporter) {
       this.logger.debug(`[contact-skip] from=${dto.email} subject="${subject}"`)
-      return
+      throw new ServiceUnavailableException('Contact delivery is not configured')
     }
 
     try {

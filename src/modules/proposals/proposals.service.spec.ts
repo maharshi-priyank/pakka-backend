@@ -141,7 +141,13 @@ describe('ProposalsService', () => {
 
       expect(prisma.proposal.update).toHaveBeenCalledWith({
         where: { id: 'prop-1' },
-        data:  { status: 'SENT', otpGated: false, viewOtp: null, otpFailedAttempts: 0 },
+        data: {
+          status: 'SENT',
+          sentAt: expect.any(Date),
+          otpGated: false,
+          viewOtp: null,
+          otpFailedAttempts: 0,
+        },
       });
       expect(result.otp).toBeNull();
       expect(result.proposal.viewOtp).toBeUndefined();

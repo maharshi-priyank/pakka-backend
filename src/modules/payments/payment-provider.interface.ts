@@ -3,6 +3,7 @@ export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');
 export interface CreateSubscriptionParams {
   userId: string;
   planId: string;
+  tier?: 'PRO' | 'STUDIO';
   returnUrl: string;
   cancelUrl: string;
   customerEmail: string;

@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, BadRequestException, HttpException,
+  Injectable, NotFoundException, BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -11,7 +11,7 @@ import { UpdateContactDto } from './dto/update-contact.dto';
 import { QueryContactsDto } from './dto/query-contacts.dto';
 import { QueryContactHistoryDto } from './dto/query-contact-history.dto';
 import { ContactStage } from '@prisma/client';
-import { effectivePlan } from '../users/effective-plan';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PhoneNumberUtil, PhoneNumberFormat } = require('google-libphonenumber') as typeof import('google-libphonenumber');
 const phoneUtil = PhoneNumberUtil.getInstance();
@@ -34,25 +34,14 @@ export class ContactsService {
     private readonly prisma:       PrismaService,
     private readonly config:       ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   async create(workspaceId: string, dto: CreateContactDto) {
-    // Phase C plan limit: mirrors Lead limits for ENQUIRY-stage contacts
-    const user = await this.prisma.user.findUnique({
-      where:  { id: workspaceId },
-      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
-    })
-    if (effectivePlan(user!) === 'FREE') {
-      const count = await this.prisma.contact.count({
-        where: { workspaceId, archivedAt: null, stage: { in: ACTIVE_STAGES } },
-      })
-      if (count >= 3) {
-        throw new HttpException(
-          { message: 'Free plan: 3 active contact limit reached.', code: 'PLAN_LIMIT' },
-          402,
-        )
-      }
-    }
+    const stage = dto.stage ?? 'ENQUIRY'
+    if (ACTIVE_STAGES.includes(stage)) await this.entitlements.assertWithinLimit(workspaceId, 'activeLeads')
+    if (stage === 'CLIENT' || stage === 'PAST_CLIENT') await this.entitlements.assertWithinLimit(workspaceId, 'clients')
+    await this.entitlements.assertWithinLimit(workspaceId, 'projects')
 
     const contact = await this.prisma.$transaction(async (tx) => {
       const c = await tx.contact.create({
@@ -293,7 +282,15 @@ export class ContactsService {
   }
 
   async updateStage(workspaceId: string, id: string, stage: ContactStage, lostReason?: string) {
-    await this.findOne(workspaceId, id)
+    const existing = await this.findOne(workspaceId, id)
+    if (!existing.archivedAt) {
+      if (ACTIVE_STAGES.includes(stage) && !ACTIVE_STAGES.includes(existing.stage)) {
+        await this.entitlements.assertWithinLimit(workspaceId, 'activeLeads')
+      }
+      if ((stage === 'CLIENT' || stage === 'PAST_CLIENT') && existing.stage !== 'CLIENT' && existing.stage !== 'PAST_CLIENT') {
+        await this.entitlements.assertWithinLimit(workspaceId, 'clients')
+      }
+    }
     const contact = await this.prisma.contact.update({
       where: { id },
       data:  {

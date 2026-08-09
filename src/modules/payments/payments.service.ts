@@ -7,6 +7,8 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from './payment-provider.inter
 import { PlanResolutionService, type PlanTier } from './plan-resolution.service';
 import type { RazorpayWebhookEvent } from './dto/webhook-event.dto';
 import { ProductEventsService } from '../product-events/product-events.service';
+import { EntitlementsService } from '../entitlements/entitlements.service';
+import { PermissionsService } from '../permissions/permissions.service';
 
 type WebhookHandler = (event: RazorpayWebhookEvent) => Promise<void>;
 
@@ -20,6 +22,8 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly planResolution: PlanResolutionService,
     private readonly productEvents: ProductEventsService,
+    private readonly entitlements: EntitlementsService,
+    private readonly permissions: PermissionsService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {
     this.handlers = {
@@ -35,6 +39,7 @@ export class PaymentsService {
   // ── Create ─────────────────────────────────────────────────────────────────
 
   async createSubscription(userId: string, tier: PlanTier) {
+    await this.assertBillingManager(userId);
     const user = await this.prisma.user.findUnique({
       where:  { id: userId },
       select: { subscriptionStatus: true, email: true, name: true },
@@ -45,13 +50,14 @@ export class PaymentsService {
       throw new ConflictException('You already have an active subscription');
     }
 
-    const resolved     = await this.planResolution.resolve(tier);
+    const resolved     = await this.planResolution.resolve(tier === 'SOLO' ? 'PRO' : tier);
     const frontendUrl  = this.config.get<string>('frontendUrl') ?? 'http://localhost:5173';
 
     const apiUrl = this.config.get<string>('apiUrl') ?? 'http://localhost:3000/api';
     const { checkoutUrl, subscriptionId } = await this.provider.createSubscription({
       userId,
       planId:        resolved.planId,
+      tier:          tier === 'SOLO' ? 'PRO' : tier,
       returnUrl:     `${apiUrl}/payments/subscription-return`,
       cancelUrl:     `${apiUrl}/payments/subscription-cancel`,
       customerEmail: user.email,
@@ -88,12 +94,29 @@ export class PaymentsService {
     return this.planResolution.currentPricing();
   }
 
+  async getUsage(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { activeWorkspaceId: true } });
+    if (!user) throw new NotFoundException('User not found');
+    return this.entitlements.getUsage(user.activeWorkspaceId ?? userId);
+  }
+
+  private async assertBillingManager(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, ownerId: true, activeWorkspaceId: true } });
+    if (!user) throw new NotFoundException('User not found');
+    const workspaceId = user.activeWorkspaceId ?? user.id;
+    const ownerId = await this.entitlements.resolveBillingOwnerId(workspaceId);
+    const allowed = this.entitlements.isBillingManager(user, ownerId)
+      || await this.permissions.hasPermission(userId, workspaceId, 'MANAGE_BILLING');
+    if (!allowed) throw new ConflictException('Only the billing account owner or an authorized billing manager can change plans');
+  }
+
   // ── Cancel ─────────────────────────────────────────────────────────────────
 
   async cancelSubscription(userId: string) {
+    await this.assertBillingManager(userId);
     const user = await this.prisma.user.findUnique({
       where:  { id: userId },
-      select: { razorpaySubscriptionId: true, subscriptionStatus: true },
+      select: { razorpaySubscriptionId: true, subscriptionStatus: true, billingAnchorDate: true },
     });
 
     if (!user?.razorpaySubscriptionId) throw new NotFoundException('No active subscription found');
@@ -105,7 +128,7 @@ export class PaymentsService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data:  { subscriptionStatus: SubscriptionStatus.CANCELLED },
+      data:  { subscriptionStatus: SubscriptionStatus.CANCELLED, planExpiresAt: user.billingAnchorDate },
     });
 
     return { message: 'Subscription cancelled. Access continues until end of billing period.' };
@@ -159,16 +182,6 @@ export class PaymentsService {
       return;
     }
 
-    // Record before processing to prevent race conditions
-    await this.prisma.billingEvent.create({
-      data: {
-        eventType:   event.event,
-        razorpayRef,
-        workspaceId: event.payload.subscription?.entity.notes?.userId as string | undefined,
-        payload:     event as object,
-      },
-    });
-
     const productEventName = {
       'subscription.activated': 'subscription_activated',
       'subscription.charged': 'subscription_payment_succeeded',
@@ -193,6 +206,17 @@ export class PaymentsService {
     } else {
       this.logger.debug(`Unhandled webhook event type: ${event.event}`);
     }
+
+    await this.prisma.billingEvent.create({
+      data: {
+        eventType:   event.event,
+        razorpayRef,
+        workspaceId: event.payload.subscription?.entity.notes?.userId as string | undefined,
+        payload:     event as object,
+      },
+    }).catch(error => {
+      if ((error as { code?: string }).code !== 'P2002') throw error;
+    });
   }
 
   async replayStoredEvent(event: RazorpayWebhookEvent): Promise<void> {
@@ -208,7 +232,7 @@ export class PaymentsService {
     const userId = sub?.notes?.userId as string | undefined;
     if (!sub || !userId) return;
 
-    const planTier = sub.plan_id.toLowerCase().includes('solo') ? Plan.SOLO : Plan.STUDIO;
+    const planTier = sub.notes?.tier === 'PRO' || sub.plan_id.toLowerCase().includes('solo') ? Plan.SOLO : Plan.STUDIO;
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -253,11 +277,13 @@ export class PaymentsService {
     const userId = sub?.notes?.userId as string | undefined;
     if (!userId) return;
 
+    const current = await this.prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         subscriptionStatus: SubscriptionStatus.CANCELLED,
-        plan:               Plan.FREE,
+        plan:               current?.plan ?? Plan.SOLO,
+        planExpiresAt:      sub?.charge_at ? new Date(sub.charge_at * 1000) : undefined,
       },
     });
   }

@@ -35,8 +35,11 @@ export class UsersService {
         id: dto.id,
         email: dto.email,
         name: dto.name,
-        plan: 'STUDIO',
-        subscriptionStatus: 'ACTIVE',
+        // New accounts receive the launch Pro grant; payment webhooks are the
+        // only source of truth for paid subscriptions.
+        plan: 'SOLO',
+        subscriptionStatus: 'NONE',
+        planExpiresAt: new Date(new Date().setMonth(new Date().getMonth() + 3)),
         ...attribution,
       },
     });

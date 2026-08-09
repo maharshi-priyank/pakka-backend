@@ -6,7 +6,7 @@ Status: Approved scope; awaiting written-spec review before implementation.
 
 ## Context
 
-`pakka-admin` currently has an overview page with headline counts, 30-day user
+`clearwork-admin` currently has an overview page with headline counts, 30-day user
 signups, plan distribution, a rough billing metric, and top workspaces. The
 backend already contains the tenant entities needed for richer analytics:
 users, workspaces, contacts, projects, proposals, contracts, invoices, tasks,
@@ -223,7 +223,7 @@ non-INR amounts into one total.
 
 Upgrade the existing `/admin/overview` route into the analytics dashboard while
 preserving its URL. Add the following reusable components under
-`pakka-admin/src/features/admin/analytics/`:
+`clearwork-admin/src/features/admin/analytics/`:
 
 1. **Analytics header**
    - title and last-refreshed state

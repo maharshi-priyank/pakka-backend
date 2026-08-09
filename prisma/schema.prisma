@@ -114,10 +114,15 @@ enum AdminCustomerTaskStatus {
 
 model Workspace {
   id                String    @id
+  billingOwnerId    String?
   name              String
   logoUrl           String?
   businessName      String?
   gstNumber         String?
+
+  billingOwner      User?     @relation("BillingOwnedWorkspaces", fields: [billingOwnerId], references: [id], onDelete: SetNull)
+
+  @@index([billingOwnerId])
   panNumber         String?
   businessType      String?
   razorpayAccountId String?
@@ -328,6 +333,7 @@ model User {
   activeWorkspaceId       String?
   activeWorkspace         Workspace?         @relation("ActiveWorkspace", fields: [activeWorkspaceId], references: [id], onDelete: SetNull)
   workspaceMemberships    WorkspaceMember[]
+  billingWorkspaces       Workspace[]        @relation("BillingOwnedWorkspaces")
 
   assignedTasks      Task[]            @relation("TaskAssignee")
   projectMemberships ProjectMember[]

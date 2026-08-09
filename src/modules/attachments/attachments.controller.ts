@@ -5,6 +5,7 @@ import { CreateAttachmentDto } from './dto/create-attachment.dto'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Public } from '../../common/decorators/public.decorator'
 import type { User } from '@prisma/client'
+import { resolveWorkspaceId } from '../users/resolve-workspace-id'
 
 @ApiTags('attachments')
 @ApiBearerAuth()
@@ -14,7 +15,7 @@ export class AttachmentsController {
 
   @Post()
   create(@CurrentUser() user: User, @Body() dto: CreateAttachmentDto) {
-    return this.attachmentsService.create(user.id, dto)
+    return this.attachmentsService.create(resolveWorkspaceId(user), dto)
   }
 
   @Get()
@@ -25,12 +26,12 @@ export class AttachmentsController {
     @Query('invoiceId')  invoiceId?: string,
     @Query('clientId')   clientId?: string,
   ) {
-    return this.attachmentsService.list(user.id, { projectId, proposalId, invoiceId, clientId })
+    return this.attachmentsService.list(resolveWorkspaceId(user), { projectId, proposalId, invoiceId, clientId })
   }
 
   @Delete(':id')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.attachmentsService.remove(user.id, id)
+    return this.attachmentsService.remove(resolveWorkspaceId(user), id)
   }
 
   // ── Public routes (no auth) ──────────────────────────────────────────────

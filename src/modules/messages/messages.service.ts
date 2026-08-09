@@ -4,6 +4,7 @@ import { NotificationsService } from '../notifications/notifications.service'
 import { EmailService } from '../automations/email.service'
 import { layout } from '../automations/templates/email-templates'
 import type { SendMessageDto } from './dto/send-message.dto'
+import { EntitlementsService } from '../entitlements/entitlements.service'
 
 @Injectable()
 export class MessagesService {
@@ -11,6 +12,7 @@ export class MessagesService {
     private readonly prisma:        PrismaService,
     private readonly notifications: NotificationsService,
     private readonly emailService:  EmailService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   private async getOrCreateThread(workspaceId: string, clientId: string, subject?: string) {
@@ -254,6 +256,7 @@ export class MessagesService {
 
   async getThreadByToken(token: string) {
     const resolved = await this.resolveEntityByPortalToken(token)
+    await this.entitlements.assertPortalAccess(resolved.entity.workspaceId)
     const { workspaceId, name } = resolved.type === 'contact'
       ? { workspaceId: resolved.entity.workspaceId, name: resolved.entity.name }
       : { workspaceId: resolved.entity.workspaceId, name: resolved.entity.name }
@@ -275,6 +278,7 @@ export class MessagesService {
 
   async sendReply(token: string, body: string) {
     const resolved = await this.resolveEntityByPortalToken(token)
+    await this.entitlements.assertPortalAccess(resolved.entity.workspaceId)
     const workspaceId = resolved.entity.workspaceId
     const entityName  = resolved.entity.name
     const entityEmail = (resolved.entity as any).email as string | null
@@ -332,6 +336,7 @@ export class MessagesService {
   async markReadByToken(token: string) {
     const resolved = await this.resolveEntityByPortalToken(token).catch(() => null)
     if (!resolved) return
+    await this.entitlements.assertPortalAccess(resolved.entity.workspaceId)
 
     const thread = resolved.type === 'contact'
       ? await this.prisma.thread.findFirst({

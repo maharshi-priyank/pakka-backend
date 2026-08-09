@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProjectStatus, ProjectStage, ContactStage, InvoiceStatus, TaskStatus } from '@prisma/client';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 export interface CreateProjectDto {
   name:                string;
@@ -33,6 +34,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma:       PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly entitlements?: EntitlementsService,
   ) {}
 
   private n(v: { toString(): string } | null | undefined): number {
@@ -40,6 +42,7 @@ export class ProjectsService {
   }
 
   async create(workspaceId: string, dto: CreateProjectDto) {
+    if (this.entitlements) await this.entitlements.assertWithinLimit(workspaceId, 'projects');
     const project = await this.prisma.project.create({
       data: {
         workspaceId,

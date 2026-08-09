@@ -4,12 +4,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import Razorpay from 'razorpay';
 import * as crypto from 'crypto';
 import { effectivePlan } from '../users/effective-plan';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @Injectable()
 export class PortalService {
   constructor(
     private readonly prisma:       PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   private makeRazorpay(keyId: string | null, keySecret: string | null): Razorpay {
@@ -68,6 +70,7 @@ export class PortalService {
     });
 
     if (contact) {
+      await this.entitlements.assertPortalAccess(contact.workspaceId);
       return this.getPortalDataForContact(contact, token);
     }
 
@@ -76,6 +79,7 @@ export class PortalService {
       include: { workspace: { select: { businessName: true, logoUrl: true, razorpayKeyId: true, razorpayKeySecret: true } } },
     });
     if (!client) throw new NotFoundException('Portal link is invalid or has expired');
+    await this.entitlements.assertPortalAccess(client.workspaceId);
     return this.getPortalDataForClient(client);
   }
 
@@ -83,10 +87,7 @@ export class PortalService {
     contact: Awaited<ReturnType<typeof this.prisma.contact.findFirst>> & { workspace: { businessName: string | null; logoUrl: string | null; razorpayKeyId: string | null; razorpayKeySecret: string | null } },
     _token: string,
   ) {
-    const owner = await this.prisma.user.findUnique({
-      where:  { id: contact!.workspaceId },
-      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
-    });
+    const owner = await this.entitlements.getOwnerForWorkspace(contact!.workspaceId);
 
     const [proposals, contracts, invoices, meetings, projects] = await Promise.all([
       this.prisma.proposal.findMany({
@@ -210,10 +211,7 @@ export class PortalService {
   private async getPortalDataForClient(
     client: Awaited<ReturnType<typeof this.prisma.client.findUnique>> & { workspace: { businessName: string | null; logoUrl: string | null; razorpayKeyId: string | null; razorpayKeySecret: string | null } },
   ) {
-    const owner = await this.prisma.user.findUnique({
-      where: { id: client!.workspaceId },
-      select: { plan: true, planExpiresAt: true, subscriptionStatus: true },
-    });
+    const owner = await this.entitlements.getOwnerForWorkspace(client!.workspaceId);
 
     const [proposals, contracts, invoices, meetings, projects] = await Promise.all([
       this.prisma.proposal.findMany({
@@ -344,6 +342,7 @@ export class PortalService {
     let invoiceWhere: Record<string, string>
 
     if (contact) {
+      await this.entitlements.assertPortalAccess(contact.workspaceId);
       workspaceInfo = contact.workspace
       invoiceWhere  = { id: invoiceId, contactId: contact.id }
     } else {
@@ -352,6 +351,7 @@ export class PortalService {
         include: { workspace: { select: { razorpayKeyId: true, razorpayKeySecret: true } } },
       });
       if (!client) throw new NotFoundException('Portal link is invalid or has expired');
+      await this.entitlements.assertPortalAccess(client.workspaceId);
       workspaceInfo = client.workspace
       invoiceWhere  = { id: invoiceId, clientId: client.id }
     }
@@ -400,6 +400,7 @@ export class PortalService {
     let invoiceWhere: Record<string, string>
 
     if (contact) {
+      await this.entitlements.assertPortalAccess(contact.workspaceId);
       workspaceId       = contact.workspaceId
       razorpayKeySecret = contact.workspace.razorpayKeySecret
       invoiceWhere      = { id: invoiceId, contactId: contact.id }
@@ -409,6 +410,7 @@ export class PortalService {
         include: { workspace: { select: { razorpayKeySecret: true } } },
       });
       if (!client) throw new NotFoundException('Portal link is invalid or has expired');
+      await this.entitlements.assertPortalAccess(client.workspaceId);
       workspaceId       = client.workspaceId
       razorpayKeySecret = client.workspace.razorpayKeySecret
       invoiceWhere      = { id: invoiceId, clientId: client.id }
