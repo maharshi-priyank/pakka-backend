@@ -184,6 +184,7 @@ model Workspace {
   changeRequests      ChangeRequest[]
   approvalRequests    ApprovalRequest[]
   reviews             Review[]
+  feedbacks           Feedback[]
 
   @@map("workspaces")
 }
@@ -1873,4 +1874,25 @@ model Review {
   @@index([workspaceId])
   @@index([projectId])
   @@map("reviews")
+}
+
+enum FeedbackType {
+  BUG
+  FEATURE
+  GENERAL
+  COMPLAINT
+}
+
+model Feedback {
+  id          String       @id @default(cuid())
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  type        FeedbackType @default(GENERAL)
+  subject     String
+  message     String?
+  createdAt   DateTime     @default(now())
+
+  @@index([workspaceId])
+  @@map("feedbacks")
 }

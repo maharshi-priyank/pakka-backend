@@ -61,6 +61,7 @@ import { ProductEventsModule } from './modules/product-events/product-events.mod
 import { ChangeRequestsModule } from './modules/change-requests/change-requests.module';
 import { ApprovalRequestsModule } from './modules/approval-requests/approval-requests.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { WorkspacePermissionGuard } from './common/guards/workspace-permission.guard';
@@ -148,6 +149,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     ChangeRequestsModule,
     ApprovalRequestsModule,
     ReviewsModule,
+    FeedbackModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
