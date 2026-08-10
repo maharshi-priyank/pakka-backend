@@ -6,9 +6,8 @@ const { PDFParse } = require('pdf-parse')
 const mammoth  = require('mammoth')
 import type { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
-const GROQ_API   = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_TEXT  = 'llama-3.3-70b-versatile'
-const GROQ_VISION = 'llama-3.2-11b-vision-preview'
+const GROQ_API  = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_MODEL = 'llama-3.1-8b-instant'
 
 // ─── Response shapes ──────────────────────────────────────────────────────────
 
@@ -157,34 +156,23 @@ export class AiService {
   }
 
   private async callClaude(systemPrompt: string, dto: ExtractLeadDto | ExtractProposalDto, maxTokens = 2048): Promise<string> {
-    const hasImage = !!(dto.imageBase64 && dto.mimeType)
-
-    // Build user message content
-    const userContent: unknown = hasImage
-      ? [
-          {
-            type:      'image_url',
-            image_url: { url: `data:${dto.mimeType};base64,${dto.imageBase64}` },
-          },
-          ...(dto.text?.trim() ? [{ type: 'text', text: dto.text.trim() }] : []),
-        ]
-      : dto.text?.trim()
-
-    if (!userContent) throw new BadRequestException('Provide text or an image')
-
-    const model = hasImage ? GROQ_VISION : GROQ_TEXT
+    // Image-only input — no vision model available on free tier, require text alongside
+    const userText = dto.text?.trim()
+    if (!userText) {
+      if (dto.imageBase64) throw new BadRequestException('Please describe the image content as text — image-only extraction is not supported on the current plan')
+      throw new BadRequestException('Provide text to extract from')
+    }
 
     const body: Record<string, unknown> = {
-      model,
-      max_tokens: maxTokens,
+      model:       GROQ_MODEL,
+      max_tokens:  maxTokens,
       temperature: 0.2,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userContent  },
+        { role: 'user',   content: userText     },
       ],
+      response_format: { type: 'json_object' },
     }
-    // JSON mode only for text model — vision model may not support it
-    if (!hasImage) body.response_format = { type: 'json_object' }
 
     let res: Response | undefined
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -340,7 +328,7 @@ Rules:
     ]
 
     const body = {
-      model:      GROQ_TEXT,
+      model:      GROQ_MODEL,
       max_tokens: 1024,
       temperature: 0.6,
       messages,
