@@ -17,7 +17,7 @@ export class GoogleAuthService {
 
   private static readonly DOCS_SCOPES = [
     'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/documents.readonly',
+    'https://www.googleapis.com/auth/documents',
   ];
 
   private static readonly SHEETS_SCOPES = [

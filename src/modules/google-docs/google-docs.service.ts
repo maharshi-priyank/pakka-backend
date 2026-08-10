@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { google, docs_v1 } from 'googleapis';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleAuthService } from '../google-auth/google-auth.service';
@@ -113,15 +113,23 @@ export class GoogleDocsService {
     const docsApi = google.docs({ version: 'v1', auth });
 
     const title = proposal.title ?? 'Proposal';
-    const { data: created } = await docsApi.documents.create({ requestBody: { title } });
-    const docId = created.documentId!;
+    try {
+      const { data: created } = await docsApi.documents.create({ requestBody: { title } });
+      const docId = created.documentId!;
 
-    const requests = this.buildProposalRequests(proposal);
-    if (requests.length > 0) {
-      await docsApi.documents.batchUpdate({ documentId: docId, requestBody: { requests } });
+      const requests = this.buildProposalRequests(proposal);
+      if (requests.length > 0) {
+        await docsApi.documents.batchUpdate({ documentId: docId, requestBody: { requests } });
+      }
+
+      return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.code;
+      if (status === 401 || status === 403) {
+        throw new BadRequestException('Google Docs permission error — please disconnect and reconnect Google Docs in Settings → Integrations');
+      }
+      throw new BadRequestException('Failed to export to Google Docs — please try again');
     }
-
-    return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
   }
 
   // ─── Export contract ─────────────────────────────────────────────────────────
@@ -137,15 +145,23 @@ export class GoogleDocsService {
     const docsApi = google.docs({ version: 'v1', auth });
 
     const title = contract.title ?? 'Contract';
-    const { data: created } = await docsApi.documents.create({ requestBody: { title } });
-    const docId = created.documentId!;
+    try {
+      const { data: created } = await docsApi.documents.create({ requestBody: { title } });
+      const docId = created.documentId!;
 
-    const requests = this.buildContractRequests(contract);
-    if (requests.length > 0) {
-      await docsApi.documents.batchUpdate({ documentId: docId, requestBody: { requests } });
+      const requests = this.buildContractRequests(contract);
+      if (requests.length > 0) {
+        await docsApi.documents.batchUpdate({ documentId: docId, requestBody: { requests } });
+      }
+
+      return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.code;
+      if (status === 401 || status === 403) {
+        throw new BadRequestException('Google Docs permission error — please disconnect and reconnect Google Docs in Settings → Integrations');
+      }
+      throw new BadRequestException('Failed to export to Google Docs — please try again');
     }
-
-    return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
   }
 
   // ─── Proposal builder ────────────────────────────────────────────────────────
