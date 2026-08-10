@@ -6,7 +6,8 @@ const { PDFParse } = require('pdf-parse')
 const mammoth  = require('mammoth')
 import type { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
-const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
+const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001'
 
 // ─── Response shapes ──────────────────────────────────────────────────────────
 
@@ -149,74 +150,69 @@ export class AiService {
   constructor(private readonly config: ConfigService) {}
 
   private get apiKey(): string {
-    const key = this.config.get<string>('geminiApiKey')
-    if (!key) throw new BadRequestException('Gemini API key not configured')
+    const key = this.config.get<string>('anthropicApiKey')
+    if (!key) throw new BadRequestException('AI API key not configured')
     return key
   }
 
-  private async callGemini(systemPrompt: string, dto: ExtractLeadDto | ExtractProposalDto, maxOutputTokens = 2048): Promise<string> {
-    const parts: unknown[] = []
+  private async callClaude(systemPrompt: string, dto: ExtractLeadDto | ExtractProposalDto, maxTokens = 2048): Promise<string> {
+    const contentParts: unknown[] = []
 
     if (dto.imageBase64 && dto.mimeType) {
-      parts.push({
-        inlineData: {
-          mimeType: dto.mimeType,
-          data:     dto.imageBase64,
-        },
+      contentParts.push({
+        type:   'image',
+        source: { type: 'base64', media_type: dto.mimeType, data: dto.imageBase64 },
       })
     }
 
     const userText = dto.text?.trim()
     if (userText) {
-      parts.push({ text: userText })
+      contentParts.push({ type: 'text', text: userText })
     }
 
-    if (parts.length === 0) {
+    if (contentParts.length === 0) {
       throw new BadRequestException('Provide text or an image')
     }
 
     const body = {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature:      0.2,
-        maxOutputTokens:  maxOutputTokens,
-      },
+      model:      ANTHROPIC_MODEL,
+      max_tokens: maxTokens,
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: contentParts }],
     }
 
     let res: Response | undefined
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500))
-      res = await fetch(GEMINI_API, {
+      res = await fetch(ANTHROPIC_API, {
         method:  'POST',
         headers: {
-          'Content-Type':   'application/json',
-          'X-goog-api-key': this.apiKey,
+          'Content-Type':    'application/json',
+          'x-api-key':       this.apiKey,
+          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify(body),
       })
-      if (res.status !== 503) break
+      if (res.status !== 529) break
     }
 
     if (!res!.ok) {
       const err = await res!.text()
-      this.logger.error(`Gemini error ${res!.status}: ${err}`)
-      const msg = res!.status === 503
+      this.logger.error(`Claude error ${res!.status}: ${err}`)
+      const msg = res!.status === 529
         ? 'AI service is temporarily busy — please try again in a moment'
         : 'AI extraction failed — please try again'
       throw new BadRequestException(msg)
     }
 
     const json = await res!.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+      content?: Array<{ type: string; text?: string }>
     }
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    return text
+    return json.content?.find(b => b.type === 'text')?.text ?? ''
   }
 
   async extractLead(dto: ExtractLeadDto): Promise<ExtractedLead> {
-    const raw = await this.callGemini(LEAD_SYSTEM_PROMPT, dto)
+    const raw = await this.callClaude(LEAD_SYSTEM_PROMPT, dto)
     try {
       const parsed = JSON.parse(raw) as ExtractedLead
       return {
@@ -238,7 +234,7 @@ export class AiService {
 
   async extractProposal(dto: ExtractProposalDto): Promise<ExtractedProposal> {
     const systemPrompt = PROPOSAL_SYSTEM_PROMPT((dto as ExtractProposalDto).pricingContext)
-    const raw = await this.callGemini(systemPrompt, dto, 4096)
+    const raw = await this.callClaude(systemPrompt, dto, 4096)
     try {
       const parsed = JSON.parse(raw) as ExtractedProposal
       return {
@@ -286,13 +282,13 @@ export class AiService {
 
     if (!extractedText) throw new BadRequestException('Could not extract text from the file — ensure it is not a scanned image')
 
-    // Cap input to ~15k chars — enough for any real proposal, avoids Gemini input overload
+    // Cap input to ~15k chars to keep token usage reasonable
     const inputText = extractedText.length > 15000 ? extractedText.slice(0, 15000) : extractedText
 
     const systemPrompt = PARSE_TEMPLATE_SYSTEM_PROMPT(context)
-    const raw = await this.callGemini(systemPrompt, { text: inputText }, 8192)
+    const raw = await this.callClaude(systemPrompt, { text: inputText }, 8192)
 
-    // Strip markdown code fences Gemini occasionally adds despite responseMimeType: json
+    // Strip any markdown code fences the model may add
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
 
     try {
@@ -330,45 +326,45 @@ Rules:
 - Respond in the same language as the user
 - Do not use markdown formatting — no **, ##, *, bullet hyphens, or backticks. Plain text only.`
 
-    const contents = [
+    const messages = [
       ...(dto.history ?? []).map(h => ({
-        role:  h.role,
-        parts: [{ text: h.content }],
+        role:    h.role as 'user' | 'assistant',
+        content: h.content,
       })),
-      { role: 'user', parts: [{ text: dto.message }] },
+      { role: 'user' as const, content: dto.message },
     ]
 
     const body = {
-      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents,
-      generationConfig: {
-        temperature:     0.6,
-        maxOutputTokens: 1024,
-      },
+      model:      ANTHROPIC_MODEL,
+      max_tokens: 1024,
+      system:     SYSTEM_PROMPT,
+      messages,
     }
 
     let res: Response | undefined
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500))
-      res = await fetch(GEMINI_API, {
+      res = await fetch(ANTHROPIC_API, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'X-goog-api-key': this.apiKey },
-        body:    JSON.stringify(body),
+        headers: {
+          'Content-Type':      'application/json',
+          'x-api-key':         this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body),
       })
-      if (res.status !== 503) break
+      if (res.status !== 529) break
     }
 
     if (!res!.ok) {
       const errBody = await res!.text()
-      this.logger.error(`Gemini chat error ${res!.status}: ${errBody}`)
-      const detail = `${res!.status}: ${errBody.slice(0, 300)}`
-      throw new BadRequestException(`AI unavailable — ${detail}`)
+      this.logger.error(`Claude chat error ${res!.status}: ${errBody}`)
+      throw new BadRequestException(`AI unavailable — ${res!.status}: ${errBody.slice(0, 300)}`)
     }
 
-    const json = await res!.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
-    }
-    const reply = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? 'Sorry, I could not generate a response. Please try again.'
+    const json = await res!.json() as { content?: Array<{ type: string; text?: string }> }
+    const reply = json.content?.find(b => b.type === 'text')?.text?.trim()
+      ?? 'Sorry, I could not generate a response. Please try again.'
     return { reply }
   }
 }

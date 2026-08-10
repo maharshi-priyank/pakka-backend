@@ -15,6 +15,7 @@ export const validationSchema = Joi.object({
   RAZORPAY_KEY_SECRET: Joi.string().required(),
   RAZORPAY_WEBHOOK_SECRET: Joi.string().required(),
   GEMINI_API_KEY: Joi.string().optional(),
+  ANTHROPIC_API_KEY: Joi.string().optional(),
   CORS_ORIGIN: Joi.string().required(),
   GOOGLE_CLIENT_ID: Joi.string().optional(),
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
@@ -104,7 +105,8 @@ export const configuration = () => ({
   },
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
   backendUrl: process.env.BACKEND_URL ?? 'http://localhost:3000/api',
-  geminiApiKey: process.env.GEMINI_API_KEY,
+  geminiApiKey:    process.env.GEMINI_API_KEY,
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   newRelic: {
     licenseKey: process.env.NEW_RELIC_LICENSE_KEY,
     appName: process.env.NEW_RELIC_APP_NAME ?? 'clearwork-backend',
