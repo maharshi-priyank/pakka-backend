@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
 import { UsersService } from '../users/users.service';
@@ -27,30 +27,33 @@ export class GoogleAuthService {
   getAuthUrl(userId: string): string {
     const client = this.buildOAuthClient();
     return client.generateAuthUrl({
-      access_type: 'offline',
-      prompt:      'consent',
-      scope:       GoogleAuthService.CALENDAR_SCOPES,
-      state:       userId,
+      access_type:  'offline',
+      prompt:       'consent',
+      scope:        GoogleAuthService.CALENDAR_SCOPES,
+      state:        userId,
+      redirect_uri: this.redirectUri,
     });
   }
 
   getDocsAuthUrl(userId: string): string {
     const client = this.buildOAuthClient();
     return client.generateAuthUrl({
-      access_type: 'offline',
-      prompt:      'consent',
-      scope:       GoogleAuthService.DOCS_SCOPES,
-      state:       `docs:${userId}`,
+      access_type:  'offline',
+      prompt:       'consent',
+      scope:        GoogleAuthService.DOCS_SCOPES,
+      state:        `docs:${userId}`,
+      redirect_uri: this.redirectUri,
     });
   }
 
   getSheetsAuthUrl(userId: string): string {
     const client = this.buildOAuthClient();
     return client.generateAuthUrl({
-      access_type: 'offline',
-      prompt:      'consent',
-      scope:       GoogleAuthService.SHEETS_SCOPES,
-      state:       `sheets:${userId}`,
+      access_type:  'offline',
+      prompt:       'consent',
+      scope:        GoogleAuthService.SHEETS_SCOPES,
+      state:        `sheets:${userId}`,
+      redirect_uri: this.redirectUri,
     });
   }
 
@@ -142,11 +145,19 @@ export class GoogleAuthService {
     await this.users.saveGoogleSheetsConnected(userId, false, null);
   }
 
-  private buildOAuthClient() {
-    return new google.auth.OAuth2(
-      this.config.get<string>('google.clientId'),
-      this.config.get<string>('google.clientSecret'),
-      this.config.get<string>('google.redirectUri'),
+  private get redirectUri(): string {
+    return (
+      this.config.get<string>('google.redirectUri') ||
+      'http://localhost:3000/api/v1/auth/google/callback'
     );
+  }
+
+  private buildOAuthClient() {
+    const clientId     = this.config.get<string>('google.clientId');
+    const clientSecret = this.config.get<string>('google.clientSecret');
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('Google OAuth is not configured on this server');
+    }
+    return new google.auth.OAuth2(clientId, clientSecret, this.redirectUri);
   }
 }
