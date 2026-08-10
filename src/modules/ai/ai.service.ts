@@ -6,8 +6,9 @@ const { PDFParse } = require('pdf-parse')
 const mammoth  = require('mammoth')
 import type { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages'
-const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001'
+const GROQ_API   = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_TEXT  = 'llama-3.3-70b-versatile'
+const GROQ_VISION = 'llama-3.2-11b-vision-preview'
 
 // ─── Response shapes ──────────────────────────────────────────────────────────
 
@@ -150,65 +151,68 @@ export class AiService {
   constructor(private readonly config: ConfigService) {}
 
   private get apiKey(): string {
-    const key = this.config.get<string>('anthropicApiKey')
+    const key = this.config.get<string>('groqApiKey')
     if (!key) throw new BadRequestException('AI API key not configured')
     return key
   }
 
   private async callClaude(systemPrompt: string, dto: ExtractLeadDto | ExtractProposalDto, maxTokens = 2048): Promise<string> {
-    const contentParts: unknown[] = []
+    const hasImage = !!(dto.imageBase64 && dto.mimeType)
 
-    if (dto.imageBase64 && dto.mimeType) {
-      contentParts.push({
-        type:   'image',
-        source: { type: 'base64', media_type: dto.mimeType, data: dto.imageBase64 },
-      })
-    }
+    // Build user message content
+    const userContent: unknown = hasImage
+      ? [
+          {
+            type:      'image_url',
+            image_url: { url: `data:${dto.mimeType};base64,${dto.imageBase64}` },
+          },
+          ...(dto.text?.trim() ? [{ type: 'text', text: dto.text.trim() }] : []),
+        ]
+      : dto.text?.trim()
 
-    const userText = dto.text?.trim()
-    if (userText) {
-      contentParts.push({ type: 'text', text: userText })
-    }
+    if (!userContent) throw new BadRequestException('Provide text or an image')
 
-    if (contentParts.length === 0) {
-      throw new BadRequestException('Provide text or an image')
-    }
+    const model = hasImage ? GROQ_VISION : GROQ_TEXT
 
-    const body = {
-      model:      ANTHROPIC_MODEL,
+    const body: Record<string, unknown> = {
+      model,
       max_tokens: maxTokens,
-      system:     systemPrompt,
-      messages:   [{ role: 'user', content: contentParts }],
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userContent  },
+      ],
     }
+    // JSON mode only for text model — vision model may not support it
+    if (!hasImage) body.response_format = { type: 'json_object' }
 
     let res: Response | undefined
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500))
-      res = await fetch(ANTHROPIC_API, {
+      res = await fetch(GROQ_API, {
         method:  'POST',
         headers: {
-          'Content-Type':    'application/json',
-          'x-api-key':       this.apiKey,
-          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(body),
       })
-      if (res.status !== 529) break
+      if (res.status !== 503) break
     }
 
     if (!res!.ok) {
       const err = await res!.text()
-      this.logger.error(`Claude error ${res!.status}: ${err}`)
-      const msg = res!.status === 529
+      this.logger.error(`Groq error ${res!.status}: ${err}`)
+      const msg = res!.status === 503 || res!.status === 529
         ? 'AI service is temporarily busy — please try again in a moment'
         : 'AI extraction failed — please try again'
       throw new BadRequestException(msg)
     }
 
     const json = await res!.json() as {
-      content?: Array<{ type: string; text?: string }>
+      choices?: Array<{ message?: { content?: string } }>
     }
-    return json.content?.find(b => b.type === 'text')?.text ?? ''
+    return json.choices?.[0]?.message?.content ?? ''
   }
 
   async extractLead(dto: ExtractLeadDto): Promise<ExtractedLead> {
@@ -327,6 +331,7 @@ Rules:
 - Do not use markdown formatting — no **, ##, *, bullet hyphens, or backticks. Plain text only.`
 
     const messages = [
+      { role: 'system' as const, content: SYSTEM_PROMPT },
       ...(dto.history ?? []).map(h => ({
         role:    h.role as 'user' | 'assistant',
         content: h.content,
@@ -335,35 +340,34 @@ Rules:
     ]
 
     const body = {
-      model:      ANTHROPIC_MODEL,
+      model:      GROQ_TEXT,
       max_tokens: 1024,
-      system:     SYSTEM_PROMPT,
+      temperature: 0.6,
       messages,
     }
 
     let res: Response | undefined
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500))
-      res = await fetch(ANTHROPIC_API, {
+      res = await fetch(GROQ_API, {
         method:  'POST',
         headers: {
-          'Content-Type':      'application/json',
-          'x-api-key':         this.apiKey,
-          'anthropic-version': '2023-06-01',
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(body),
       })
-      if (res.status !== 529) break
+      if (res.status !== 503) break
     }
 
     if (!res!.ok) {
       const errBody = await res!.text()
-      this.logger.error(`Claude chat error ${res!.status}: ${errBody}`)
+      this.logger.error(`Groq chat error ${res!.status}: ${errBody}`)
       throw new BadRequestException(`AI unavailable — ${res!.status}: ${errBody.slice(0, 300)}`)
     }
 
-    const json = await res!.json() as { content?: Array<{ type: string; text?: string }> }
-    const reply = json.content?.find(b => b.type === 'text')?.text?.trim()
+    const json = await res!.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const reply = json.choices?.[0]?.message?.content?.trim()
       ?? 'Sorry, I could not generate a response. Please try again.'
     return { reply }
   }
