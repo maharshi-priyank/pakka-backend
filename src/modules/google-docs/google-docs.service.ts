@@ -109,11 +109,11 @@ export class GoogleDocsService {
     });
     if (!proposal) throw new NotFoundException('Proposal not found');
 
-    const auth    = await this.googleAuth.getAuthorizedClient(userId);
-    const docsApi = google.docs({ version: 'v1', auth });
-
-    const title = proposal.title ?? 'Proposal';
     try {
+      const auth    = await this.googleAuth.getAuthorizedClient(userId);
+      const docsApi = google.docs({ version: 'v1', auth });
+
+      const title = proposal.title ?? 'Proposal';
       const { data: created } = await docsApi.documents.create({ requestBody: { title } });
       const docId = created.documentId!;
 
@@ -124,10 +124,14 @@ export class GoogleDocsService {
 
       return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
     } catch (err: any) {
+      if (err?.status === 401 || err?.response?.status === 401 || err?.message?.includes('reconnect')) {
+        throw new BadRequestException(err.message ?? 'Google session expired — please reconnect Google Docs in Settings → Integrations');
+      }
       const status = err?.response?.status ?? err?.code;
-      if (status === 401 || status === 403) {
+      if (status === 403) {
         throw new BadRequestException('Google Docs permission error — please disconnect and reconnect Google Docs in Settings → Integrations');
       }
+      if (err?.status >= 400 && err?.status < 500) throw err;
       throw new BadRequestException('Failed to export to Google Docs — please try again');
     }
   }
@@ -141,11 +145,11 @@ export class GoogleDocsService {
     });
     if (!contract) throw new NotFoundException('Contract not found');
 
-    const auth    = await this.googleAuth.getAuthorizedClient(userId);
-    const docsApi = google.docs({ version: 'v1', auth });
-
-    const title = contract.title ?? 'Contract';
     try {
+      const auth    = await this.googleAuth.getAuthorizedClient(userId);
+      const docsApi = google.docs({ version: 'v1', auth });
+
+      const title = contract.title ?? 'Contract';
       const { data: created } = await docsApi.documents.create({ requestBody: { title } });
       const docId = created.documentId!;
 
@@ -156,10 +160,14 @@ export class GoogleDocsService {
 
       return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
     } catch (err: any) {
+      if (err?.status === 401 || err?.response?.status === 401 || err?.message?.includes('reconnect')) {
+        throw new BadRequestException(err.message ?? 'Google session expired — please reconnect Google Docs in Settings → Integrations');
+      }
       const status = err?.response?.status ?? err?.code;
-      if (status === 401 || status === 403) {
+      if (status === 403) {
         throw new BadRequestException('Google Docs permission error — please disconnect and reconnect Google Docs in Settings → Integrations');
       }
+      if (err?.status >= 400 && err?.status < 500) throw err;
       throw new BadRequestException('Failed to export to Google Docs — please try again');
     }
   }

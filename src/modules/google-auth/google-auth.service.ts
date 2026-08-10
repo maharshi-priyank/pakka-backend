@@ -104,13 +104,17 @@ export class GoogleAuthService {
 
     // Auto-refresh if expired
     if (stored.googleTokenExpiresAt && stored.googleTokenExpiresAt < new Date()) {
-      const { credentials } = await client.refreshAccessToken();
-      await this.users.saveGoogleTokens(userId, {
-        accessToken:  credentials.access_token!,
-        refreshToken: credentials.refresh_token ?? stored.googleRefreshToken,
-        expiresAt:    new Date(credentials.expiry_date ?? Date.now() + 3600 * 1000),
-      });
-      client.setCredentials(credentials);
+      try {
+        const { credentials } = await client.refreshAccessToken();
+        await this.users.saveGoogleTokens(userId, {
+          accessToken:  credentials.access_token!,
+          refreshToken: credentials.refresh_token ?? stored.googleRefreshToken,
+          expiresAt:    new Date(credentials.expiry_date ?? Date.now() + 3600 * 1000),
+        });
+        client.setCredentials(credentials);
+      } catch {
+        throw new UnauthorizedException('Google token expired — please reconnect Google Docs in Settings → Integrations');
+      }
     }
 
     return client;
