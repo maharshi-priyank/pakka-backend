@@ -1,16 +1,26 @@
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+#
+# Manual deploys only — no auto-deploy on push. Trigger from the GitHub
+# Actions tab: Actions → Fly Deploy → Run workflow.
 
 name: Fly Deploy
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm deploying to production'
+        required: true
 jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
     concurrency: deploy-group    # optional: ensure only one action runs at a time
     steps:
+      - name: Guard against accidental runs
+        if: github.event.inputs.confirm != 'deploy'
+        run: |
+          echo "::error::Input 'confirm' must be exactly 'deploy' to proceed. Got: '${{ github.event.inputs.confirm }}'"
+          exit 1
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
