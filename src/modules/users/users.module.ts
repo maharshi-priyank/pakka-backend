@@ -7,9 +7,10 @@ import { ContractTemplatesModule } from '../contract-templates/contract-template
 import { InvoiceTemplatesModule } from '../invoice-templates/invoice-templates.module';
 import { FormsModule } from '../forms/forms.module';
 import { ProductEventsModule } from '../product-events/product-events.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports:     [AutomationsModule, WorkspacesModule, ContractTemplatesModule, InvoiceTemplatesModule, FormsModule, ProductEventsModule],
+  imports:     [AuthModule, AutomationsModule, WorkspacesModule, ContractTemplatesModule, InvoiceTemplatesModule, FormsModule, ProductEventsModule],
   controllers: [UsersController],
   providers:   [UsersService],
   exports:     [UsersService],

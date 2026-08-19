@@ -5,6 +5,10 @@ import { SyncUserDto, UpdateUserDto } from './dto/upsert-user.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayloadOnly } from '../../common/decorators/jwt-payload-only.decorator';
 import type { SupabaseJwtPayload } from '../auth/jwt-payload.strategy';
+import {
+  LoginSessionsService,
+  type LoginSessionRequest,
+} from '../auth/login-sessions.service';
 import { User } from '@prisma/client';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 
@@ -15,6 +19,7 @@ export class UsersController {
   constructor(
     private readonly usersService:      UsersService,
     private readonly workspacesService: WorkspacesService,
+    private readonly loginSessions:     LoginSessionsService,
   ) {}
 
   /**
@@ -26,10 +31,15 @@ export class UsersController {
   @JwtPayloadOnly()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Upsert user on first login' })
-  upsert(@Request() req: { user: SupabaseJwtPayload }, @Body() dto: SyncUserDto) {
+  async upsert(
+    @Request() req: LoginSessionRequest & { user: SupabaseJwtPayload },
+    @Body() dto: SyncUserDto,
+  ) {
     const { sub, email, user_metadata } = req.user;
     const name = user_metadata?.name || email;
-    return this.usersService.upsert({ id: sub, email, name, ...dto });
+    const user = await this.usersService.upsert({ id: sub, email, name, ...dto });
+    await this.loginSessions.observe(user.id, req.user, req);
+    return user;
   }
 
   @Get('me')

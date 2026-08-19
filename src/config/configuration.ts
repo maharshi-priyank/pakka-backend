@@ -14,9 +14,11 @@ export const validationSchema = Joi.object({
   RAZORPAY_KEY_ID: Joi.string().required(),
   RAZORPAY_KEY_SECRET: Joi.string().required(),
   RAZORPAY_WEBHOOK_SECRET: Joi.string().required(),
-  GEMINI_API_KEY: Joi.string().optional(),
-  ANTHROPIC_API_KEY: Joi.string().optional(),
-  GROQ_API_KEY: Joi.string().optional(),
+  // Optional AI providers are commonly represented as KEY="" in local and
+  // hosted environments. Treat an empty value as "provider disabled".
+  GEMINI_API_KEY: Joi.string().allow('').optional(),
+  ANTHROPIC_API_KEY: Joi.string().allow('').optional(),
+  GROQ_API_KEY: Joi.string().allow('').optional(),
   CORS_ORIGIN: Joi.string().required(),
   GOOGLE_CLIENT_ID: Joi.string().optional(),
   GOOGLE_CLIENT_SECRET: Joi.string().optional(),
@@ -106,9 +108,9 @@ export const configuration = () => ({
   },
   appUrl: process.env.APP_URL ?? 'http://localhost:5173',
   backendUrl: process.env.BACKEND_URL ?? 'http://localhost:3000/api',
-  geminiApiKey:    process.env.GEMINI_API_KEY,
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-  groqApiKey:      process.env.GROQ_API_KEY,
+  geminiApiKey:    process.env.GEMINI_API_KEY || undefined,
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
+  groqApiKey:      process.env.GROQ_API_KEY || undefined,
   newRelic: {
     licenseKey: process.env.NEW_RELIC_LICENSE_KEY,
     appName: process.env.NEW_RELIC_APP_NAME ?? 'clearwork-backend',

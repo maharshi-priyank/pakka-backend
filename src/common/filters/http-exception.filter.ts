@@ -24,6 +24,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let details: unknown = undefined;
+    let code: string | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -35,6 +36,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         const resp = exceptionResponse as Record<string, unknown>;
         message = (resp['message'] as string) || message;
         details = Array.isArray(resp['message']) ? resp['message'] : undefined;
+        code = typeof resp['code'] === 'string' ? resp['code'] : undefined;
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -54,6 +56,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error: {
         statusCode: status,
         message,
+        ...(code ? { code } : {}),
         details,
         path: request.url,
         timestamp: new Date().toISOString(),

@@ -342,8 +342,37 @@ model User {
   leadProviderKeys LeadProviderKey[]
   leadCampaigns    LeadCampaign[]
   productEvents    ProductEvent[]
+  loginSessions    UserLoginSession[]
 
   @@map("users")
+}
+
+/// A Supabase Auth session observed by the API. Access and refresh tokens are
+/// never persisted; providerSessionId is the non-secret `session_id` JWT claim.
+model UserLoginSession {
+  id                 String    @id @default(cuid())
+  userId             String    @map("user_id")
+  providerSessionId  String?   @unique @map("provider_session_id")
+  sessionFingerprint String    @unique @map("session_fingerprint")
+  deviceId           String?   @map("device_id")
+  deviceName         String?   @map("device_name")
+  deviceType         String    @default("unknown") @map("device_type")
+  browser            String?
+  os                 String?
+  ipAddress          String?   @map("ip_address")
+  location           String?
+  userAgent          String?   @map("user_agent")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  lastActiveAt       DateTime  @default(now()) @map("last_active_at")
+  tokenExpiresAt     DateTime? @map("token_expires_at")
+  revokedAt          DateTime? @map("revoked_at")
+  revokeReason       String?   @map("revoke_reason")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, lastActiveAt])
+  @@index([tokenExpiresAt])
+  @@map("user_login_sessions")
 }
 
 model PromoCode {
