@@ -7,7 +7,7 @@ const mammoth  = require('mammoth')
 import type { ExtractLeadDto, ExtractProposalDto, ChatDto } from './dto/extract.dto'
 
 const GROQ_API  = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_MODEL = 'llama-3.1-8b-instant'
+const GROQ_MODEL = 'openai/gpt-oss-20b'
 
 // ─── Response shapes ──────────────────────────────────────────────────────────
 

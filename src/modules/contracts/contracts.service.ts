@@ -356,11 +356,22 @@ export class ContractsService {
       data:  { status: ContractStatus.SENT, signerOtp: null, sentAt: new Date() },
     });
 
-    // Generate a hashed OTP and email it to the client. OtpService persists
-    // otpHash + otpExpiresAt on the Contract row and sends the plaintext code
-    // directly to the client's inbox — the code is never returned to the caller.
-    const clientEmail = (contract as any).client?.email ?? '';
-    const clientName  = (contract as any).client?.name  ?? 'there';
+    // Resolve signer email: content.signerEmail (set on the Parties form) takes
+    // priority, then contact.email, then legacy client.email. INCLUDE_FULL omits
+    // email on contact so fetch email-bearing relations with a separate query.
+    const contentMap = (contract.content as Record<string, unknown>) ?? {};
+    const emailRecord = await this.prisma.contract.findUnique({
+      where:   { id },
+      include: { client: true, contact: true },
+    });
+    const clientEmail = (contentMap.signerEmail as string | undefined)
+      ?? (emailRecord as any)?.contact?.email
+      ?? (emailRecord as any)?.client?.email
+      ?? '';
+    const clientName  = (contentMap.signerName as string | undefined)
+      ?? (emailRecord as any)?.contact?.name
+      ?? (emailRecord as any)?.client?.name
+      ?? 'there';
     const { otpEmailSent } = await this.otpService.generate('contract', id, {
       email:       clientEmail,
       name:        clientName,
@@ -418,9 +429,15 @@ export class ContractsService {
     if (!contract || contract.workspaceId !== workspaceId) {
       throw new NotFoundException('Contract not found')
     }
-    // Resolve recipient email (contact takes priority over client)
-    const email = (contract as any).contact?.email ?? (contract as any).client?.email
-    const name  = (contract as any).contact?.name  ?? (contract as any).client?.name ?? 'Client'
+    // Resolve recipient email: content.signerEmail first, then contact, then client.
+    const contentMap = (contract.content as Record<string, unknown>) ?? {};
+    const email = (contentMap.signerEmail as string | undefined)
+      ?? (contract as any).contact?.email
+      ?? (contract as any).client?.email
+    const name  = (contentMap.signerName as string | undefined)
+      ?? (contract as any).contact?.name
+      ?? (contract as any).client?.name
+      ?? 'Client'
     if (!email) throw new BadRequestException('No client email on record')
 
     return this.otpService.resend('contract', contractId, { email, name, workspaceId })
