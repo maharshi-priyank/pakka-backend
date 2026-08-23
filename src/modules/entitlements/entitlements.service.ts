@@ -6,8 +6,8 @@ import { effectivePlan } from '../users/effective-plan';
 export type UsageMetric = 'clients' | 'projects' | 'activeLeads' | 'teamMembers' | 'storageBytes';
 
 export const PLAN_LIMITS: Record<Plan, Record<UsageMetric, number>> = {
-  FREE:  { clients: 5,  projects: 10, activeLeads: 30,  teamMembers: 0, storageBytes: 100 * 1024 * 1024 },
-  SOLO:  { clients: 30, projects: 60, activeLeads: 300, teamMembers: 5, storageBytes: 2 * 1024 * 1024 * 1024 },
+  FREE:  { clients: 2,  projects: 10, activeLeads: 30,  teamMembers: 0, storageBytes: 100 * 1024 * 1024 },
+  SOLO:  { clients: Infinity, projects: Infinity, activeLeads: Infinity, teamMembers: 0, storageBytes: 2 * 1024 * 1024 * 1024 },
   STUDIO:{ clients: Infinity, projects: Infinity, activeLeads: Infinity, teamMembers: Infinity, storageBytes: Infinity },
 };
 

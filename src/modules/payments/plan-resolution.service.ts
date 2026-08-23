@@ -19,9 +19,9 @@ export interface PublicPlanPrice {
 }
 
 const PRICES: Record<PlanTier, Record<string, number>> = {
-  PRO:    { founding: 149, earlyaccess: 149, regular: 149 },
-  SOLO:   { founding: 149, earlyaccess: 149, regular: 149 },
-  STUDIO: { founding: 650, earlyaccess: 650, regular: 650 },
+  PRO:    { founding: 249, earlyaccess: 249, regular: 249 },
+  SOLO:   { founding: 249, earlyaccess: 249, regular: 249 },
+  STUDIO: { founding: 799, earlyaccess: 799, regular: 799 },
 };
 
 @Injectable()

@@ -8,7 +8,7 @@ import { UpdateClientDto } from './dto/update-client.dto';
 import { QueryClientsDto } from './dto/query-clients.dto';
 import { effectivePlan } from '../users/effective-plan';
 
-const CLIENT_LIMITS = { FREE: 5, SOLO: 25, STUDIO: Infinity } as const;
+const CLIENT_LIMITS = { FREE: 2, SOLO: Infinity, STUDIO: Infinity } as const;
 
 @Injectable()
 export class ClientsService {
