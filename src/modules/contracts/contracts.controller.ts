@@ -11,6 +11,7 @@ import { QueryContractsDto } from './dto/query-contracts.dto';
 import { SignContractDto } from './dto/sign-contract.dto';
 import { ReapplyTemplateDto } from './dto/reapply-template.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '@prisma/client';
@@ -23,30 +24,35 @@ export class ContractsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a contract manually' })
+  @RequirePermission('MANAGE_CONTRACTS')
   create(@CurrentUser() user: User, @Body() dto: CreateContractDto) {
     return this.svc.create(resolveWorkspaceId(user), dto);
   }
 
   @Post('from-proposal/:proposalId')
   @ApiOperation({ summary: 'Auto-generate contract from an accepted proposal' })
+  @RequirePermission('MANAGE_CONTRACTS')
   createFromProposal(@CurrentUser() user: User, @Param('proposalId') proposalId: string) {
     return this.svc.createFromProposal(resolveWorkspaceId(user), proposalId);
   }
 
   @Get()
   @ApiOperation({ summary: 'List contracts' })
+  @RequirePermission('VIEW_CONTRACTS')
   findAll(@CurrentUser() user: User, @Query() query: QueryContractsDto) {
     return this.svc.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a contract by ID (authenticated)' })
+  @RequirePermission('VIEW_CONTRACTS')
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update contract content or status' })
+  @RequirePermission('MANAGE_CONTRACTS')
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateContractDto) {
     return this.svc.update(resolveWorkspaceId(user), id, dto);
   }
@@ -54,6 +60,7 @@ export class ContractsController {
   @Post(':id/reapply-template')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Re-apply a different template\'s boilerplate clauses (draft/sent/declined only)' })
+  @RequirePermission('MANAGE_CONTRACTS')
   reapplyTemplate(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ReapplyTemplateDto) {
     return this.svc.reapplyTemplate(resolveWorkspaceId(user), id, dto);
   }
@@ -61,6 +68,7 @@ export class ContractsController {
   @Post(':id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark contract as sent — generates OTP and returns sign URL' })
+  @RequirePermission('SEND_CONTRACTS')
   send(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.send(resolveWorkspaceId(user), id);
   }
@@ -68,24 +76,28 @@ export class ContractsController {
   @Post(':id/resend-otp')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resend OTP to the client (rate-limited to once per 60 seconds)' })
+  @RequirePermission('SEND_CONTRACTS')
   resendOtp(@CurrentUser() user: User, @Param('id') id: string): Promise<{ otpEmailSent: boolean }> {
     return this.svc.resendOtp(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive a contract (unsigned only)' })
+  @RequirePermission('MANAGE_CONTRACTS')
   archive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
   @ApiOperation({ summary: 'Unarchive a contract' })
+  @RequirePermission('MANAGE_CONTRACTS')
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.unarchive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/void')
   @ApiOperation({ summary: 'Void a signed contract' })
+  @RequirePermission('MANAGE_CONTRACTS')
   void(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.void(resolveWorkspaceId(user), id);
   }
@@ -93,6 +105,7 @@ export class ContractsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a contract (draft/sent only, no linked invoices)' })
+  @RequirePermission('MANAGE_CONTRACTS')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.remove(resolveWorkspaceId(user), id);
   }

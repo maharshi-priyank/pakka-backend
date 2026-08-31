@@ -9,6 +9,7 @@ import type { RazorpayWebhookEvent } from './dto/webhook-event.dto';
 import { ProductEventsService } from '../product-events/product-events.service';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { WorkspacesService } from '../workspaces/workspaces.service';
 
 type WebhookHandler = (event: RazorpayWebhookEvent) => Promise<void>;
 
@@ -24,6 +25,7 @@ export class PaymentsService {
     private readonly productEvents: ProductEventsService,
     private readonly entitlements: EntitlementsService,
     private readonly permissions: PermissionsService,
+    private readonly workspaces: WorkspacesService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {
     this.handlers = {
@@ -234,7 +236,7 @@ export class PaymentsService {
 
     const planTier = sub.notes?.tier === 'PRO' || sub.plan_id.toLowerCase().includes('solo') ? Plan.SOLO : Plan.STUDIO;
 
-    await this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         plan:                   planTier,
@@ -245,6 +247,13 @@ export class PaymentsService {
         planExpiresAt:          null,
       },
     });
+
+    // G2/KTD-3: an owner upgrading to Studio unlocks team members — seed the
+    // preset roles into their active workspace now rather than waiting on
+    // the one-time backfill migration to cover pre-existing workspaces.
+    if (planTier === Plan.STUDIO) {
+      await this.workspaces.seedPresetsForWorkspace(user.activeWorkspaceId ?? userId);
+    }
   }
 
   private async onPaymentSuccess(event: RazorpayWebhookEvent): Promise<void> {

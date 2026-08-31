@@ -99,11 +99,15 @@ export class AdminWorkspacesService {
         orderBy: { flag: 'asc' },
         select: { id: true, workspaceId: true, flag: true, enabled: true, updatedBy: true, createdAt: true, updatedAt: true },
       }),
-      this.prisma.workspaceRole.findMany({ select: { id: true, key: true, name: true }, orderBy: { sortOrder: 'asc' } }),
+      this.prisma.workspaceRole.findMany({
+        where:   { OR: [{ workspaceId: null }, { workspaceId: id }] },
+        select:  { id: true, key: true, name: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
     ]);
 
     // Plan of the workspace's owner (first OWNER member) for billing/limits context.
-    const owner = members.find((m) => m.role === 'OWNER');
+    const owner = members.find((m) => m.workspaceRole.key === 'OWNER');
 
     return {
       ...workspace,

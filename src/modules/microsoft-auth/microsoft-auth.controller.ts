@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { MicrosoftAuthService } from './microsoft-auth.service.js';
 import { User } from '@prisma/client';
 
@@ -16,6 +17,7 @@ export class MicrosoftAuthController {
   ) {}
 
   @Get('connect')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   connect(@CurrentUser() user: User) {
     const authUrl = this.msAuth.getAuthUrl(user.id);
     return { authUrl };
@@ -34,6 +36,7 @@ export class MicrosoftAuthController {
   }
 
   @Post('disconnect')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async disconnect(@CurrentUser() user: User) {
     await this.msAuth.disconnectOutlook(user.id);
     return { success: true };

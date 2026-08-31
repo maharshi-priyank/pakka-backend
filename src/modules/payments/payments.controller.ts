@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { PaymentsService } from './payments.service';
 import { StripeService } from './stripe.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
@@ -24,6 +25,7 @@ export class PaymentsController {
 
   @Post('create-subscription')
   @UseGuards(JwtAuthGuard)
+  @RequirePermission('MANAGE_BILLING')
   createSubscription(
     @CurrentUser() user: User,
     @Body() dto: CreateSubscriptionDto,
@@ -39,6 +41,7 @@ export class PaymentsController {
 
   @Delete('subscription')
   @UseGuards(JwtAuthGuard)
+  @RequirePermission('MANAGE_BILLING')
   cancelSubscription(@CurrentUser() user: User) {
     return this.payments.cancelSubscription(user.id);
   }
@@ -95,6 +98,7 @@ export class PaymentsController {
 
   @Post('stripe/checkout')
   @UseGuards(JwtAuthGuard)
+  @RequirePermission('MANAGE_BILLING')
   createStripeCheckout(
     @CurrentUser() user: User,
     @Body() dto: CreateSubscriptionDto,

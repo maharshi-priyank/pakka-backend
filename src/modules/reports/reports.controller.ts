@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ReportsService } from './reports.service';
 
 @ApiTags('Reports')
@@ -13,6 +14,7 @@ export class ReportsController {
   @ApiOperation({ summary: 'Revenue report — invoiced, collected, outstanding by month' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to',   required: false })
+  @RequirePermission('VIEW_REPORTS')
   revenue(
     @CurrentUser() user: { id: string },
     @Query('from') from?: string,
@@ -25,6 +27,7 @@ export class ReportsController {
   @ApiOperation({ summary: 'GST report — IGST/CGST/SGST/TDS breakdown by month' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to',   required: false })
+  @RequirePermission('VIEW_REPORTS')
   gst(
     @CurrentUser() user: { id: string },
     @Query('from') from?: string,
@@ -37,6 +40,7 @@ export class ReportsController {
   @ApiOperation({ summary: 'Client report — revenue, collected, outstanding per client' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to',   required: false })
+  @RequirePermission('VIEW_REPORTS')
   clients(
     @CurrentUser() user: { id: string },
     @Query('from') from?: string,
@@ -49,6 +53,7 @@ export class ReportsController {
   @ApiOperation({ summary: 'Expense report — by category with monthly trend' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to',   required: false })
+  @RequirePermission('VIEW_REPORTS')
   expenses(
     @CurrentUser() user: { id: string },
     @Query('from') from?: string,
@@ -61,6 +66,7 @@ export class ReportsController {
   @ApiOperation({ summary: 'Time report — hours by client with monthly trend' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to',   required: false })
+  @RequirePermission('VIEW_REPORTS')
   time(
     @CurrentUser() user: { id: string },
     @Query('from') from?: string,
@@ -74,6 +80,7 @@ export class ReportsController {
   @ApiQuery({ name: 'from',  required: false })
   @ApiQuery({ name: 'to',    required: false })
   @ApiQuery({ name: 'basis', required: false, enum: ['accrual', 'cash'] })
+  @RequirePermission('VIEW_REPORTS')
   pl(
     @CurrentUser() user: { id: string },
     @Query('from')  from?:  string,

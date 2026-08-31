@@ -37,7 +37,7 @@ export class EntitlementsService {
 
     // Compatibility for rows created before the account ownership migration.
     const owner = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId, role: 'OWNER' },
+      where: { workspaceId, workspaceRole: { key: 'OWNER' } },
       orderBy: { joinedAt: 'asc' },
       select: { userId: true },
     });
@@ -125,7 +125,7 @@ export class EntitlementsService {
     }
   }
 
-  isBillingManager(user: Pick<User, 'id' | 'ownerId'>, ownerId: string, permissions: string[] = []): boolean {
-    return user.id === ownerId || permissions.includes('MANAGE_BILLING') || user.ownerId === ownerId;
+  isBillingManager(user: Pick<User, 'id'>, ownerId: string, permissions: string[] = []): boolean {
+    return user.id === ownerId || permissions.includes('MANAGE_BILLING');
   }
 }

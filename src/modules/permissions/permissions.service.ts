@@ -52,8 +52,13 @@ export class PermissionsService implements OnModuleInit {
     return perms.map(p => p.permission as string)
   }
 
-  async listRoles() {
+  // M3: scoped to system roles (workspaceId null) plus the caller's own
+  // workspace-scoped roles — an unscoped findMany() here would leak every
+  // other workspace's custom/preset roles to any authenticated caller.
+  async listRoles(workspaceId: string | null) {
     return this.prisma.workspaceRole.findMany({
+      where:   { OR: [{ workspaceId: null }, { workspaceId }] },
+      include: { permissions: true, _count: { select: { members: true } } },
       orderBy: { sortOrder: 'asc' },
     })
   }

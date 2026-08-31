@@ -5,6 +5,7 @@ import { WorkspacesService } from './workspaces.service'
 import { CreateWorkspaceDto } from './dto/create-workspace.dto'
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 
 @ApiTags('workspaces')
 @ApiBearerAuth()
@@ -27,8 +28,8 @@ export class WorkspacesController {
 
   @Get('roles')
   @ApiOperation({ summary: 'List available workspace roles' })
-  getRoles() {
-    return this.workspacesService.getRoles()
+  getRoles(@CurrentUser() user: User) {
+    return this.workspacesService.getRoles(user.activeWorkspaceId)
   }
 
   @Get('my-permissions')
@@ -45,7 +46,8 @@ export class WorkspacesController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update workspace profile (OWNER only)' })
+  @ApiOperation({ summary: 'Update workspace profile (requires MANAGE_WORKSPACE_SETTINGS)' })
+  @RequirePermission('MANAGE_WORKSPACE_SETTINGS')
   update(
     @CurrentUser() user: User,
     @Param('id') id: string,

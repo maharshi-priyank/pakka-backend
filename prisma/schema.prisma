@@ -148,7 +148,8 @@ model Workspace {
   updatedAt         DateTime  @updatedAt
   archivedAt        DateTime? @map("archived_at")
 
-  members     WorkspaceMember[]
+  members       WorkspaceMember[]
+  workspaceRoles WorkspaceRole[]
   activeUsers User[]            @relation("ActiveWorkspace")
 
   leads               Lead[]
@@ -196,7 +197,9 @@ model Workspace {
 
 model WorkspaceRole {
   id          String                    @id @default(cuid())
-  key         String                    @unique
+  key         String
+  workspaceId String?
+  workspace   Workspace?                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   description String?
   isSystem    Boolean                   @default(true)
@@ -205,6 +208,11 @@ model WorkspaceRole {
   members     WorkspaceMember[]
   createdAt   DateTime                  @default(now())
 
+  // Partial unique indexes enforced via raw SQL in the migration (Prisma
+  // schema syntax can't express `WHERE workspace_id IS NULL` constraints):
+  //   UNIQUE (key) WHERE workspace_id IS NULL
+  //   UNIQUE (workspace_id, key) WHERE workspace_id IS NOT NULL
+  @@index([workspaceId])
   @@map("workspace_roles")
 }
 

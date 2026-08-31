@@ -9,6 +9,7 @@ import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
 import { SubmitFormDto } from './dto/submit-form.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 
@@ -39,6 +40,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Post()
   @ApiOperation({ summary: 'Create a new intake form' })
+  @RequirePermission('MANAGE_FORMS')
   create(@CurrentUser() user: User, @Body() dto: CreateFormDto) {
     return this.formsService.create(user.id, dto);
   }
@@ -46,6 +48,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Get()
   @ApiOperation({ summary: 'List all intake forms' })
+  @RequirePermission('VIEW_FORMS')
   findAll(@CurrentUser() user: User, @Query('includeArchived') includeArchived?: string) {
     return this.formsService.findAll(user.id, includeArchived === 'true');
   }
@@ -56,6 +59,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Get('lead-capture')
   @ApiOperation({ summary: 'Get the workspace\'s one auto-provisioned lead-capture form' })
+  @RequirePermission('VIEW_FORMS')
   getLeadCaptureForm(@CurrentUser() user: User) {
     return this.formsService.getLeadCaptureForm(resolveWorkspaceId(user));
   }
@@ -63,6 +67,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Get(':id')
   @ApiOperation({ summary: 'Get form with submissions' })
+  @RequirePermission('VIEW_FORMS')
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.formsService.findOne(user.id, id);
   }
@@ -70,6 +75,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Patch(':id')
   @ApiOperation({ summary: 'Update form' })
+  @RequirePermission('MANAGE_FORMS')
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateFormDto) {
     return this.formsService.update(user.id, id, dto);
   }
@@ -77,6 +83,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive form' })
+  @RequirePermission('MANAGE_FORMS')
   archive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.formsService.archive(user.id, id);
   }
@@ -84,6 +91,7 @@ export class FormsController {
   @ApiBearerAuth()
   @Patch(':id/unarchive')
   @ApiOperation({ summary: 'Unarchive form' })
+  @RequirePermission('MANAGE_FORMS')
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.formsService.unarchive(user.id, id);
   }
@@ -92,6 +100,7 @@ export class FormsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete form (no submissions)' })
+  @RequirePermission('MANAGE_FORMS')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.formsService.remove(user.id, id);
   }

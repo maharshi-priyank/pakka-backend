@@ -17,7 +17,7 @@ export class ProductEventsListener {
   async recordContractSigned(event: WorkspaceLifecycleEvent) {
     if (!event.entityId || !event.workspaceId) return;
     const owner = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId: event.workspaceId, role: 'OWNER' },
+      where: { workspaceId: event.workspaceId, workspaceRole: { key: 'OWNER' } },
       select: { userId: true },
     });
     if (!owner) return;

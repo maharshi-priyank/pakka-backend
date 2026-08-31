@@ -58,13 +58,22 @@ export class TeamService {
     if (email.toLowerCase() === owner.email.toLowerCase()) {
       throw new BadRequestException('You cannot invite yourself.')
     }
-    const alreadyMember = await this.prisma.user.findFirst({ where: { email, ownerId: owner.id } })
+    const alreadyMember = await this.prisma.workspaceMember.findFirst({
+      where: { workspaceId, user: { email } },
+    })
     if (alreadyMember) throw new BadRequestException('This person is already a team member.')
 
-    // Resolve role — default to MEMBER if not provided
-    let resolvedRoleId = roleId
-    if (!resolvedRoleId) {
-      const memberRole = await this.prisma.workspaceRole.findUnique({ where: { key: 'MEMBER' } })
+    // Resolve role — default to MEMBER if not provided; otherwise validate
+    // the caller isn't assigning a role that belongs to another workspace.
+    let resolvedRoleId: string
+    if (roleId) {
+      const role = await this.prisma.workspaceRole.findUnique({ where: { id: roleId } })
+      if (!role || (role.workspaceId !== null && role.workspaceId !== workspaceId)) {
+        throw new BadRequestException('Role does not belong to this workspace.')
+      }
+      resolvedRoleId = role.id
+    } else {
+      const memberRole = await this.prisma.workspaceRole.findFirst({ where: { key: 'MEMBER', workspaceId: null } })
       resolvedRoleId = memberRole!.id
     }
 
@@ -108,12 +117,14 @@ export class TeamService {
   }
 
   async removeMember(ownerId: string, memberId: string) {
-    const member = await this.prisma.user.findFirst({ where: { id: memberId, ownerId } })
+    const member = await this.prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: memberId, workspaceId: ownerId } },
+    })
     if (!member) throw new NotFoundException('Team member not found.')
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: memberId },
-        data:  { ownerId: null, activeWorkspaceId: memberId }, // reset to their own workspace
+        data:  { activeWorkspaceId: memberId }, // reset to their own workspace
       }),
       this.prisma.workspaceMember.deleteMany({ where: { userId: memberId, workspaceId: ownerId } }),
     ])
@@ -121,9 +132,12 @@ export class TeamService {
   }
 
   async updateMemberRole(ownerId: string, memberId: string, roleId: string) {
-    // Validate the role exists and is a system role
+    // Validate the role exists, belongs to this workspace (or is a system role), and isn't OWNER
     const role = await this.prisma.workspaceRole.findUnique({ where: { id: roleId } })
     if (!role) throw new NotFoundException('Role not found.')
+    if (role.workspaceId !== null && role.workspaceId !== ownerId) {
+      throw new BadRequestException('Role does not belong to this workspace.')
+    }
     // Owners cannot be downgraded this way
     if (role.key === 'OWNER') throw new BadRequestException('Cannot assign OWNER role to a team member.')
 
@@ -172,13 +186,13 @@ export class TeamService {
     }
 
     const workspaceRoleId = invite.workspaceRoleId ?? (
-      await this.prisma.workspaceRole.findUnique({ where: { key: 'MEMBER' } })
+      await this.prisma.workspaceRole.findFirst({ where: { key: 'MEMBER', workspaceId: null } })
     )!.id
 
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
-        data:  { ownerId: invite.ownerId, activeWorkspaceId: invite.ownerId },
+        data:  { activeWorkspaceId: invite.ownerId },
       }),
       this.prisma.teamInvite.update({ where: { token }, data: { accepted: true } }),
       this.prisma.workspaceMember.upsert({
@@ -193,14 +207,18 @@ export class TeamService {
 
   async leaveTeam(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
-    if (!user?.ownerId) throw new BadRequestException('You are not a team member.')
-    const ownerId = user.ownerId
+    const workspaceId = user?.activeWorkspaceId
+    if (!workspaceId || workspaceId === userId) throw new BadRequestException('You are not a team member.')
+    const membership = await this.prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+    })
+    if (!membership) throw new BadRequestException('You are not a team member.')
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
-        data:  { ownerId: null, activeWorkspaceId: userId }, // reset to their own workspace
+        data:  { activeWorkspaceId: userId }, // reset to their own workspace
       }),
-      this.prisma.workspaceMember.deleteMany({ where: { userId, workspaceId: ownerId } }),
+      this.prisma.workspaceMember.deleteMany({ where: { userId, workspaceId } }),
     ])
     return { message: 'You have left the workspace.' }
   }

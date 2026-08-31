@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { TasksService, CreateTaskDto, UpdateTaskDto, ListTasksQuery } from './tasks.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User } from '@prisma/client';
 
@@ -12,6 +13,7 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Get()
+  @RequirePermission('VIEW_TASKS')
   findAll(
     @CurrentUser() user: User,
     @Query() query: ListTasksQuery,
@@ -20,6 +22,7 @@ export class TasksController {
   }
 
   @Post()
+  @RequirePermission('MANAGE_TASKS')
   create(
     @CurrentUser() user: User,
     @Body() body: CreateTaskDto,
@@ -28,6 +31,7 @@ export class TasksController {
   }
 
   @Get(':id')
+  @RequirePermission('VIEW_TASKS')
   findOne(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -36,6 +40,7 @@ export class TasksController {
   }
 
   @Patch(':id')
+  @RequirePermission('MANAGE_TASKS')
   update(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -46,6 +51,7 @@ export class TasksController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission('MANAGE_TASKS')
   remove(
     @CurrentUser() user: User,
     @Param('id') id: string,

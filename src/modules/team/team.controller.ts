@@ -5,6 +5,7 @@ import { InviteMemberDto } from './dto/invite-member.dto'
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Public } from '../../common/decorators/public.decorator'
+import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 
 @Controller('team')
 export class TeamController {
@@ -22,27 +23,31 @@ export class TeamController {
   }
 
   @Post('invite')
+  @RequirePermission('MANAGE_MEMBERS')
   invite(@CurrentUser() user: User, @Body() dto: InviteMemberDto) {
     return this.team.invite(user, dto.email, dto.roleId)
   }
 
   @Delete('invite/:id')
+  @RequirePermission('MANAGE_MEMBERS')
   cancelInvite(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.team.cancelInvite(user.id, id)
+    return this.team.cancelInvite(user.activeWorkspaceId ?? user.id, id)
   }
 
   @Delete('member/:id')
+  @RequirePermission('MANAGE_MEMBERS')
   removeMember(@CurrentUser() user: User, @Param('id') id: string) {
-    return this.team.removeMember(user.id, id)
+    return this.team.removeMember(user.activeWorkspaceId ?? user.id, id)
   }
 
   @Patch('member/:id/role')
+  @RequirePermission('MANAGE_MEMBERS')
   updateMemberRole(
     @CurrentUser() user: User,
     @Param('id') id: string,
     @Body() dto: UpdateMemberRoleDto,
   ) {
-    return this.team.updateMemberRole(user.id, id, dto.roleId)
+    return this.team.updateMemberRole(user.activeWorkspaceId ?? user.id, id, dto.roleId)
   }
 
   @Post('accept/:token')

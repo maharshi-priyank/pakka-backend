@@ -11,6 +11,7 @@ import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { ConvertLeadToContactDto } from './dto/convert-lead-to-contact.dto';
 import { CreateLeadActivityDto } from './dto/create-lead-activity.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User, LeadStage } from '@prisma/client';
 import { IsEnum } from 'class-validator';
@@ -30,36 +31,42 @@ export class LeadsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new lead' })
+  @RequirePermission('MANAGE_LEADS')
   create(@CurrentUser() user: User, @Body() dto: CreateLeadDto) {
     return this.leadsService.create(resolveWorkspaceId(user), dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List leads with optional filters and search' })
+  @RequirePermission('VIEW_LEADS')
   findAll(@CurrentUser() user: User, @Query() query: QueryLeadsDto) {
     return this.leadsService.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get('pipeline-value')
   @ApiOperation({ summary: 'Get total pipeline value for active leads' })
+  @RequirePermission('VIEW_LEADS')
   getPipelineValue(@CurrentUser() user: User) {
     return this.leadsService.getPipelineValue(user.id);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a single lead by ID' })
+  @RequirePermission('VIEW_LEADS')
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.leadsService.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update lead details' })
+  @RequirePermission('MANAGE_LEADS')
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateLeadDto) {
     return this.leadsService.update(resolveWorkspaceId(user), id, dto);
   }
 
   @Patch(':id/stage')
   @ApiOperation({ summary: 'Move lead to a different Kanban stage' })
+  @RequirePermission('MANAGE_LEADS')
   updateStage(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateStageDto) {
     return this.leadsService.updateStage(resolveWorkspaceId(user), id, dto.stage);
   }
@@ -67,6 +74,7 @@ export class LeadsController {
   @Post(':id/convert-to-client')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Convert a lead to a client and optionally create a project' })
+  @RequirePermission('MANAGE_LEADS')
   convertToClient(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ConvertLeadDto) {
     return this.leadsService.convertToClient(resolveWorkspaceId(user), id, dto);
   }
@@ -74,6 +82,7 @@ export class LeadsController {
   @Post(':id/convert-to-contact')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Convert a website-form-sourced lead to a real contact' })
+  @RequirePermission('MANAGE_LEADS')
   convertToContact(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: ConvertLeadToContactDto) {
     return this.leadsService.convertToContact(resolveWorkspaceId(user), id, dto);
   }

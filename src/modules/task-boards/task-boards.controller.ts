@@ -10,6 +10,7 @@ import {
   UpdateColumnDto,
 } from './task-boards.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { User } from '@prisma/client';
 
@@ -18,6 +19,7 @@ export class TaskBoardsController {
   constructor(private readonly taskBoardsService: TaskBoardsService) {}
 
   @Get()
+  @RequirePermission('VIEW_PROJECTS')
   list(
     @CurrentUser() user: User,
     @Query('projectId')       projectId?: string,
@@ -27,6 +29,7 @@ export class TaskBoardsController {
   }
 
   @Post()
+  @RequirePermission('MANAGE_PROJECTS')
   create(
     @CurrentUser() user: User,
     @Body() body: CreateBoardDto,
@@ -35,6 +38,7 @@ export class TaskBoardsController {
   }
 
   @Get(':id')
+  @RequirePermission('VIEW_PROJECTS')
   findOne(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -43,6 +47,7 @@ export class TaskBoardsController {
   }
 
   @Patch(':id')
+  @RequirePermission('MANAGE_PROJECTS')
   update(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -52,17 +57,20 @@ export class TaskBoardsController {
   }
 
   @Patch(':id/archive')
+  @RequirePermission('MANAGE_PROJECTS')
   archive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.taskBoardsService.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
+  @RequirePermission('MANAGE_PROJECTS')
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.taskBoardsService.unarchive(resolveWorkspaceId(user), id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission('MANAGE_PROJECTS')
   remove(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -71,6 +79,7 @@ export class TaskBoardsController {
   }
 
   @Post(':id/columns')
+  @RequirePermission('MANAGE_PROJECTS')
   createColumn(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -80,6 +89,7 @@ export class TaskBoardsController {
   }
 
   @Patch(':id/columns/:colId')
+  @RequirePermission('MANAGE_PROJECTS')
   updateColumn(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -91,6 +101,7 @@ export class TaskBoardsController {
 
   @Delete(':id/columns/:colId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission('MANAGE_PROJECTS')
   removeColumn(
     @CurrentUser() user: User,
     @Param('id') id: string,

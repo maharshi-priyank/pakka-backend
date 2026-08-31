@@ -28,7 +28,8 @@ export class AdminWorkspaceAdministrationService {
         orderBy: { joinedAt: 'asc' },
       }),
       this.prisma.workspaceRole.findMany({
-        select: { id: true, key: true, name: true },
+        where:   { OR: [{ workspaceId: null }, { workspaceId }] },
+        select:  { id: true, key: true, name: true },
         orderBy: { sortOrder: 'asc' },
       }),
     ]);

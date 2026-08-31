@@ -4,6 +4,7 @@ import { WorkflowsService } from './workflows.service'
 import { CreateWorkflowDto } from './dto/create-workflow.dto'
 import { UpdateWorkflowDto } from './dto/update-workflow.dto'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import type { User } from '@prisma/client'
 
 @ApiTags('workflows')
@@ -13,21 +14,25 @@ export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}
 
   @Get()
+  @RequirePermission('VIEW_AUTOMATIONS')
   findAll(@CurrentUser() user: User) {
     return this.workflowsService.findAll(user.id)
   }
 
   @Post()
+  @RequirePermission('MANAGE_AUTOMATIONS')
   create(@CurrentUser() user: User, @Body() dto: CreateWorkflowDto) {
     return this.workflowsService.create(user.id, dto)
   }
 
   @Get(':id')
+  @RequirePermission('VIEW_AUTOMATIONS')
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.workflowsService.findOne(user.id, id)
   }
 
   @Patch(':id')
+  @RequirePermission('MANAGE_AUTOMATIONS')
   update(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -37,11 +42,13 @@ export class WorkflowsController {
   }
 
   @Delete(':id')
+  @RequirePermission('MANAGE_AUTOMATIONS')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.workflowsService.remove(user.id, id)
   }
 
   @Get(':id/runs')
+  @RequirePermission('VIEW_AUTOMATIONS')
   getRuns(@CurrentUser() user: User, @Param('id') id: string) {
     return this.workflowsService.getRuns(user.id, id)
   }

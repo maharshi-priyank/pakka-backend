@@ -51,6 +51,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { TeamModule } from './modules/team/team.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
+import { WorkspaceRolesModule } from './modules/workspace-roles/workspace-roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { LeadsProxyModule } from './modules/leads-proxy/leads-proxy.module';
 import { ContactFormModule } from './modules/contact-form/contact-form.module';
@@ -140,6 +141,7 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
     TeamModule,
     MessagesModule,
     WorkspacesModule,
+    WorkspaceRolesModule,
     PermissionsModule,
     LeadsProxyModule,
     ContactFormModule,

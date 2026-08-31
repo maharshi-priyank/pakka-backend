@@ -50,10 +50,11 @@ export class UsersService {
     });
 
     // Ensure owner WorkspaceMember row exists (idempotent)
+    const ownerRole = await this.prisma.workspaceRole.findFirst({ where: { key: 'OWNER', workspaceId: null } });
     await this.prisma.workspaceMember.upsert({
       where:  { userId_workspaceId: { userId: dto.id, workspaceId: dto.id } },
       update: {},
-      create: { user: { connect: { id: dto.id } }, workspace: { connect: { id: dto.id } }, role: 'OWNER', workspaceRole: { connect: { key: 'OWNER' } } },
+      create: { user: { connect: { id: dto.id } }, workspace: { connect: { id: dto.id } }, role: 'OWNER', workspaceRole: { connect: { id: ownerRole!.id } } },
     });
 
     // Set activeWorkspaceId if not yet set

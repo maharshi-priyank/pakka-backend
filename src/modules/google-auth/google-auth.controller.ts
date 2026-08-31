@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { GoogleAuthService } from './google-auth.service';
 import { User } from '@prisma/client';
 
@@ -16,12 +17,14 @@ export class GoogleAuthController {
   ) {}
 
   @Get('connect')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   connect(@CurrentUser() user: User) {
     const authUrl = this.googleAuth.getAuthUrl(user.id);
     return { authUrl };
   }
 
   @Get('connect-docs')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   connectDocs(@CurrentUser() user: User) {
     const authUrl = this.googleAuth.getDocsAuthUrl(user.id);
     return { authUrl };
@@ -43,24 +46,28 @@ export class GoogleAuthController {
   }
 
   @Post('disconnect')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async disconnect(@CurrentUser() user: User) {
     await this.googleAuth.disconnectCalendar(user.id);
     return { success: true };
   }
 
   @Post('disconnect-docs')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async disconnectDocs(@CurrentUser() user: User) {
     await this.googleAuth.disconnectDocs(user.id);
     return { success: true };
   }
 
   @Get('connect-sheets')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   connectSheets(@CurrentUser() user: User) {
     const authUrl = this.googleAuth.getSheetsAuthUrl(user.id);
     return { authUrl };
   }
 
   @Post('disconnect-sheets')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async disconnectSheets(@CurrentUser() user: User) {
     await this.googleAuth.disconnectSheets(user.id);
     return { success: true };

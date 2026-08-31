@@ -7,9 +7,10 @@ import { PaymentsService } from './payments.service';
 import { StripeService } from './stripe.service';
 import { PaymentsController } from './payments.controller';
 import { ProductEventsModule } from '../product-events/product-events.module';
+import { WorkspacesModule } from '../workspaces/workspaces.module';
 
 @Module({
-  imports: [ConfigModule, ProductEventsModule],
+  imports: [ConfigModule, ProductEventsModule, WorkspacesModule],
   controllers: [PaymentsController],
   providers: [
     PlanResolutionService,

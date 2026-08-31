@@ -12,6 +12,7 @@ import { VerifyDepositDto } from './dto/verify-deposit.dto';
 import { SendProposalDto } from './dto/send-proposal.dto';
 import { VerifyProposalOtpDto } from './dto/verify-proposal-otp.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { resolveWorkspaceId } from '../users/resolve-workspace-id';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '@prisma/client';
@@ -24,24 +25,28 @@ export class ProposalsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new proposal' })
+  @RequirePermission('MANAGE_PROPOSALS')
   create(@CurrentUser() user: User, @Body() dto: CreateProposalDto) {
     return this.svc.create(resolveWorkspaceId(user), dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List proposals' })
+  @RequirePermission('VIEW_PROPOSALS')
   findAll(@CurrentUser() user: User, @Query() query: QueryProposalsDto) {
     return this.svc.findAll(resolveWorkspaceId(user), query);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a proposal by ID (authenticated)' })
+  @RequirePermission('VIEW_PROPOSALS')
   findOne(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.findOne(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update proposal content or status' })
+  @RequirePermission('MANAGE_PROPOSALS')
   update(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: UpdateProposalDto) {
     return this.svc.update(resolveWorkspaceId(user), id, dto);
   }
@@ -49,18 +54,21 @@ export class ProposalsController {
   @Post(':id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark proposal as sent and return shareable link' })
+  @RequirePermission('SEND_PROPOSALS')
   send(@CurrentUser() user: User, @Param('id') id: string, @Body() dto: SendProposalDto) {
     return this.svc.send(resolveWorkspaceId(user), id, dto);
   }
 
   @Patch(':id/archive')
   @ApiOperation({ summary: 'Archive a proposal' })
+  @RequirePermission('MANAGE_PROPOSALS')
   archive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.archive(resolveWorkspaceId(user), id);
   }
 
   @Patch(':id/unarchive')
   @ApiOperation({ summary: 'Unarchive a proposal' })
+  @RequirePermission('MANAGE_PROPOSALS')
   unarchive(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.unarchive(resolveWorkspaceId(user), id);
   }
@@ -68,6 +76,7 @@ export class ProposalsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a proposal (no linked contracts)' })
+  @RequirePermission('MANAGE_PROPOSALS')
   remove(@CurrentUser() user: User, @Param('id') id: string) {
     return this.svc.remove(resolveWorkspaceId(user), id);
   }

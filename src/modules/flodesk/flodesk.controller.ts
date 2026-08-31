@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { IsString, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { FlodeskService } from './flodesk.service.js';
 import { User } from '@prisma/client';
 
@@ -22,6 +23,7 @@ export class FlodeskController {
   @Post('connect')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate and save Flodesk API key' })
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async connect(@CurrentUser() user: User, @Body() dto: ConnectFlodeskDto) {
     await this.flodesk.validateAndSave(user.id, dto.apiKey);
     return { connected: true };
@@ -30,6 +32,7 @@ export class FlodeskController {
   @Post('disconnect')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Disconnect Flodesk integration' })
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async disconnect(@CurrentUser() user: User) {
     await this.flodesk.disconnect(user.id);
     return { success: true };

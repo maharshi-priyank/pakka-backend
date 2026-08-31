@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator.js';
 import { ClickUpAuthService } from './clickup-auth.service.js';
 import { User } from '@prisma/client';
 
@@ -16,6 +17,7 @@ export class ClickUpAuthController {
   ) {}
 
   @Get('connect')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   connect(@CurrentUser() user: User) {
     const authUrl = this.clickUpAuth.getAuthUrl(user.id);
     return { authUrl };
@@ -34,6 +36,7 @@ export class ClickUpAuthController {
   }
 
   @Post('disconnect')
+  @RequirePermission('MANAGE_INTEGRATIONS')
   async disconnect(@CurrentUser() user: User) {
     await this.clickUpAuth.disconnect(user.id);
     return { success: true };
